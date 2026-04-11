@@ -150,6 +150,16 @@
             border: 1px solid #2A3A4A;
         }
 
+        .btn-success {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #f44336;
+            color: white;
+        }
+
         .divider {
             display: flex;
             align-items: center;
@@ -201,6 +211,30 @@
             width: 100%;
             background: #0A0F1E;
             position: relative;
+        }
+
+        /* Вкладки */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #1A2A3A;
+            background: #0F1A2A;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            background: none;
+            border: none;
+            color: #88A9C4;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            color: #64B5F6;
+            border-bottom: 2px solid #64B5F6;
         }
 
         .contacts-screen {
@@ -302,6 +336,35 @@
         .chat-info p {
             font-size: 11px;
             color: #88A9C4;
+        }
+
+        .online-status {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+
+        .online {
+            background-color: #4CAF50;
+            box-shadow: 0 0 5px #4CAF50;
+        }
+
+        .offline {
+            background-color: #888;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .action-buttons button {
+            padding: 6px 12px;
+            font-size: 12px;
+            width: auto;
         }
 
         .user-profile {
@@ -412,6 +475,15 @@
         .contact-status {
             font-size: 11px;
             color: #88A9C4;
+        }
+
+        .request-badge {
+            background: #FF9800;
+            color: white;
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin-left: 8px;
         }
 
         .messages-area {
@@ -572,10 +644,22 @@
                     </div>
                     <button class="logout-btn" onclick="logout()" title="Выйти">🚪</button>
                 </div>
+                
+                <!-- Вкладки: Контакты и Новые -->
+                <div class="tabs">
+                    <button class="tab-btn active" id="contactsTabBtn" onclick="switchTab('contacts')">💬 Контакты</button>
+                    <button class="tab-btn" id="requestsTabBtn" onclick="switchTab('requests')">🆕 Новые</button>
+                </div>
+                
                 <div class="search-area">
                     <input type="text" class="search-input" placeholder="🔍 Найти по Global ID..." id="searchInput">
                 </div>
-                <div class="contacts-list" id="contactsList"></div>
+                
+                <!-- Список контактов -->
+                <div id="contactsList" class="contacts-list"></div>
+                
+                <!-- Список новых запросов -->
+                <div id="requestsList" class="contacts-list" style="display: none;"></div>
             </div>
 
             <div id="chatScreen" class="chat-screen">
@@ -625,7 +709,7 @@
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, orderBy, onSnapshot, updateDoc, arrayUnion, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, orderBy, onSnapshot, updateDoc, arrayUnion, arrayRemove, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth();
@@ -636,10 +720,15 @@
         let currentUserData = null;
         let currentContact = null;
         let contacts = [];
+        let pendingRequests = [];
         let messagesUnsubscribe = null;
         let destructTimeouts = {};
+        let presenceUnsubscribe = null;
+        let onlineStatuses = {};
+        let currentTab = 'contacts';
 
-        const SELF_DESTRUCT_DELAY = 5000; // 5 секунд
+        const SELF_DESTRUCT_DELAY = 5000;
+        const ENCRYPTION_LAYERS = 21;
 
         function generateGlobalId() {
             const digits = '0123456789';
@@ -663,9 +752,7 @@
             return result.join('');
         }
 
-        // ============ 21-КРАТНОЕ ШИФРОВАНИЕ ============
-        const ENCRYPTION_LAYERS = 21;
-        
+        // Шифрование
         function base64Encrypt(text) {
             return btoa(unescape(encodeURIComponent(text)));
         }
@@ -716,7 +803,6 @@
             return xorEncrypt(text, key);
         }
         
-        // Многослойное шифрование (21 слой)
         async function multiLayerEncrypt(text) {
             let encrypted = text;
             for (let i = 0; i < ENCRYPTION_LAYERS; i++) {
@@ -729,7 +815,6 @@
             return encrypted;
         }
         
-        // Многослойное расшифрование (21 слой, в обратном порядке)
         async function multiLayerDecrypt(encrypted) {
             let decrypted = encrypted;
             for (let i = ENCRYPTION_LAYERS - 1; i >= 0; i--) {
@@ -760,6 +845,74 @@
             }
         }
 
+        // Обновление онлайн-статуса
+        async function updatePresence() {
+            if (!currentUser) return;
+            const userRef = doc(db, "users", currentUser.uid);
+            await updateDoc(userRef, {
+                lastSeen: new Date(),
+                online: true
+            }).catch(() => {});
+        }
+
+        // Подписка на статусы контактов
+        function subscribeToPresence() {
+            if (presenceUnsubscribe) presenceUnsubscribe();
+            
+            const userIds = contacts.map(c => c.uid);
+            if (userIds.length === 0) return;
+            
+            // Для простоты используем периодическую проверку
+            const checkPresence = async () => {
+                for (const contact of contacts) {
+                    const userDoc = await getDoc(doc(db, "users", contact.uid));
+                    const userData = userDoc.data();
+                    const isOnline = userData && userData.online === true && 
+                                    (new Date() - userData.lastSeen?.toDate()) < 60000;
+                    onlineStatuses[contact.uid] = isOnline;
+                }
+                loadContacts();
+                setTimeout(checkPresence, 30000);
+            };
+            checkPresence();
+        }
+
+        // Обновление статуса при закрытии страницы
+        window.addEventListener('beforeunload', async () => {
+            if (currentUser) {
+                const userRef = doc(db, "users", currentUser.uid);
+                await updateDoc(userRef, {
+                    online: false,
+                    lastSeen: new Date()
+                }).catch(() => {});
+            }
+        });
+
+        // Периодическое обновление статуса
+        setInterval(updatePresence, 30000);
+
+        window.switchTab = (tab) => {
+            currentTab = tab;
+            const contactsList = document.getElementById('contactsList');
+            const requestsList = document.getElementById('requestsList');
+            const contactsBtn = document.getElementById('contactsTabBtn');
+            const requestsBtn = document.getElementById('requestsTabBtn');
+            
+            if (tab === 'contacts') {
+                contactsList.style.display = 'block';
+                requestsList.style.display = 'none';
+                contactsBtn.classList.add('active');
+                requestsBtn.classList.remove('active');
+                loadContacts();
+            } else {
+                contactsList.style.display = 'none';
+                requestsList.style.display = 'block';
+                contactsBtn.classList.remove('active');
+                requestsBtn.classList.add('active');
+                loadPendingRequests();
+            }
+        };
+
         window.closeChat = function() {
             document.getElementById('contactsScreen').classList.remove('hide-on-mobile');
             document.getElementById('chatScreen').classList.remove('show-on-mobile');
@@ -782,7 +935,10 @@
                     globalId: globalId,
                     nickname: email.split('@')[0],
                     createdAt: new Date(),
-                    contacts: []
+                    contacts: [],
+                    pendingFrom: [],
+                    online: true,
+                    lastSeen: new Date()
                 });
                 showMessageUI('Регистрация успешна!', false);
                 setTimeout(() => window.showLogin(), 1500);
@@ -802,12 +958,74 @@
                     email = usersSnap.docs[0].data().email;
                 }
                 await signInWithEmailAndPassword(auth, email, password);
+                await updatePresence();
             } catch (error) { showMessageUI('Неверный email/Global ID или пароль', true); }
         };
 
         window.logout = async () => {
             if (messagesUnsubscribe) messagesUnsubscribe();
+            if (presenceUnsubscribe) presenceUnsubscribe();
+            if (currentUser) {
+                const userRef = doc(db, "users", currentUser.uid);
+                await updateDoc(userRef, { online: false, lastSeen: new Date() }).catch(() => {});
+            }
             await signOut(auth);
+        };
+
+        // Добавление в контакты из запроса
+        window.acceptRequest = async (contactId) => {
+            const contactDoc = await getDoc(doc(db, "users", contactId));
+            const contactData = contactDoc.data();
+            
+            // Добавляем в контакты текущего пользователя
+            const currentUserRef = doc(db, "users", currentUser.uid);
+            const currentUserSnap = await getDoc(currentUserRef);
+            const currentContacts = currentUserSnap.data().contacts || [];
+            
+            if (!currentContacts.some(c => c.uid === contactId)) {
+                await updateDoc(currentUserRef, {
+                    contacts: arrayUnion({
+                        uid: contactId,
+                        globalId: contactData.globalId,
+                        nickname: contactData.nickname,
+                        email: contactData.email,
+                        addedAt: new Date()
+                    })
+                });
+            }
+            
+            // Удаляем из pending
+            await updateDoc(currentUserRef, {
+                pendingFrom: arrayRemove(contactId)
+            });
+            
+            // Добавляем текущего пользователя в контакты собеседника
+            const targetUserRef = doc(db, "users", contactId);
+            const targetUserSnap = await getDoc(targetUserRef);
+            const targetContacts = targetUserSnap.data().contacts || [];
+            
+            if (!targetContacts.some(c => c.uid === currentUser.uid)) {
+                await updateDoc(targetUserRef, {
+                    contacts: arrayUnion({
+                        uid: currentUser.uid,
+                        globalId: currentUserData.globalId,
+                        nickname: currentUserData.nickname,
+                        email: currentUser.email,
+                        addedAt: new Date()
+                    })
+                });
+            }
+            
+            loadContacts();
+            loadPendingRequests();
+        };
+
+        window.declineRequest = async (contactId) => {
+            const currentUserRef = doc(db, "users", currentUser.uid);
+            await updateDoc(currentUserRef, {
+                pendingFrom: arrayRemove(contactId)
+            });
+            loadPendingRequests();
         };
 
         window.searchUser = async () => {
@@ -819,35 +1037,75 @@
             const userDoc = usersSnap.docs[0];
             const userData = userDoc.data();
             if (userDoc.id === currentUser.uid) { alert('Это вы сами'); return; }
+            
+            // Отправляем запрос на добавление
             const currentUserRef = doc(db, "users", currentUser.uid);
-            const currentUserSnap = await getDoc(currentUserRef);
-            const currentContacts = currentUserSnap.data().contacts || [];
-            if (!currentContacts.some(c => c.uid === userDoc.id)) {
-                await updateDoc(currentUserRef, {
-                    contacts: arrayUnion({
-                        uid: userDoc.id,
-                        globalId: userData.globalId,
-                        nickname: userData.nickname,
-                        email: userData.email,
-                        addedAt: new Date()
-                    })
+            const targetUserRef = doc(db, "users", userDoc.id);
+            
+            // Добавляем в pending получателя
+            const targetUserSnap = await getDoc(targetUserRef);
+            const targetPending = targetUserSnap.data().pendingFrom || [];
+            
+            if (!targetPending.includes(currentUser.uid)) {
+                await updateDoc(targetUserRef, {
+                    pendingFrom: arrayUnion(currentUser.uid)
                 });
             }
+            
             document.getElementById('searchInput').value = '';
-            loadContacts();
+            alert(`Запрос отправлен пользователю ${userData.nickname || userData.globalId}`);
         };
+
+        async function loadPendingRequests() {
+            const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+            const userData = userDoc.data();
+            const pendingIds = userData.pendingFrom || [];
+            
+            const requestsList = document.getElementById('requestsList');
+            requestsList.innerHTML = '';
+            
+            if (pendingIds.length === 0) {
+                requestsList.innerHTML = '<div style="padding: 20px; text-align: center; color: #88A9C4;">Нет входящих запросов</div>';
+                return;
+            }
+            
+            for (const uid of pendingIds) {
+                const contactDoc = await getDoc(doc(db, "users", uid));
+                if (contactDoc.exists()) {
+                    const contact = contactDoc.data();
+                    const requestDiv = document.createElement('div');
+                    requestDiv.className = 'contact-item';
+                    requestDiv.innerHTML = `
+                        <div class="contact-avatar">${contact.nickname?.charAt(0).toUpperCase() || '👤'}</div>
+                        <div class="contact-info">
+                            <div class="contact-name">${contact.nickname || contact.globalId?.substring(0, 8)}</div>
+                            <div class="contact-status">${contact.globalId?.substring(0, 12)}...</div>
+                            <div class="action-buttons">
+                                <button class="btn-success" onclick="acceptRequest('${uid}')">✅ Принять</button>
+                                <button class="btn-danger" onclick="declineRequest('${uid}')">❌ Отклонить</button>
+                            </div>
+                        </div>
+                    `;
+                    requestsList.appendChild(requestDiv);
+                }
+            }
+        }
 
         async function loadContacts() {
             const userDoc = await getDoc(doc(db, "users", currentUser.uid));
             const userData = userDoc.data();
             contacts = userData.contacts || [];
+            
             const contactsList = document.getElementById('contactsList');
             contactsList.innerHTML = '';
+            
             if (contacts.length === 0) {
                 contactsList.innerHTML = '<div style="padding: 20px; text-align: center; color: #88A9C4;">Нет контактов<br><span style="font-size: 11px;">Используйте поиск по Global ID</span></div>';
                 return;
             }
+            
             for (const contact of contacts) {
+                const isOnline = onlineStatuses[contact.uid] || false;
                 const contactDiv = document.createElement('div');
                 contactDiv.className = 'contact-item';
                 contactDiv.onclick = () => selectContact(contact);
@@ -855,7 +1113,10 @@
                     <div class="contact-avatar">${contact.nickname?.charAt(0).toUpperCase() || '👤'}</div>
                     <div class="contact-info">
                         <div class="contact-name">${contact.nickname || contact.globalId?.substring(0, 8)}</div>
-                        <div class="contact-status">${contact.globalId?.substring(0, 12)}...</div>
+                        <div class="contact-status">
+                            <span class="online-status ${isOnline ? 'online' : 'offline'}"></span>
+                            ${isOnline ? 'онлайн' : 'офлайн'}
+                        </div>
                     </div>
                 `;
                 contactsList.appendChild(contactDiv);
@@ -865,8 +1126,12 @@
         async function selectContact(contact) {
             currentContact = contact;
             
+            const isOnline = onlineStatuses[contact.uid] || false;
             document.getElementById('chatName').innerHTML = contact.nickname || contact.globalId?.substring(0, 8);
-            document.getElementById('chatStatus').innerHTML = `Global ID: ${contact.globalId} | 🔒 21 слой шифрования`;
+            document.getElementById('chatStatus').innerHTML = `
+                <span class="online-status ${isOnline ? 'online' : 'offline'}"></span>
+                ${isOnline ? 'онлайн' : 'офлайн'} | 🔒 21 слой шифрования
+            `;
             document.getElementById('chatAvatar').innerHTML = contact.nickname?.charAt(0).toUpperCase() || '🧊';
             document.getElementById('chatInputArea').style.display = 'flex';
             
@@ -912,7 +1177,6 @@
                     `;
                     messagesArea.appendChild(messageDiv);
                     
-                    // Самоуничтожение ТОЛЬКО для получателя, отправитель не удаляет свои сообщения
                     if (msg.messageId && !destructTimeouts[msg.messageId] && !isSent) {
                         destructTimeouts[msg.messageId] = setTimeout(async () => {
                             await deleteDoc(doc(db, "chats", chatId, "messages", docSnap.id));
@@ -937,8 +1201,6 @@
             if (!text || !currentContact) return;
             
             const chatId = [currentUser.uid, currentContact.uid].sort().join('_');
-            
-            // ОБЯЗАТЕЛЬНОЕ ШИФРОВАНИЕ 21 СЛОЙ
             const encryptedText = await multiLayerEncrypt(text);
             const messageId = Date.now().toString() + Math.random().toString(36);
             
@@ -952,12 +1214,8 @@
                 encryptionLayers: ENCRYPTION_LAYERS
             });
             
-            // ⚠️ ВАЖНО: НЕ сохраняем lastMessage в открытом виде (уязвимость исправлена)
-            // Вместо этого используем заглушку
             const chatRef = doc(db, "chats", chatId);
-            await updateDoc(chatRef, { 
-                lastMessageTime: new Date() 
-            });
+            await updateDoc(chatRef, { lastMessageTime: new Date() });
             
             messageInput.value = '';
         };
@@ -988,19 +1246,29 @@
                         globalId: globalId,
                         nickname: user.email.split('@')[0],
                         createdAt: new Date(),
-                        contacts: []
+                        contacts: [],
+                        pendingFrom: [],
+                        online: true,
+                        lastSeen: new Date()
                     });
                     currentUserData = { globalId, nickname: user.email.split('@')[0] };
                 }
+                
+                await updatePresence();
+                
                 document.getElementById('authForm').style.display = 'none';
                 document.getElementById('messengerApp').style.display = 'flex';
                 document.getElementById('userAvatar').innerText = currentUserData.nickname?.charAt(0).toUpperCase() || 'U';
                 document.getElementById('userName').innerText = currentUserData.nickname || user.email.split('@')[0];
                 const shortGlobalId = currentUserData.globalId ? currentUserData.globalId.substring(0, 12) + '...' : '—';
                 document.getElementById('userGlobalId').innerHTML = shortGlobalId;
+                
                 loadContacts();
+                loadPendingRequests();
+                subscribeToPresence();
             } else {
                 if (messagesUnsubscribe) messagesUnsubscribe();
+                if (presenceUnsubscribe) presenceUnsubscribe();
                 currentContact = null;
                 document.getElementById('authForm').style.display = 'flex';
                 document.getElementById('messengerApp').style.display = 'none';
