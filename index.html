@@ -602,6 +602,7 @@
     </div>
 
     <script type="module">
+        // Защита от скриншотов
         document.addEventListener('keyup', function(e) {
             if (e.key === 'PrintScreen') {
                 alert('📸 Создание скриншотов запрещено!');
@@ -662,7 +663,7 @@
             return result.join('');
         }
 
-        // ============ 21-КРАТНОЕ ШИФРОВАНИЕ (ОБЯЗАТЕЛЬНО) ============
+        // ============ 21-КРАТНОЕ ШИФРОВАНИЕ ============
         const ENCRYPTION_LAYERS = 21;
         
         function base64Encrypt(text) {
@@ -717,7 +718,6 @@
         
         // Многослойное шифрование (21 слой)
         async function multiLayerEncrypt(text) {
-            console.log('🔐 Шифрование 21 слоя...');
             let encrypted = text;
             for (let i = 0; i < ENCRYPTION_LAYERS; i++) {
                 let method = i % 4;
@@ -726,13 +726,11 @@
                 else if (method === 2) encrypted = caesarEncrypt(encrypted, (i % 5) + 1);
                 else encrypted = xorEncrypt(encrypted, (i % 10) + 1);
             }
-            console.log('✅ Зашифровано:', encrypted.substring(0, 50) + '...');
             return encrypted;
         }
         
         // Многослойное расшифрование (21 слой, в обратном порядке)
         async function multiLayerDecrypt(encrypted) {
-            console.log('🔓 Расшифровка 21 слоя...');
             let decrypted = encrypted;
             for (let i = ENCRYPTION_LAYERS - 1; i >= 0; i--) {
                 let method = i % 4;
@@ -741,7 +739,6 @@
                 else if (method === 2) decrypted = caesarDecrypt(decrypted, (i % 5) + 1);
                 else decrypted = xorDecrypt(decrypted, (i % 10) + 1);
             }
-            console.log('✅ Расшифровано:', decrypted);
             return decrypted;
         }
 
@@ -762,11 +759,6 @@
                 setTimeout(() => { if(msgDiv) msgDiv.style.display = 'none'; }, 3000);
             }
         }
-
-        window.openChat = function(contact) {
-            document.getElementById('contactsScreen').classList.add('hide-on-mobile');
-            document.getElementById('chatScreen').classList.add('show-on-mobile');
-        };
 
         window.closeChat = function() {
             document.getElementById('contactsScreen').classList.remove('hide-on-mobile');
@@ -889,7 +881,7 @@
             const chatRef = doc(db, "chats", chatId);
             const chatDoc = await getDoc(chatRef);
             if (!chatDoc.exists()) {
-                await setDoc(chatRef, { participants: [currentUser.uid, contact.uid], createdAt: new Date(), lastMessage: null });
+                await setDoc(chatRef, { participants: [currentUser.uid, contact.uid], createdAt: new Date() });
             }
             
             const messagesRef = collection(db, "chats", chatId, "messages");
@@ -916,10 +908,11 @@
                     messageDiv.innerHTML = `
                         <div>${escapeHtml(decryptedText)}</div>
                         <div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div>
-                        <div class="message-self-destruct">💣 Самоуничтожится через 5 секунд (21 слой шифрования)</div>
+                        <div class="message-self-destruct">💣 Самоуничтожится через 5 секунд (21 слой)</div>
                     `;
                     messagesArea.appendChild(messageDiv);
                     
+                    // Самоуничтожение ТОЛЬКО для получателя, отправитель не удаляет свои сообщения
                     if (msg.messageId && !destructTimeouts[msg.messageId] && !isSent) {
                         destructTimeouts[msg.messageId] = setTimeout(async () => {
                             await deleteDoc(doc(db, "chats", chatId, "messages", docSnap.id));
@@ -949,8 +942,6 @@
             const encryptedText = await multiLayerEncrypt(text);
             const messageId = Date.now().toString() + Math.random().toString(36);
             
-            console.log('📨 Отправка зашифрованного сообщения:', encryptedText.substring(0, 50) + '...');
-            
             await addDoc(collection(db, "chats", chatId, "messages"), {
                 from: currentUser.uid,
                 to: currentContact.uid,
@@ -961,9 +952,10 @@
                 encryptionLayers: ENCRYPTION_LAYERS
             });
             
+            // ⚠️ ВАЖНО: НЕ сохраняем lastMessage в открытом виде (уязвимость исправлена)
+            // Вместо этого используем заглушку
             const chatRef = doc(db, "chats", chatId);
             await updateDoc(chatRef, { 
-                lastMessage: text.substring(0, 50), 
                 lastMessageTime: new Date() 
             });
             
