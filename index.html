@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=1.0, viewport-fit=cover">
     <title>Айсберг - Защищённый мессенджер</title>
     
-    <!-- Логотип -->
     <link rel="icon" type="image/jpeg" href="https://i.ibb.co/8JY0bXs/IMG-0335.jpg">
     <link rel="apple-touch-icon" href="https://i.ibb.co/8JY0bXs/IMG-0335.jpg">
     
@@ -14,7 +13,6 @@
     <meta name="apple-mobile-web-app-title" content="Айсберг">
     <meta name="theme-color" content="#0A0F1E">
     
-    <!-- Защита от скриншотов -->
     <style>
         * {
             margin: 0;
@@ -33,23 +31,6 @@
             flex-direction: column;
         }
 
-        /* Защита от скриншотов (через CSS) */
-        .screenshot-protect {
-            position: relative;
-        }
-        
-        .screenshot-protect::before {
-            content: "";
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            pointer-events: none;
-            z-index: 9999;
-        }
-
-        /* Контейнер */
         .app-container {
             flex: 1;
             display: flex;
@@ -59,7 +40,6 @@
             margin: 0 auto;
         }
 
-        /* Форма входа */
         .auth-card {
             background: #1A2A3A;
             border-radius: 28px;
@@ -215,7 +195,6 @@
             color: #E53935;
         }
 
-        /* Мессенджер - как WhatsApp */
         .messenger-container {
             display: flex;
             height: calc(100vh - 60px);
@@ -224,7 +203,6 @@
             position: relative;
         }
 
-        /* Список контактов (всегда виден на ПК, на телефоне - только когда чат закрыт) */
         .contacts-screen {
             width: 100%;
             max-width: 400px;
@@ -252,7 +230,6 @@
             }
         }
 
-        /* Экран чата */
         .chat-screen {
             flex: 1;
             display: flex;
@@ -276,7 +253,6 @@
             }
         }
 
-        /* Шапка чата */
         .chat-header {
             padding: 16px;
             background: #0F1A2A;
@@ -328,7 +304,6 @@
             color: #88A9C4;
         }
 
-        /* Список контактов */
         .user-profile {
             padding: 16px;
             border-bottom: 1px solid #1A2A3A;
@@ -410,10 +385,6 @@
             background: #1A2A3A;
         }
 
-        .contact-item.active {
-            background: #1E88E5;
-        }
-
         .contact-avatar {
             width: 48px;
             height: 48px;
@@ -443,7 +414,6 @@
             color: #88A9C4;
         }
 
-        /* Сообщения */
         .messages-area {
             flex: 1;
             overflow-y: auto;
@@ -511,7 +481,6 @@
             padding: 12px 24px;
         }
 
-        /* Футер */
         .footer {
             text-align: center;
             padding: 12px 16px;
@@ -526,7 +495,6 @@
             text-decoration: none;
         }
 
-        /* Уведомление */
         .destruct-notice {
             position: fixed;
             bottom: 70px;
@@ -538,19 +506,18 @@
             font-size: 10px;
             font-weight: bold;
             z-index: 200;
-            animation: fadeOut 10s forwards;
+            animation: fadeOut 60s forwards;
         }
 
         @keyframes fadeOut {
             0% { opacity: 1; }
-            70% { opacity: 1; }
+            95% { opacity: 1; }
             100% { opacity: 0; visibility: hidden; }
         }
     </style>
 </head>
 <body>
-    <div class="app-container screenshot-protect">
-        <!-- Форма входа -->
+    <div class="app-container">
         <div id="authForm" style="display: flex; height: 100vh; align-items: center; justify-content: center;">
             <div class="auth-card">
                 <div class="logo-area">
@@ -593,9 +560,7 @@
             </div>
         </div>
 
-        <!-- Основной интерфейс мессенджера -->
         <div id="messengerApp" style="display: none;" class="messenger-container">
-            <!-- Экран контактов -->
             <div id="contactsScreen" class="contacts-screen">
                 <div class="user-profile">
                     <div class="user-info">
@@ -613,7 +578,6 @@
                 <div class="contacts-list" id="contactsList"></div>
             </div>
 
-            <!-- Экран чата -->
             <div id="chatScreen" class="chat-screen">
                 <div class="chat-header" id="chatHeader">
                     <button class="back-btn" onclick="closeChat()">←</button>
@@ -632,27 +596,24 @@
         </div>
     </div>
 
-    <!-- Футер -->
     <div class="footer">
         <p>© 2026 IT Global. Все права защищены.</p>
         <p>Связь с разработчиком: <a href="mailto:vasiliy.novikov389@gmail.com">vasiliy.novikov389@gmail.com</a></p>
     </div>
 
     <script type="module">
-        // Защита от скриншотов (попытка через JS)
+        // Защита от скриншотов
         document.addEventListener('keyup', function(e) {
             if (e.key === 'PrintScreen') {
-                alert('📸 Создание скриншотов запрещено в целях безопасности!');
+                alert('📸 Создание скриншотов запрещено!');
                 return false;
             }
         });
-        
         document.addEventListener('contextmenu', function(e) {
             e.preventDefault();
             return false;
         });
 
-        // GLoB Data Firebase конфиг
         const firebaseConfig = {
             apiKey: "AIzaSyA6GGJxAiao77U7_9mBUEjftmS_FnSWbIw",
             authDomain: "glob-data.firebaseapp.com",
@@ -669,7 +630,6 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth();
         const db = getFirestore();
-
         setPersistence(auth, browserLocalPersistence);
 
         let currentUser = null;
@@ -679,7 +639,8 @@
         let messagesUnsubscribe = null;
         let destructTimeouts = {};
 
-        // Генерация Global ID
+        const SELF_DESTRUCT_DELAY = 60000; // 1 минута = 60000 мс
+
         function generateGlobalId() {
             const digits = '0123456789';
             const letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -702,163 +663,91 @@
             return result.join('');
         }
 
-        // ============ ШИФРОВАНИЕ ============
-        const ERCC_DICT = {
-            'а': 1.24, 'б': 1.63, 'в': 1.95, 'г': 1.08, 'д': 1.37,
-            'е': 1.41, 'ё': 1.45, 'ж': 1.79, 'з': 1.52, 'и': 1.86,
-            'й': 1.30, 'к': 1.74, 'л': 1.29, 'м': 1.57, 'н': 1.84,
-            'о': 1.69, 'п': 1.15, 'р': 1.48, 'с': 1.67, 'т': 1.20,
-            'у': 1.55, 'ф': 1.83, 'х': 1.91, 'ц': 1.39, 'ч': 1.72,
-            'ш': 1.53, 'щ': 1.88, 'ъ': 1.66, 'ы': 1.42, 'ь': 1.35,
-            'э': 1.81, 'ю': 1.47, 'я': 1.90, ' ': 0.0,
-            'a': 1.01, 'b': 1.02, 'c': 1.03, 'd': 1.04, 'e': 1.05,
-            'f': 1.06, 'g': 1.07, 'h': 1.08, 'i': 1.09, 'j': 1.10,
-            'k': 1.11, 'l': 1.12, 'm': 1.13, 'n': 1.14, 'o': 1.15,
-            'p': 1.16, 'q': 1.17, 'r': 1.18, 's': 1.19, 't': 1.20,
-            'u': 1.21, 'v': 1.22, 'w': 1.23, 'x': 1.24, 'y': 1.25, 'z': 1.26
-        };
+        // ============ 21-КРАТНОЕ ШИФРОВАНИЕ ============
+        const ENCRYPTION_LAYERS = 21;
         
-        const ERCC_REVERSE = {};
-        for (let [k, v] of Object.entries(ERCC_DICT)) {
-            ERCC_REVERSE[Math.round(v * 10000) / 10000] = k;
+        function base64Encrypt(text) {
+            return btoa(unescape(encodeURIComponent(text)));
         }
-
-        function erccEncrypt(text) {
-            let result = [];
-            for (let ch of text) {
-                if (ERCC_DICT[ch.toLowerCase()] !== undefined) {
-                    result.push(ERCC_DICT[ch.toLowerCase()].toFixed(4));
-                } else {
-                    result.push(ch);
-                }
+        
+        function base64Decrypt(text) {
+            try {
+                return decodeURIComponent(escape(atob(text)));
+            } catch(e) {
+                return text;
             }
-            return result.join(' ');
         }
-
-        function erccDecrypt(text) {
-            let result = [];
-            let parts = text.split(' ');
-            for (let part of parts) {
-                let num = parseFloat(part);
-                if (!isNaN(num)) {
-                    let rounded = Math.round(num * 10000) / 10000;
-                    if (ERCC_REVERSE[rounded]) {
-                        result.push(ERCC_REVERSE[rounded]);
-                    } else {
-                        result.push(part);
-                    }
-                } else {
-                    result.push(part);
-                }
+        
+        function reverseEncrypt(text) {
+            return text.split('').reverse().join('');
+        }
+        
+        function reverseDecrypt(text) {
+            return text.split('').reverse().join('');
+        }
+        
+        function caesarEncrypt(text, shift = 3) {
+            let result = '';
+            for (let i = 0; i < text.length; i++) {
+                let code = text.charCodeAt(i);
+                result += String.fromCharCode(code + shift);
             }
-            return result.join('');
+            return result;
         }
-
-        function generateKey() {
-            let key = {};
-            let used = new Set();
-            for (let i = 32; i < 127; i++) {
-                let binary = i.toString(2).padStart(8, '0');
-                let num;
-                do {
-                    num = Math.floor(Math.random() * 1000);
-                } while (used.has(num));
-                used.add(num);
-                key[binary] = num;
+        
+        function caesarDecrypt(text, shift = 3) {
+            let result = '';
+            for (let i = 0; i < text.length; i++) {
+                let code = text.charCodeAt(i);
+                result += String.fromCharCode(code - shift);
             }
-            return key;
+            return result;
         }
-
-        function asciiToNumbers(text, key) {
-            let nums = [];
-            for (let ch of text) {
-                let code = ch.charCodeAt(0);
-                if (code >= 32 && code < 127) {
-                    let binary = code.toString(2).padStart(8, '0');
-                    nums.push(key[binary]);
-                } else {
-                    nums.push(ch);
-                }
+        
+        function xorEncrypt(text, key = 42) {
+            let result = '';
+            for (let i = 0; i < text.length; i++) {
+                result += String.fromCharCode(text.charCodeAt(i) ^ key);
             }
-            let keyStr = "KEY: " + Object.entries(key).map(([k, v]) => `${k}:${v}`).join(", ");
-            return { encrypted: nums.join(' '), keyStr, key };
+            return result;
         }
-
-        function numbersToAscii(text, keyStr) {
-            if (!keyStr.startsWith("KEY: ")) return null;
-            let key = {};
-            let pairs = keyStr.substring(5).split(", ");
-            for (let pair of pairs) {
-                let [binary, num] = pair.split(':');
-                key[num] = binary;
+        
+        function xorDecrypt(text, key = 42) {
+            return xorEncrypt(text, key);
+        }
+        
+        // Многослойное шифрование (21 слой)
+        async function multiLayerEncrypt(text) {
+            let encrypted = text;
+            for (let i = 0; i < ENCRYPTION_LAYERS; i++) {
+                let method = i % 4;
+                if (method === 0) encrypted = base64Encrypt(encrypted);
+                else if (method === 1) encrypted = reverseEncrypt(encrypted);
+                else if (method === 2) encrypted = caesarEncrypt(encrypted, (i % 5) + 1);
+                else encrypted = xorEncrypt(encrypted, (i % 10) + 1);
             }
-            let result = [];
-            let parts = text.split(' ');
-            for (let part of parts) {
-                if (key[part]) {
-                    let binary = key[part];
-                    let code = parseInt(binary, 2);
-                    if (!isNaN(code) && code >= 32 && code < 127) {
-                        result.push(String.fromCharCode(code));
-                    } else {
-                        result.push(part);
-                    }
-                } else {
-                    result.push(part);
-                }
+            return encrypted;
+        }
+        
+        // Многослойное расшифрование (21 слой, в обратном порядке)
+        async function multiLayerDecrypt(encrypted) {
+            let decrypted = encrypted;
+            for (let i = ENCRYPTION_LAYERS - 1; i >= 0; i--) {
+                let method = i % 4;
+                if (method === 0) decrypted = base64Decrypt(decrypted);
+                else if (method === 1) decrypted = reverseDecrypt(decrypted);
+                else if (method === 2) decrypted = caesarDecrypt(decrypted, (i % 5) + 1);
+                else decrypted = xorDecrypt(decrypted, (i % 10) + 1);
             }
-            return result.join('');
-        }
-
-        function asciiBinaryEncrypt(text) {
-            let result = [];
-            for (let ch of text) {
-                let code = ch.charCodeAt(0);
-                if (code < 127) {
-                    result.push(code.toString(2).padStart(8, '0'));
-                } else {
-                    result.push(ch);
-                }
-            }
-            return result.join(' ');
-        }
-
-        function asciiBinaryDecrypt(text) {
-            let parts = text.split(' ');
-            let result = [];
-            for (let part of parts) {
-                if (part.length === 8 && /^[01]+$/.test(part)) {
-                    let code = parseInt(part, 2);
-                    result.push(String.fromCharCode(code));
-                } else {
-                    result.push(part);
-                }
-            }
-            return result.join('');
-        }
-
-        async function fullEncrypt(text) {
-            let layer1 = erccEncrypt(text);
-            let key = generateKey();
-            let layer2 = asciiToNumbers(layer1, key);
-            let layer3 = asciiBinaryEncrypt(layer2.encrypted);
-            return { encrypted: layer3, keyStr: layer2.keyStr };
-        }
-
-        async function fullDecrypt(encrypted, keyStr) {
-            let layer3 = asciiBinaryDecrypt(encrypted);
-            let layer2 = numbersToAscii(layer3, keyStr);
-            if (!layer2) return null;
-            let layer1 = erccDecrypt(layer2);
-            return layer1;
+            return decrypted;
         }
 
         function showDestructNotice() {
             let notice = document.createElement('div');
             notice.className = 'destruct-notice';
-            notice.textContent = '💣 Сообщение самоуничтожится через 10 секунд!';
+            notice.textContent = '💣 Сообщение самоуничтожится через 1 минуту!';
             document.body.appendChild(notice);
-            setTimeout(() => notice.remove(), 10000);
+            setTimeout(() => notice.remove(), SELF_DESTRUCT_DELAY);
         }
 
         function showMessageUI(text, isError = true) {
@@ -871,7 +760,6 @@
             }
         }
 
-        // Навигация на телефоне
         window.openChat = function(contact) {
             document.getElementById('contactsScreen').classList.add('hide-on-mobile');
             document.getElementById('chatScreen').classList.add('show-on-mobile');
@@ -886,7 +774,6 @@
             document.getElementById('chatName').innerText = 'Выберите собеседника';
         };
 
-        // Регистрация
         window.register = async () => {
             const email = document.getElementById('regEmail').value;
             const password = document.getElementById('regPassword').value;
@@ -907,7 +794,6 @@
             } catch (error) { showMessageUI(error.message, true); }
         };
 
-        // Вход
         window.login = async () => {
             const identifier = document.getElementById('loginIdentifier').value;
             const password = document.getElementById('loginPassword').value;
@@ -929,7 +815,6 @@
             await signOut(auth);
         };
 
-        // Поиск
         window.searchUser = async () => {
             const searchInput = document.getElementById('searchInput').value.trim();
             if (!searchInput) return;
@@ -985,13 +870,11 @@
         async function selectContact(contact) {
             currentContact = contact;
             
-            // Обновляем шапку чата
             document.getElementById('chatName').innerHTML = contact.nickname || contact.globalId?.substring(0, 8);
             document.getElementById('chatStatus').innerHTML = `Global ID: ${contact.globalId}`;
             document.getElementById('chatAvatar').innerHTML = contact.nickname?.charAt(0).toUpperCase() || '🧊';
             document.getElementById('chatInputArea').style.display = 'flex';
             
-            // Открываем чат на телефоне
             if (window.innerWidth <= 768) {
                 document.getElementById('contactsScreen').classList.add('hide-on-mobile');
                 document.getElementById('chatScreen').classList.add('show-on-mobile');
@@ -1016,25 +899,29 @@
                     const msg = docSnap.data();
                     const isSent = msg.from === currentUser.uid;
                     let decryptedText = msg.text;
-                    if (msg.encrypted && msg.keyStr) {
+                    
+                    if (msg.encrypted) {
                         try {
-                            decryptedText = await fullDecrypt(msg.text, msg.keyStr);
-                            if (!decryptedText) decryptedText = '🔒 Ошибка расшифровки';
-                        } catch(e) { decryptedText = '🔒 Зашифрованное сообщение'; }
+                            decryptedText = await multiLayerDecrypt(msg.text);
+                        } catch(e) { 
+                            decryptedText = '🔒 Зашифрованное сообщение'; 
+                        }
                     }
+                    
                     const messageDiv = document.createElement('div');
                     messageDiv.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
                     messageDiv.innerHTML = `
                         <div>${escapeHtml(decryptedText)}</div>
                         <div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div>
-                        <div class="message-self-destruct">💣 Самоуничтожится через 10 сек</div>
+                        <div class="message-self-destruct">💣 Самоуничтожится через 1 минуту</div>
                     `;
                     messagesArea.appendChild(messageDiv);
+                    
                     if (msg.messageId && !destructTimeouts[msg.messageId] && !isSent) {
                         destructTimeouts[msg.messageId] = setTimeout(async () => {
                             await deleteDoc(doc(db, "chats", chatId, "messages", docSnap.id));
                             delete destructTimeouts[msg.messageId];
-                        }, 10000);
+                        }, SELF_DESTRUCT_DELAY);
                         showDestructNotice();
                     }
                 }
@@ -1052,20 +939,27 @@
             const messageInput = document.getElementById('messageInput');
             const text = messageInput.value.trim();
             if (!text || !currentContact) return;
+            
             const chatId = [currentUser.uid, currentContact.uid].sort().join('_');
-            const { encrypted, keyStr } = await fullEncrypt(text);
+            const encryptedText = await multiLayerEncrypt(text);
             const messageId = Date.now().toString() + Math.random().toString(36);
+            
             await addDoc(collection(db, "chats", chatId, "messages"), {
                 from: currentUser.uid,
                 to: currentContact.uid,
-                text: encrypted,
+                text: encryptedText,
                 encrypted: true,
-                keyStr: keyStr,
                 timestamp: new Date(),
-                messageId: messageId
+                messageId: messageId,
+                encryptionLayers: ENCRYPTION_LAYERS
             });
+            
             const chatRef = doc(db, "chats", chatId);
-            await updateDoc(chatRef, { lastMessage: text.substring(0, 50), lastMessageTime: new Date() });
+            await updateDoc(chatRef, { 
+                lastMessage: text.substring(0, 50), 
+                lastMessageTime: new Date() 
+            });
+            
             messageInput.value = '';
         };
 
@@ -1113,7 +1007,6 @@
                 document.getElementById('messengerApp').style.display = 'none';
                 document.getElementById('loginIdentifier').value = '';
                 document.getElementById('loginPassword').value = '';
-                // Сбрасываем навигацию
                 document.getElementById('contactsScreen').classList.remove('hide-on-mobile');
                 document.getElementById('chatScreen').classList.remove('show-on-mobile');
             }
