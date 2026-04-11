@@ -675,10 +675,8 @@
         let currentUser = null;
         let currentUserData = null;
         let currentContact = null;
-        let chats = [];
         let messagesUnsubscribe = null;
         let destructTimeouts = {};
-        let onlineStatuses = {};
 
         const SELF_DESTRUCT_DELAY = 5000;
         const ENCRYPTION_LAYERS = 21;
@@ -798,7 +796,6 @@
             }
         }
 
-        // Обновление онлайн-статуса
         async function updatePresence() {
             if (!currentUser) return;
             const userRef = doc(db, "users", currentUser.uid);
@@ -827,27 +824,55 @@
             document.getElementById('addContactBtn').style.display = 'none';
         };
 
-        // Добавление в контакты
         window.addToContacts = async () => {
-            if (!currentContact) return;
+            if (!currentContact) {
+                alert('Нет выбранного контакта');
+                return;
+            }
             
-            const currentUserRef = doc(db, "users", currentUser.uid);
-            const currentUserSnap = await getDoc(currentUserRef);
-            const currentContacts = currentUserSnap.data().contacts || [];
-            
-            if (!currentContacts.some(c => c.uid === currentContact.uid)) {
+            try {
+                const currentUserRef = doc(db, "users", currentUser.uid);
+                const currentUserSnap = await getDoc(currentUserRef);
+                const currentContacts = currentUserSnap.data().contacts || [];
+                
+                if (currentContacts.some(c => c.uid === currentContact.uid)) {
+                    alert('Этот пользователь уже в ваших контактах');
+                    document.getElementById('addContactBtn').style.display = 'none';
+                    return;
+                }
+                
+                // Получаем полные данные о контакте
+                let contactData = currentContact;
+                if (!contactData.globalId || !contactData.nickname) {
+                    const contactDoc = await getDoc(doc(db, "users", currentContact.uid));
+                    if (contactDoc.exists()) {
+                        const data = contactDoc.data();
+                        contactData = {
+                            uid: currentContact.uid,
+                            globalId: data.globalId,
+                            nickname: data.nickname,
+                            email: data.email
+                        };
+                        currentContact = contactData;
+                    }
+                }
+                
                 await updateDoc(currentUserRef, {
                     contacts: arrayUnion({
-                        uid: currentContact.uid,
-                        globalId: currentContact.globalId,
-                        nickname: currentContact.nickname,
-                        email: currentContact.email,
+                        uid: contactData.uid,
+                        globalId: contactData.globalId,
+                        nickname: contactData.nickname,
+                        email: contactData.email,
                         addedAt: new Date()
                     })
                 });
+                
                 document.getElementById('addContactBtn').style.display = 'none';
-                alert(`✅ ${currentContact.nickname || currentContact.globalId} добавлен в контакты`);
+                alert(`✅ ${contactData.nickname || contactData.globalId} добавлен в контакты`);
                 loadChats();
+            } catch (error) {
+                console.error('Ошибка добавления:', error);
+                alert('Ошибка при добавлении в контакты');
             }
         };
 
@@ -899,7 +924,6 @@
             await signOut(auth);
         };
 
-        // Поиск пользователя и создание чата
         window.searchAndStartChat = async () => {
             const searchInput = document.getElementById('searchInput').value.trim();
             if (!searchInput) return;
@@ -924,15 +948,12 @@
         };
 
         async function loadChats() {
-            // Получаем все чаты пользователя (из контактов и из сообщений)
             const userDoc = await getDoc(doc(db, "users", currentUser.uid));
             const userData = userDoc.data();
             const contacts = userData.contacts || [];
             
-            // Находим всех пользователей, с которыми есть переписка
             const chatsSet = new Map();
             
-            // Добавляем контакты
             for (const contact of contacts) {
                 chatsSet.set(contact.uid, {
                     uid: contact.uid,
@@ -943,7 +964,6 @@
                 });
             }
             
-            // Ищем чаты с незнакомцами (есть сообщения, но нет в контактах)
             const chatsQuery = query(collection(db, "chats"));
             const chatsSnap = await getDocs(chatsQuery);
             for (const chatDoc of chatsSnap.docs) {
@@ -991,23 +1011,35 @@
         }
 
         async function selectContact(contact) {
-            currentContact = contact;
+            // Получаем полные данные о контакте
+            let fullContact = contact;
+            if (!contact.globalId || !contact.nickname) {
+                const contactDoc = await getDoc(doc(db, "users", contact.uid));
+                if (contactDoc.exists()) {
+                    const data = contactDoc.data();
+                    fullContact = {
+                        uid: contact.uid,
+                        globalId: data.globalId,
+                        nickname: data.nickname,
+                        email: data.email
+                    };
+                }
+            }
+            currentContact = fullContact;
             
-            // Проверяем, есть ли контакт в списке контактов
             const userDoc = await getDoc(doc(db, "users", currentUser.uid));
             const userData = userDoc.data();
-            const isContact = (userData.contacts || []).some(c => c.uid === contact.uid);
+            const isContact = (userData.contacts || []).some(c => c.uid === currentContact.uid);
             
-            const isOnline = onlineStatuses[contact.uid] || false;
-            document.getElementById('chatName').innerHTML = contact.nickname || contact.globalId?.substring(0, 8);
+            const isOnline = false; // Упрощённо
+            document.getElementById('chatName').innerHTML = currentContact.nickname || currentContact.globalId?.substring(0, 8);
             document.getElementById('chatStatus').innerHTML = `
                 <span class="online-status ${isOnline ? 'online' : 'offline'}"></span>
                 ${isOnline ? 'онлайн' : 'офлайн'} | 🔒 21 слой шифрования
             `;
-            document.getElementById('chatAvatar').innerHTML = contact.nickname?.charAt(0).toUpperCase() || '🧊';
+            document.getElementById('chatAvatar').innerHTML = currentContact.nickname?.charAt(0).toUpperCase() || '🧊';
             document.getElementById('chatInputArea').style.display = 'flex';
             
-            // Показываем кнопку "Добавить в контакты" только если не в контактах
             if (!isContact) {
                 document.getElementById('addContactBtn').style.display = 'block';
             } else {
@@ -1021,11 +1053,11 @@
             
             if (messagesUnsubscribe) messagesUnsubscribe();
             
-            const chatId = [currentUser.uid, contact.uid].sort().join('_');
+            const chatId = [currentUser.uid, currentContact.uid].sort().join('_');
             const chatRef = doc(db, "chats", chatId);
             const chatDoc = await getDoc(chatRef);
             if (!chatDoc.exists()) {
-                await setDoc(chatRef, { participants: [currentUser.uid, contact.uid], createdAt: new Date() });
+                await setDoc(chatRef, { participants: [currentUser.uid, currentContact.uid], createdAt: new Date() });
             }
             
             const messagesRef = collection(db, "chats", chatId, "messages");
@@ -1139,16 +1171,6 @@
                 document.getElementById('userGlobalId').innerHTML = shortGlobalId;
                 
                 loadChats();
-                
-                // Обновляем статусы онлайн
-                const updateOnlineStatuses = async () => {
-                    const chatsList = document.getElementById('chatsList');
-                    const chatItems = chatsList.children;
-                    for (const item of chatItems) {
-                        // Можно добавить статус в список чатов
-                    }
-                };
-                setInterval(updateOnlineStatuses, 30000);
             } else {
                 if (messagesUnsubscribe) messagesUnsubscribe();
                 currentContact = null;
