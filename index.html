@@ -872,7 +872,7 @@
                 loadChats();
             } catch (error) {
                 console.error('Ошибка добавления:', error);
-                alert('Ошибка при добавлении в контакты');
+                alert('Ошибка при добавлении в контакты: ' + error.message);
             }
         };
 
@@ -964,6 +964,7 @@
                 });
             }
             
+            // Находим чаты с пользователями, которых нет в контактах
             const chatsQuery = query(collection(db, "chats"));
             const chatsSnap = await getDocs(chatsQuery);
             for (const chatDoc of chatsSnap.docs) {
@@ -1023,6 +1024,9 @@
                         nickname: data.nickname,
                         email: data.email
                     };
+                } else {
+                    alert('Пользователь не найден');
+                    return;
                 }
             }
             currentContact = fullContact;
@@ -1031,7 +1035,7 @@
             const userData = userDoc.data();
             const isContact = (userData.contacts || []).some(c => c.uid === currentContact.uid);
             
-            const isOnline = false; // Упрощённо
+            const isOnline = false;
             document.getElementById('chatName').innerHTML = currentContact.nickname || currentContact.globalId?.substring(0, 8);
             document.getElementById('chatStatus').innerHTML = `
                 <span class="online-status ${isOnline ? 'online' : 'offline'}"></span>
@@ -1057,7 +1061,11 @@
             const chatRef = doc(db, "chats", chatId);
             const chatDoc = await getDoc(chatRef);
             if (!chatDoc.exists()) {
-                await setDoc(chatRef, { participants: [currentUser.uid, currentContact.uid], createdAt: new Date() });
+                await setDoc(chatRef, { 
+                    participants: [currentUser.uid, currentContact.uid], 
+                    createdAt: new Date(),
+                    lastMessageTime: null
+                });
             }
             
             const messagesRef = collection(db, "chats", chatId, "messages");
