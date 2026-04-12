@@ -843,18 +843,30 @@
                 
                 // Получаем полные данные о контакте
                 let contactData = currentContact;
-                if (!contactData.globalId || !contactData.nickname) {
+                
+                // Если данных нет, загружаем из Firestore
+                if (!contactData.globalId || !contactData.nickname || !contactData.email) {
                     const contactDoc = await getDoc(doc(db, "users", currentContact.uid));
                     if (contactDoc.exists()) {
                         const data = contactDoc.data();
                         contactData = {
                             uid: currentContact.uid,
-                            globalId: data.globalId,
-                            nickname: data.nickname,
-                            email: data.email
+                            globalId: data.globalId || 'unknown',
+                            nickname: data.nickname || 'User',
+                            email: data.email || 'noemail@example.com'
                         };
                         currentContact = contactData;
+                    } else {
+                        alert('Пользователь не найден в базе данных');
+                        return;
                     }
+                }
+                
+                // Проверяем, что все поля существуют
+                if (!contactData.uid || !contactData.globalId || !contactData.nickname) {
+                    console.error('Ошибка: недостаточно данных о контакте', contactData);
+                    alert('Ошибка: недостаточно данных о контакте');
+                    return;
                 }
                 
                 await updateDoc(currentUserRef, {
@@ -862,7 +874,7 @@
                         uid: contactData.uid,
                         globalId: contactData.globalId,
                         nickname: contactData.nickname,
-                        email: contactData.email,
+                        email: contactData.email || 'noemail@example.com',
                         addedAt: new Date()
                     })
                 });
@@ -1014,15 +1026,15 @@
         async function selectContact(contact) {
             // Получаем полные данные о контакте
             let fullContact = contact;
-            if (!contact.globalId || !contact.nickname) {
+            if (!contact.globalId || !contact.nickname || !contact.email) {
                 const contactDoc = await getDoc(doc(db, "users", contact.uid));
                 if (contactDoc.exists()) {
                     const data = contactDoc.data();
                     fullContact = {
                         uid: contact.uid,
-                        globalId: data.globalId,
-                        nickname: data.nickname,
-                        email: data.email
+                        globalId: data.globalId || 'unknown',
+                        nickname: data.nickname || 'User',
+                        email: data.email || 'noemail@example.com'
                     };
                 } else {
                     alert('Пользователь не найден');
