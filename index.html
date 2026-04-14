@@ -13,6 +13,7 @@
     <meta name="apple-mobile-web-app-title" content="Айсберг">
     <meta name="theme-color" content="#0A0F1E">
     
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     
     <style>
@@ -23,7 +24,7 @@
             -webkit-tap-highlight-color: transparent;
             user-select: none;
             -webkit-user-select: none;
-            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
         }
 
         body {
@@ -32,7 +33,18 @@
             min-height: 100vh;
             display: flex;
             flex-direction: column;
-            transition: background 0.3s ease;
+            position: relative;
+        }
+
+        /* ЧАСТИЦЫ КАК НА ОСНОВНОМ САЙТЕ */
+        #particles-js {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
         }
 
         /* ТЕМЫ ОФОРМЛЕНИЯ */
@@ -123,6 +135,45 @@
             width: 100%;
             max-width: 1400px;
             margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Адаптация под большие экраны телефонов (iPhone Pro Max, Samsung Ultra) */
+        @media (min-width: 430px) and (max-width: 800px) {
+            .contacts-screen {
+                max-width: 340px;
+            }
+            .chat-avatar-small {
+                width: 52px;
+                height: 52px;
+                font-size: 22px;
+            }
+            .chat-name {
+                font-size: 16px;
+            }
+            .message-bubble {
+                max-width: 75%;
+                font-size: 15px;
+            }
+        }
+
+        @media (min-width: 800px) {
+            .contacts-screen {
+                max-width: 380px;
+            }
+            .chat-avatar-small {
+                width: 56px;
+                height: 56px;
+                font-size: 24px;
+            }
+            .chat-name {
+                font-size: 17px;
+            }
+            .message-bubble {
+                max-width: 65%;
+                font-size: 15px;
+            }
         }
 
         .auth-card {
@@ -291,7 +342,7 @@
 
         .contacts-screen {
             width: 100%;
-            max-width: 400px;
+            max-width: 350px;
             background: var(--bg-secondary);
             border-right: 1px solid var(--border);
             display: flex;
@@ -661,6 +712,7 @@
             display: flex;
             gap: 10px;
             align-items: center;
+            cursor: pointer;
         }
 
         .link-preview img {
@@ -672,16 +724,23 @@
 
         .link-preview-content {
             flex: 1;
+            min-width: 0;
         }
 
         .link-preview-title {
             font-weight: bold;
             font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .link-preview-url {
             font-size: 10px;
             color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .chat-input-area {
@@ -921,6 +980,9 @@
     </style>
 </head>
 <body class="theme-dark">
+    <!-- ЧАСТИЦЫ КАК НА ОСНОВНОМ САЙТЕ -->
+    <div id="particles-js"></div>
+    
     <div class="app-container">
         <div id="authForm" style="display: flex; height: 100vh; align-items: center; justify-content: center;">
             <div class="auth-card">
@@ -1067,13 +1129,6 @@
                     <span id="theme-blue-check" class="theme-check" style="display: none;">✓</span>
                 </div>
             </div>
-            <div class="settings-card">
-                <div class="settings-title">Конфиденциальность</div>
-                <div class="setting-row">
-                    <span class="setting-label">Автоудаление сообщений</span>
-                    <div id="autoDeleteToggle" class="toggle-switch" onclick="toggleAutoDelete()"></div>
-                </div>
-            </div>
             <button class="btn btn-secondary" onclick="closeSettings()" style="margin-top: 16px;">Закрыть</button>
         </div>
     </div>
@@ -1151,9 +1206,28 @@
         let currentChatId = null;
         let messagesUnsubscribe = null;
         let html5QrCode = null;
-        let autoDeleteEnabled = localStorage.getItem('autoDeleteEnabled') === 'true';
 
         const ENCRYPTION_LAYERS = 21;
+
+        // ИНИЦИАЛИЗАЦИЯ ЧАСТИЦ
+        function initParticles() {
+            particlesJS('particles-js', {
+                particles: {
+                    number: { value: 80, density: { enable: true, value_area: 800 } },
+                    color: { value: ["#00ff00", "#00aa00", "#008800", "#005500"] },
+                    shape: { type: ["circle", "square", "triangle"] },
+                    opacity: { value: 0.5, random: true, anim: { enable: true, speed: 1, opacity_min: 0.1 } },
+                    size: { value: 3, random: true, anim: { enable: true, speed: 2, size_min: 0.1 } },
+                    line_linked: { enable: true, distance: 150, color: "#00aa00", opacity: 0.2, width: 1 },
+                    move: { enable: true, speed: 1, direction: "none", random: true, out_mode: "out" }
+                },
+                interactivity: {
+                    detect_on: "canvas",
+                    events: { onhover: { enable: true, mode: "repulse" }, onclick: { enable: true, mode: "push" }, resize: true }
+                },
+                retina_detect: true
+            });
+        }
 
         // Функции темы
         window.setTheme = function(theme) {
@@ -1180,30 +1254,14 @@
 
         window.showSettings = () => {
             document.getElementById('settingsModal').style.display = 'flex';
-            updateToggleUI();
         };
 
         window.closeSettings = () => {
             document.getElementById('settingsModal').style.display = 'none';
         };
 
-        function updateToggleUI() {
-            const toggle = document.getElementById('autoDeleteToggle');
-            if (autoDeleteEnabled) {
-                toggle.classList.add('active');
-            } else {
-                toggle.classList.remove('active');
-            }
-        }
-
-        window.toggleAutoDelete = () => {
-            autoDeleteEnabled = !autoDeleteEnabled;
-            localStorage.setItem('autoDeleteEnabled', autoDeleteEnabled);
-            updateToggleUI();
-        };
-
         loadTheme();
-        updateToggleUI();
+        initParticles();
 
         // Отправка фото
         document.getElementById('attachPhotoBtn').addEventListener('click', () => {
@@ -1240,7 +1298,6 @@
                 from: currentUser.uid,
                 text: imageData,
                 isImage: true,
-                encrypted: false,
                 timestamp: new Date(),
                 messageId: messageId
             };
@@ -1800,12 +1857,6 @@
                     messageDiv.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
                     messageDiv.innerHTML = `${!isSent ? `<div style="font-size: 10px; color: var(--accent); margin-bottom: 4px;">${senderName}</div>` : ''}${content}<div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div>`;
                     messagesArea.appendChild(messageDiv);
-                    
-                    if (autoDeleteEnabled && !isSent) {
-                        setTimeout(async () => {
-                            await deleteDoc(doc(db, "chats", groupId, "messages", docSnap.id));
-                        }, 10000);
-                    }
                 }
                 messagesArea.scrollTop = messagesArea.scrollHeight;
             });
@@ -1884,12 +1935,6 @@
                     messageDiv.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
                     messageDiv.innerHTML = `${content}<div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div>`;
                     messagesArea.appendChild(messageDiv);
-                    
-                    if (autoDeleteEnabled && !isSent) {
-                        setTimeout(async () => {
-                            await deleteDoc(doc(db, "chats", currentChatId, "messages", docSnap.id));
-                        }, 10000);
-                    }
                 }
                 messagesArea.scrollTop = messagesArea.scrollHeight;
             });
