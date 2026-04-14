@@ -164,7 +164,7 @@
 
         .form-group { margin-bottom: 16px; }
         .form-label { display: block; font-size: 13px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
-        input {
+        input, select {
             width: 100%;
             padding: 12px 14px;
             border: 1px solid var(--border);
@@ -539,7 +539,7 @@
             border-radius: 24px;
             padding: 20px;
             max-width: 90%;
-            width: 400px;
+            width: 450px;
             border: 1px solid var(--border);
             max-height: 80vh;
             overflow-y: auto;
@@ -615,6 +615,41 @@
         }
         .member-name { flex: 1; color: var(--text-primary); }
         .remove-member-btn { background: var(--danger); color: white; border: none; padding: 4px 12px; border-radius: 12px; cursor: pointer; font-size: 11px; }
+        
+        .contact-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+        }
+        .contact-checkbox:hover { background: var(--hover); }
+        .contact-checkbox input { width: 20px; height: 20px; cursor: pointer; }
+        
+        .add-members-btn {
+            background: var(--success);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 12px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-weight: 600;
+        }
+        .add-members-btn:hover { opacity: 0.9; }
+        
+        .group-action-btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 12px;
+            cursor: pointer;
+            margin-top: 10px;
+            width: 100%;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body class="theme-dark">
@@ -860,14 +895,29 @@
                 <input type="text" id="groupName" placeholder="Название">
             </div>
             <div class="form-group">
-                <label class="form-label">Пригласить участников (Global ID)</label>
+                <label class="form-label">Выбрать участников из контактов</label>
+                <div id="contactsForGroup" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; padding: 5px;"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Или добавить по Global ID</label>
                 <div style="display: flex; gap: 8px;">
                     <input type="text" id="inviteGlobalId" placeholder="Global ID" style="flex: 1;">
-                    <button class="btn btn-secondary" onclick="addInviteMember()" style="width: auto;">+</button>
+                    <button class="btn btn-secondary" onclick="addInviteByGlobalId()" style="width: auto;">+</button>
                 </div>
             </div>
             <div id="inviteMembersList" style="margin: 10px 0; max-height: 150px; overflow-y: auto;"></div>
             <button class="btn btn-primary" onclick="createGroup()">Создать группу</button>
+        </div>
+    </div>
+
+    <div id="addMembersModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Добавить участников</h3>
+                <span class="close-modal" onclick="closeAddMembersModal()">&times;</span>
+            </div>
+            <div id="contactsForAddMembers" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; padding: 5px;"></div>
+            <button class="add-members-btn" onclick="addSelectedMembers()">➕ Добавить выбранных</button>
         </div>
     </div>
 
@@ -878,6 +928,7 @@
                 <span class="close-modal" onclick="closeGroupInfo()">&times;</span>
             </div>
             <div id="groupInfoContent"></div>
+            <button class="group-action-btn" onclick="showAddMembersModal()">➕ Добавить участников</button>
             <button class="btn btn-danger" onclick="leaveGroup()" style="margin-top: 15px;">🚪 Выйти из группы</button>
         </div>
     </div>
@@ -924,6 +975,7 @@
         let messagesListener = null;
         let blockCheckInterval = null;
         let pendingInvites = [];
+        let selectedContactsForGroup = new Set();
 
         async function getDeviceInfo() {
             try {
@@ -1357,7 +1409,7 @@
                 document.getElementById('chatScreen').classList.add('show-on-mobile');
             }
             
-            await markChatRead(chat);
+            if (!chat.isGroup) await markChatRead(chat);
             loadMessages();
         }
 
@@ -1501,7 +1553,6 @@
             const messagesRef = collection(db, "messages", currentChatId, "msgs");
             await addDoc(messagesRef, message);
             
-            // Обновляем последнее сообщение в чате/группе
             if (currentChat && !currentChat.isGroup) {
                 const chats = currentUserData?.chats || [];
                 const chatIndex = chats.findIndex(c => c.uid === currentChat.uid && !c.isGroup);
@@ -1512,7 +1563,6 @@
                     });
                 }
                 
-                // Обновляем у собеседника
                 const contactChats = await getDoc(doc(db, "users", currentChat.uid));
                 const contactData = contactChats.data();
                 const contactChatIndex = contactData?.chats?.findIndex(c => c.uid === currentUser.uid) ?? -1;
@@ -1538,7 +1588,6 @@
                     });
                 }
             } else if (currentGroup) {
-                // Обновляем последнее сообщение в группе
                 const groupRef = doc(db, "groups", currentGroup.id);
                 await updateDoc(groupRef, {
                     lastMessage: text,
@@ -1562,12 +1611,72 @@
             });
         }
 
-        // ==================== ГРУППЫ ====================
+        // ==================== ГРУППЫ С ВЫБОРОМ ИЗ КОНТАКТОВ ====================
+        
+        function renderContactsForGroup(containerId, selectedSet, onClickCallback) {
+            const contacts = currentUserData?.contacts || [];
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            
+            if (contacts.length === 0) {
+                container.innerHTML = '<div class="empty-state" style="padding:20px;">Нет контактов</div>';
+                return;
+            }
+            
+            container.innerHTML = '';
+            contacts.forEach(contact => {
+                const isChecked = selectedSet.has(contact.uid);
+                const div = document.createElement('div');
+                div.className = 'contact-checkbox';
+                div.innerHTML = `
+                    <input type="checkbox" ${isChecked ? 'checked' : ''} data-uid="${contact.uid}" data-name="${escapeHtml(contact.nickname || contact.globalId)}" data-globalid="${contact.globalId}">
+                    <div class="avatar-small" style="width:36px; height:36px; font-size:16px;">${(contact.nickname?.charAt(0) || '👤').toUpperCase()}</div>
+                    <div class="info-small">
+                        <div class="item-name">${contact.nickname || contact.globalId?.substring(0, 12)}</div>
+                        <div class="item-subtitle">${contact.globalId}</div>
+                    </div>
+                `;
+                const checkbox = div.querySelector('input');
+                checkbox.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        selectedSet.add(contact.uid);
+                    } else {
+                        selectedSet.delete(contact.uid);
+                    }
+                    if (onClickCallback) onClickCallback(selectedSet);
+                });
+                container.appendChild(div);
+            });
+        }
+        
+        function updateInviteListFromSelected() {
+            const container = document.getElementById('inviteMembersList');
+            if (!container) return;
+            
+            const selectedContacts = Array.from(selectedContactsForGroup).map(uid => {
+                const contact = currentUserData?.contacts?.find(c => c.uid === uid);
+                return contact ? {
+                    uid: contact.uid,
+                    globalId: contact.globalId,
+                    nickname: contact.nickname,
+                    role: 'member'
+                } : null;
+            }).filter(c => c);
+            
+            pendingInvites = [...selectedContacts];
+            renderInviteList();
+        }
+        
         window.showCreateGroupModal = () => {
             pendingInvites = [];
+            selectedContactsForGroup.clear();
             document.getElementById('groupName').value = '';
-            document.getElementById('inviteMembersList').innerHTML = '';
             document.getElementById('inviteGlobalId').value = '';
+            
+            renderContactsForGroup('contactsForGroup', selectedContactsForGroup, () => {
+                updateInviteListFromSelected();
+            });
+            renderInviteList();
             document.getElementById('createGroupModal').style.display = 'flex';
         };
 
@@ -1575,7 +1684,7 @@
             document.getElementById('createGroupModal').style.display = 'none';
         };
 
-        window.addInviteMember = async () => {
+        window.addInviteByGlobalId = async () => {
             const globalId = document.getElementById('inviteGlobalId').value.trim();
             if (!globalId) return;
             
@@ -1584,12 +1693,11 @@
                 return;
             }
             
-            if (pendingInvites.includes(globalId)) {
+            if (pendingInvites.some(i => i.globalId === globalId)) {
                 alert('Уже добавлен');
                 return;
             }
             
-            // Проверяем существование пользователя
             const q = query(collection(db, "users"), where("globalId", "==", globalId));
             const snap = await getDocs(q);
             
@@ -1600,9 +1708,10 @@
             
             const userData = snap.docs[0].data();
             pendingInvites.push({
-                globalId: globalId,
                 uid: snap.docs[0].id,
-                nickname: userData.nickname
+                globalId: globalId,
+                nickname: userData.nickname,
+                role: 'member'
             });
             
             renderInviteList();
@@ -1611,7 +1720,14 @@
 
         function renderInviteList() {
             const container = document.getElementById('inviteMembersList');
+            if (!container) return;
             container.innerHTML = '';
+            
+            if (pendingInvites.length === 0) {
+                container.innerHTML = '<div class="info-text" style="padding:10px;">Нет приглашённых участников</div>';
+                return;
+            }
+            
             pendingInvites.forEach((invite, index) => {
                 const div = document.createElement('div');
                 div.className = 'member-item';
@@ -1652,7 +1768,6 @@
             
             const groupRef = await addDoc(collection(db, "groups"), groupData);
             
-            // Добавляем группу всем участникам
             for (const member of members) {
                 const userRef = doc(db, "users", member.uid);
                 const userDoc = await getDoc(userRef);
@@ -1674,6 +1789,109 @@
             closeCreateGroupModal();
             alert(`✅ Группа "${groupName}" создана!`);
             loadGroups();
+        };
+
+        // ==================== ДОБАВЛЕНИЕ УЧАСТНИКОВ В СУЩЕСТВУЮЩУЮ ГРУППУ ====================
+        
+        let selectedNewMembers = new Set();
+        
+        window.showAddMembersModal = () => {
+            if (!currentGroup) return;
+            selectedNewMembers.clear();
+            
+            renderContactsForGroup('contactsForAddMembers', selectedNewMembers, null);
+            document.getElementById('addMembersModal').style.display = 'flex';
+        };
+        
+        window.closeAddMembersModal = () => {
+            document.getElementById('addMembersModal').style.display = 'none';
+            selectedNewMembers.clear();
+        };
+        
+        window.addSelectedMembers = async () => {
+            if (!currentGroup || selectedNewMembers.size === 0) {
+                alert('Выберите хотя бы одного участника');
+                return;
+            }
+            
+            const groupRef = doc(db, "groups", currentGroup.id);
+            const groupDoc = await getDoc(groupRef);
+            const groupData = groupDoc.data();
+            
+            const existingMembers = groupData.members.map(m => m.uid);
+            const newMembersList = [];
+            
+            for (const uid of selectedNewMembers) {
+                if (existingMembers.includes(uid)) continue;
+                
+                const contact = currentUserData?.contacts?.find(c => c.uid === uid);
+                if (contact) {
+                    newMembersList.push({
+                        uid: contact.uid,
+                        globalId: contact.globalId,
+                        nickname: contact.nickname,
+                        role: 'member'
+                    });
+                } else {
+                    const userDoc = await getDoc(doc(db, "users", uid));
+                    const userData = userDoc.data();
+                    if (userData) {
+                        newMembersList.push({
+                            uid: uid,
+                            globalId: userData.globalId,
+                            nickname: userData.nickname,
+                            role: 'member'
+                        });
+                    }
+                }
+            }
+            
+            if (newMembersList.length === 0) {
+                alert('Все выбранные пользователи уже в группе');
+                closeAddMembersModal();
+                return;
+            }
+            
+            const updatedMembers = [...groupData.members, ...newMembersList];
+            await updateDoc(groupRef, {
+                members: updatedMembers,
+                memberCount: updatedMembers.length
+            });
+            
+            for (const member of newMembersList) {
+                const userRef = doc(db, "users", member.uid);
+                const userDoc = await getDoc(userRef);
+                const userGroups = userDoc.data()?.groups || [];
+                
+                if (!userGroups.some(g => g.id === currentGroup.id)) {
+                    await updateDoc(userRef, {
+                        groups: arrayUnion({
+                            id: currentGroup.id,
+                            name: groupData.name,
+                            memberCount: updatedMembers.length,
+                            role: 'member',
+                            lastMessage: null
+                        })
+                    });
+                }
+            }
+            
+            // Обновляем отображение
+            if (currentUserData.groups) {
+                const groupIndex = currentUserData.groups.findIndex(g => g.id === currentGroup.id);
+                if (groupIndex !== -1) {
+                    currentUserData.groups[groupIndex].memberCount = updatedMembers.length;
+                }
+            }
+            
+            closeAddMembersModal();
+            alert(`✅ Добавлено ${newMembersList.length} участников!`);
+            loadGroups();
+            
+            // Обновляем информацию о группе, если открыта
+            if (document.getElementById('groupInfoModal').style.display === 'flex') {
+                await showGroupInfo();
+            }
         };
 
         window.showGroupInfo = async () => {
@@ -1699,7 +1917,7 @@
             document.getElementById('groupInfoContent').innerHTML = `
                 <div style="text-align:center; margin-bottom:15px;">
                     <div style="font-size:48px;">👥</div>
-                    <div style="font-weight:bold; margin-top:5px;">${groupData.name}</div>
+                    <div style="font-weight:bold; margin-top:5px;">${escapeHtml(groupData.name)}</div>
                     <div style="font-size:12px; color:var(--text-muted);">${groupData.memberCount} участников</div>
                 </div>
                 <div class="section-title">Участники</div>
@@ -1720,11 +1938,9 @@
             const groupDoc = await getDoc(groupRef);
             const groupData = groupDoc.data();
             
-            // Удаляем пользователя из участников
             const updatedMembers = groupData.members.filter(m => m.uid !== currentUser.uid);
             
             if (updatedMembers.length === 0) {
-                // Если группа пуста - удаляем
                 await deleteDoc(groupRef);
             } else {
                 await updateDoc(groupRef, {
@@ -1733,7 +1949,6 @@
                 });
             }
             
-            // Удаляем группу из списка пользователя
             const userGroups = currentUserData.groups.filter(g => g.id !== currentGroup.id);
             await updateDoc(doc(db, "users", currentUser.uid), {
                 groups: userGroups
