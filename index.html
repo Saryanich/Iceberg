@@ -23,6 +23,7 @@
             -webkit-tap-highlight-color: transparent;
             user-select: none;
             -webkit-user-select: none;
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
         }
 
         body {
@@ -31,6 +32,88 @@
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            transition: background 0.3s ease;
+        }
+
+        /* ТЕМЫ ОФОРМЛЕНИЯ */
+        body.theme-dark {
+            --bg-primary: #0A0F1E;
+            --bg-secondary: #0F1A2A;
+            --bg-surface: #1A2A3A;
+            --bg-card: rgba(15, 26, 42, 0.95);
+            --text-primary: #FFFFFF;
+            --text-secondary: #88A9C4;
+            --text-muted: #4A6A8A;
+            --border: #2A3A4A;
+            --accent: #64B5F6;
+            --accent-dark: #1E88E5;
+            --success: #4CAF50;
+            --danger: #E53935;
+            --warning: #FF9800;
+            --message-sent: #1E88E5;
+            --message-received: #1A2A3A;
+            --hover: #1A2A3A;
+        }
+        
+        body.theme-light {
+            --bg-primary: #F5F7FA;
+            --bg-secondary: #FFFFFF;
+            --bg-surface: #E8ECF0;
+            --bg-card: rgba(255, 255, 255, 0.95);
+            --text-primary: #1C1C1E;
+            --text-secondary: #5B6B7C;
+            --text-muted: #8E9AAB;
+            --border: #D1D9E6;
+            --accent: #3B82F6;
+            --accent-dark: #2563EB;
+            --success: #10B981;
+            --danger: #EF4444;
+            --warning: #F59E0B;
+            --message-sent: #3B82F6;
+            --message-received: #E8ECF0;
+            --hover: #F0F4F9;
+        }
+        
+        body.theme-rose {
+            --bg-primary: #FFF5F7;
+            --bg-secondary: #FFFFFF;
+            --bg-surface: #FCE4EC;
+            --bg-card: rgba(255, 255, 255, 0.95);
+            --text-primary: #4A2B3A;
+            --text-secondary: #8B6B7C;
+            --text-muted: #C4A5B5;
+            --border: #F0D0D8;
+            --accent: #EC4899;
+            --accent-dark: #DB2777;
+            --success: #10B981;
+            --danger: #EF4444;
+            --warning: #F59E0B;
+            --message-sent: #EC4899;
+            --message-received: #FCE4EC;
+            --hover: #FDF2F5;
+        }
+        
+        body.theme-blue {
+            --bg-primary: #F0F9FF;
+            --bg-secondary: #FFFFFF;
+            --bg-surface: #E0F2FE;
+            --bg-card: rgba(255, 255, 255, 0.95);
+            --text-primary: #1A3A5C;
+            --text-secondary: #5B8CB0;
+            --text-muted: #9BBED4;
+            --border: #CCE4F0;
+            --accent: #0EA5E9;
+            --accent-dark: #0284C7;
+            --success: #10B981;
+            --danger: #EF4444;
+            --warning: #F59E0B;
+            --message-sent: #0EA5E9;
+            --message-received: #E0F2FE;
+            --hover: #F0F9FF;
+        }
+
+        body {
+            background: var(--bg-primary);
         }
 
         .app-container {
@@ -43,13 +126,14 @@
         }
 
         .auth-card {
-            background: #1A2A3A;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
             border-radius: 28px;
             padding: 28px 24px;
             max-width: 90%;
             width: 400px;
             margin: auto;
-            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
             animation: fadeIn 0.3s ease;
         }
 
@@ -82,7 +166,7 @@
         .logo-title {
             font-size: 24px;
             font-weight: 700;
-            color: #64B5F6;
+            color: var(--accent);
         }
 
         .form-group {
@@ -93,25 +177,25 @@
             display: block;
             font-size: 13px;
             font-weight: 500;
-            color: #88A9C4;
+            color: var(--text-secondary);
             margin-bottom: 6px;
         }
 
         input {
             width: 100%;
             padding: 12px 14px;
-            border: 1px solid #2A3A4A;
+            border: 1px solid var(--border);
             border-radius: 12px;
             font-size: 15px;
             font-family: inherit;
-            background: #0F1A2A;
-            color: #FFFFFF;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
             transition: all 0.2s;
         }
 
         input:focus {
             outline: none;
-            border-color: #64B5F6;
+            border-color: var(--accent);
             box-shadow: 0 0 0 3px rgba(100, 181, 246, 0.1);
         }
 
@@ -132,23 +216,23 @@
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #64B5F6, #1E88E5);
+            background: var(--accent);
             color: white;
         }
 
         .btn-secondary {
             background: transparent;
-            color: #64B5F6;
-            border: 1px solid #2A3A4A;
+            color: var(--accent);
+            border: 1px solid var(--border);
         }
 
         .btn-danger {
-            background: #E53935;
+            background: var(--danger);
             color: white;
         }
 
         .btn-success {
-            background: #4CAF50;
+            background: var(--success);
             color: white;
         }
 
@@ -162,19 +246,19 @@
         .divider-line {
             flex: 1;
             height: 1px;
-            background: #2A3A4A;
+            background: var(--border);
         }
 
         .divider-text {
             font-size: 11px;
-            color: #4A6A8A;
+            color: var(--text-muted);
         }
 
         .switch-link {
             text-align: center;
             margin-top: 16px;
             font-size: 13px;
-            color: #64B5F6;
+            color: var(--accent);
             cursor: pointer;
         }
 
@@ -189,27 +273,27 @@
 
         .message-success {
             background: rgba(76, 175, 80, 0.2);
-            color: #4CAF50;
+            color: var(--success);
         }
 
         .message-error {
             background: rgba(229, 57, 53, 0.2);
-            color: #E53935;
+            color: var(--danger);
         }
 
         .messenger-container {
             display: flex;
             height: calc(100vh - 60px);
             width: 100%;
-            background: #0A0F1E;
+            background: var(--bg-primary);
             position: relative;
         }
 
         .contacts-screen {
             width: 100%;
             max-width: 400px;
-            background: #0F1A2A;
-            border-right: 1px solid #1A2A3A;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
             transition: transform 0.3s ease;
@@ -236,7 +320,7 @@
             flex: 1;
             display: flex;
             flex-direction: column;
-            background: #0A0F1E;
+            background: var(--bg-primary);
         }
 
         @media (max-width: 768px) {
@@ -257,8 +341,8 @@
 
         .chat-header {
             padding: 16px;
-            background: #0F1A2A;
-            border-bottom: 1px solid #1A2A3A;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
             gap: 12px;
@@ -268,7 +352,7 @@
         .back-btn {
             background: none;
             border: none;
-            color: #64B5F6;
+            color: var(--accent);
             font-size: 24px;
             cursor: pointer;
             padding: 8px;
@@ -284,12 +368,13 @@
         .chat-avatar {
             width: 44px;
             height: 44px;
-            background: linear-gradient(135deg, #64B5F6, #1E88E5);
+            background: var(--accent);
             border-radius: 22px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 22px;
+            color: white;
         }
 
         .chat-info {
@@ -298,35 +383,33 @@
 
         .chat-info h3 {
             font-size: 16px;
-            color: white;
+            color: var(--text-primary);
             margin-bottom: 2px;
         }
 
         .chat-info p {
             font-size: 11px;
-            color: #88A9C4;
+            color: var(--text-secondary);
         }
 
         .add-contact-btn {
-            background: #4CAF50;
+            background: var(--success);
             color: white;
             border: none;
             padding: 6px 12px;
             border-radius: 20px;
             font-size: 12px;
             cursor: pointer;
-            transition: all 0.2s;
         }
 
         .delete-chat-btn {
-            background: #E53935;
+            background: var(--danger);
             color: white;
             border: none;
             padding: 6px 12px;
             border-radius: 20px;
             font-size: 12px;
             cursor: pointer;
-            transition: all 0.2s;
         }
 
         .online-status {
@@ -338,17 +421,17 @@
         }
 
         .online {
-            background-color: #4CAF50;
-            box-shadow: 0 0 5px #4CAF50;
+            background-color: var(--success);
+            box-shadow: 0 0 5px var(--success);
         }
 
         .offline {
-            background-color: #888;
+            background-color: var(--text-muted);
         }
 
         .user-profile {
             padding: 16px;
-            border-bottom: 1px solid #1A2A3A;
+            border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -363,7 +446,7 @@
         .user-avatar {
             width: 44px;
             height: 44px;
-            background: linear-gradient(135deg, #64B5F6, #1E88E5);
+            background: var(--accent);
             border-radius: 22px;
             display: flex;
             align-items: center;
@@ -375,19 +458,19 @@
 
         .user-details h4 {
             font-size: 14px;
-            color: white;
+            color: var(--text-primary);
             margin-bottom: 2px;
         }
 
         .user-details p {
             font-size: 10px;
-            color: #88A9C4;
+            color: var(--text-secondary);
         }
 
         .logout-btn {
             background: none;
             border: none;
-            color: #88A9C4;
+            color: var(--text-secondary);
             font-size: 18px;
             cursor: pointer;
             padding: 8px;
@@ -395,23 +478,23 @@
 
         .search-area {
             padding: 12px;
-            border-bottom: 1px solid #1A2A3A;
+            border-bottom: 1px solid var(--border);
             display: flex;
             gap: 8px;
         }
 
         .search-input {
             flex: 1;
-            background: #1A2A3A;
+            background: var(--bg-surface);
             border: none;
             padding: 10px 14px;
             font-size: 14px;
             border-radius: 20px;
-            color: white;
+            color: var(--text-primary);
         }
 
         .plus-btn {
-            background: #1E88E5;
+            background: var(--accent);
             color: white;
             border: none;
             width: 44px;
@@ -429,23 +512,23 @@
             position: absolute;
             top: 70px;
             right: 20px;
-            background: #1A2A3A;
+            background: var(--bg-secondary);
             border-radius: 16px;
             overflow: hidden;
             z-index: 100;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            border: 1px solid #2A3A4A;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
         }
 
         .plus-menu-item {
             padding: 14px 20px;
-            color: white;
+            color: var(--text-primary);
             cursor: pointer;
             display: flex;
             align-items: center;
             gap: 12px;
             transition: all 0.2s;
-            border-bottom: 1px solid #2A3A4A;
+            border-bottom: 1px solid var(--border);
         }
 
         .plus-menu-item:last-child {
@@ -453,7 +536,7 @@
         }
 
         .plus-menu-item:hover {
-            background: #2A3A4A;
+            background: var(--hover);
         }
 
         .chats-list {
@@ -468,18 +551,18 @@
             padding: 12px 16px;
             cursor: pointer;
             transition: all 0.2s;
-            border-bottom: 1px solid #1A2A3A;
+            border-bottom: 1px solid var(--border);
             position: relative;
         }
 
         .chat-item:hover {
-            background: #1A2A3A;
+            background: var(--hover);
         }
 
         .chat-item .delete-chat-icon {
             opacity: 0;
             transition: opacity 0.2s;
-            background: #E53935;
+            background: var(--danger);
             border: none;
             color: white;
             width: 32px;
@@ -498,14 +581,14 @@
         .chat-avatar-small {
             width: 48px;
             height: 48px;
-            background: #2A3A4A;
+            background: var(--bg-surface);
             border-radius: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 20px;
             font-weight: 600;
-            color: white;
+            color: var(--text-primary);
         }
 
         .chat-info-small {
@@ -515,13 +598,13 @@
         .chat-name {
             font-size: 15px;
             font-weight: 500;
-            color: white;
+            color: var(--text-primary);
             margin-bottom: 2px;
         }
 
         .chat-last-message {
             font-size: 11px;
-            color: #88A9C4;
+            color: var(--text-secondary);
         }
 
         .messages-area {
@@ -543,47 +626,47 @@
         }
 
         .message-sent {
-            background: #1E88E5;
+            background: var(--message-sent);
             color: white;
             align-self: flex-end;
             border-bottom-right-radius: 4px;
         }
 
         .message-received {
-            background: #1A2A3A;
-            color: white;
+            background: var(--message-received);
+            color: var(--text-primary);
             align-self: flex-start;
             border-bottom-left-radius: 4px;
         }
 
         .message-time {
             font-size: 9px;
-            color: #88A9C4;
+            color: var(--text-muted);
             margin-top: 4px;
         }
 
         .message-self-destruct {
             font-size: 9px;
-            color: #FF9800;
+            color: var(--warning);
             margin-top: 2px;
         }
 
         .chat-input-area {
             padding: 12px 16px;
-            border-top: 1px solid #1A2A3A;
+            border-top: 1px solid var(--border);
             display: flex;
             gap: 10px;
-            background: #0F1A2A;
+            background: var(--bg-secondary);
         }
 
         .chat-input {
             flex: 1;
-            background: #1A2A3A;
+            background: var(--bg-surface);
             border: none;
             padding: 12px 16px;
             font-size: 15px;
             border-radius: 24px;
-            color: white;
+            color: var(--text-primary);
         }
 
         .send-btn {
@@ -595,13 +678,13 @@
             text-align: center;
             padding: 12px 16px;
             font-size: 10px;
-            color: #4A6A8A;
-            background: #0A0F1E;
-            border-top: 1px solid #1A2A3A;
+            color: var(--text-muted);
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border);
         }
 
         .footer a {
-            color: #64B5F6;
+            color: var(--accent);
             text-decoration: none;
         }
 
@@ -632,19 +715,20 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.9);
+            background: rgba(0,0,0,0.8);
             z-index: 1000;
             align-items: center;
             justify-content: center;
         }
 
         .modal-content {
-            background: #1A2A3A;
+            background: var(--bg-secondary);
             border-radius: 24px;
             padding: 20px;
             max-width: 90%;
             width: 400px;
             text-align: center;
+            border: 1px solid var(--border);
         }
 
         .modal-header {
@@ -654,10 +738,14 @@
             margin-bottom: 16px;
         }
 
+        .modal-header h3 {
+            color: var(--text-primary);
+        }
+
         .close-modal {
             font-size: 24px;
             cursor: pointer;
-            color: #88A9C4;
+            color: var(--text-secondary);
         }
 
         #qr-reader {
@@ -678,14 +766,71 @@
             padding: 8px;
             cursor: pointer;
             border-radius: 8px;
+            color: var(--text-primary);
         }
 
         .group-member-item:hover {
-            background: #2A3A4A;
+            background: var(--hover);
         }
 
         .group-member-item.selected {
-            background: #1E88E5;
+            background: var(--accent);
+            color: white;
+        }
+
+        /* Настройки */
+        .settings-card {
+            background: var(--bg-secondary);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .settings-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .theme-option {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .theme-option:last-child {
+            border-bottom: none;
+        }
+
+        .theme-name {
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .theme-preview {
+            width: 60px;
+            height: 30px;
+            border-radius: 15px;
+            display: flex;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .theme-preview-dark { background: #0A0F1E; width: 33%; }
+        .theme-preview-light { background: #F5F7FA; width: 33%; }
+        .theme-preview-rose { background: #FFF5F7; width: 33%; }
+        .theme-preview-blue { background: #F0F9FF; width: 33%; }
+
+        .theme-check {
+            color: var(--accent);
+            margin-left: 8px;
         }
 
         @media (max-width: 480px) {
@@ -695,7 +840,7 @@
         }
     </style>
 </head>
-<body>
+<body class="theme-dark">
     <div class="app-container">
         <div id="authForm" style="display: flex; height: 100vh; align-items: center; justify-content: center;">
             <div class="auth-card">
@@ -749,6 +894,7 @@
                             <p id="userGlobalId"></p>
                         </div>
                     </div>
+                    <button class="logout-btn" onclick="showSettings()" title="Настройки">⚙️</button>
                     <button class="logout-btn" onclick="logout()" title="Выйти">🚪</button>
                 </div>
                 
@@ -780,6 +926,7 @@
         </div>
     </div>
 
+    <!-- Меню плюсика -->
     <div id="plusMenu" class="plus-menu">
         <div class="plus-menu-item" onclick="showCreateGroupModal()">
             <span>👥</span> Создать группу
@@ -792,10 +939,60 @@
         </div>
     </div>
 
+    <!-- Модальное окно настроек -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>⚙️ Настройки</h3>
+                <span class="close-modal" onclick="closeSettings()">&times;</span>
+            </div>
+            <div class="settings-card">
+                <div class="settings-title">🎨 Тема оформления</div>
+                <div class="theme-option" onclick="setTheme('dark')">
+                    <span class="theme-name">🌙 Тёмная</span>
+                    <div class="theme-preview">
+                        <div class="theme-preview-dark"></div>
+                        <div class="theme-preview-dark"></div>
+                        <div class="theme-preview-dark"></div>
+                    </div>
+                    <span id="theme-dark-check" class="theme-check">✓</span>
+                </div>
+                <div class="theme-option" onclick="setTheme('light')">
+                    <span class="theme-name">☀️ Светлая</span>
+                    <div class="theme-preview">
+                        <div class="theme-preview-light"></div>
+                        <div class="theme-preview-light"></div>
+                        <div class="theme-preview-light"></div>
+                    </div>
+                    <span id="theme-light-check" class="theme-check" style="display: none;">✓</span>
+                </div>
+                <div class="theme-option" onclick="setTheme('rose')">
+                    <span class="theme-name">🌸 Розовая</span>
+                    <div class="theme-preview">
+                        <div class="theme-preview-rose"></div>
+                        <div class="theme-preview-rose"></div>
+                        <div class="theme-preview-rose"></div>
+                    </div>
+                    <span id="theme-rose-check" class="theme-check" style="display: none;">✓</span>
+                </div>
+                <div class="theme-option" onclick="setTheme('blue')">
+                    <span class="theme-name">💙 Голубая</span>
+                    <div class="theme-preview">
+                        <div class="theme-preview-blue"></div>
+                        <div class="theme-preview-blue"></div>
+                        <div class="theme-preview-blue"></div>
+                    </div>
+                    <span id="theme-blue-check" class="theme-check" style="display: none;">✓</span>
+                </div>
+            </div>
+            <button class="btn btn-secondary" onclick="closeSettings()" style="margin-top: 16px;">Закрыть</button>
+        </div>
+    </div>
+
     <div id="searchModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 style="color: white;">🔍 Поиск по Global ID</h3>
+                <h3 style="color: var(--text-primary);">🔍 Поиск по Global ID</h3>
                 <span class="close-modal" onclick="closeSearchModal()">&times;</span>
             </div>
             <input type="text" id="searchGlobalIdInput" placeholder="Введите Global ID" style="width: 100%; margin: 10px 0;">
@@ -806,11 +1003,11 @@
     <div id="scannerModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 style="color: white;">📷 Сканирование QR-кода</h3>
+                <h3 style="color: var(--text-primary);">📷 Сканирование QR-кода</h3>
                 <span class="close-modal" onclick="closeScanner()">&times;</span>
             </div>
             <div id="qr-reader" style="width: 100%;"></div>
-            <p style="color: #88A9C4; font-size: 12px; margin-top: 12px;">Наведите камеру на QR-код с Global ID</p>
+            <p style="color: var(--text-secondary); font-size: 12px; margin-top: 12px;">Наведите камеру на QR-код с Global ID</p>
             <button class="btn btn-secondary" onclick="closeScanner()" style="margin-top: 12px;">Отмена</button>
         </div>
     </div>
@@ -818,7 +1015,7 @@
     <div id="createGroupModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 style="color: white;">👥 Создать группу</h3>
+                <h3 style="color: var(--text-primary);">👥 Создать группу</h3>
                 <span class="close-modal" onclick="closeCreateGroupModal()">&times;</span>
             </div>
             <div class="form-group">
@@ -870,6 +1067,39 @@
         const SELF_DESTRUCT_DELAY = 5000;
         const ENCRYPTION_LAYERS = 21;
 
+        // Функции темы
+        function setTheme(theme) {
+            document.body.className = `theme-${theme}`;
+            localStorage.setItem('iceberg_theme', theme);
+            document.querySelectorAll('[id^="theme-"]').forEach(el => {
+                if (el.id && el.id.endsWith('-check')) {
+                    el.style.display = 'none';
+                }
+            });
+            const checkId = `theme-${theme}-check`;
+            const checkEl = document.getElementById(checkId);
+            if (checkEl) checkEl.style.display = 'inline';
+        }
+
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('iceberg_theme');
+            if (savedTheme && ['dark', 'light', 'rose', 'blue'].includes(savedTheme)) {
+                setTheme(savedTheme);
+            } else {
+                setTheme('dark');
+            }
+        }
+
+        window.showSettings = () => {
+            document.getElementById('settingsModal').style.display = 'flex';
+        };
+
+        window.closeSettings = () => {
+            document.getElementById('settingsModal').style.display = 'none';
+        };
+
+        loadTheme();
+
         // Удаление контакта
         window.deleteContact = async (contactId) => {
             if (!confirm('Удалить этот контакт?')) return;
@@ -884,19 +1114,16 @@
             loadChats();
         };
 
-        // Удаление чата
         window.deleteCurrentChat = async () => {
             if (!currentChatId) return;
             if (!confirm('Удалить этот чат? Все сообщения будут удалены безвозвратно.')) return;
             
-            // Удаляем все сообщения в чате
             const messagesRef = collection(db, "chats", currentChatId, "messages");
             const messagesSnap = await getDocs(messagesRef);
             for (const docSnap of messagesSnap.docs) {
                 await deleteDoc(doc(db, "chats", currentChatId, "messages", docSnap.id));
             }
             
-            // Если это приватный чат, удаляем его из контактов
             if (currentChatType === 'private' && currentContact) {
                 const currentUserRef = doc(db, "users", currentUser.uid);
                 const userDoc = await getDoc(currentUserRef);
@@ -905,7 +1132,6 @@
                 await updateDoc(currentUserRef, { contacts: updatedContacts });
             }
             
-            // Удаляем сам чат
             await deleteDoc(doc(db, "chats", currentChatId));
             
             closeChat();
@@ -913,7 +1139,6 @@
             alert('✅ Чат удалён');
         };
 
-        // Меню плюсика
         document.getElementById('plusBtn').addEventListener('click', (e) => {
             e.stopPropagation();
             const menu = document.getElementById('plusMenu');
@@ -1033,7 +1258,7 @@
                 div.innerHTML = `
                     <input type="checkbox" class="contact-checkbox" value="${contact.uid}" data-nickname="${contact.nickname}" data-globalid="${contact.globalId}">
                     <div class="chat-avatar-small" style="width: 40px; height: 40px;">${contact.nickname?.charAt(0).toUpperCase() || 'U'}</div>
-                    <div><div style="color: white;">${contact.nickname || contact.globalId?.substring(0, 8)}</div><div style="font-size: 11px; color: #88A9C4;">${contact.globalId?.substring(0, 12)}...</div></div>
+                    <div><div style="color: var(--text-primary);">${contact.nickname || contact.globalId?.substring(0, 8)}</div><div style="font-size: 11px; color: var(--text-secondary);">${contact.globalId?.substring(0, 12)}...</div></div>
                 `;
                 container.appendChild(div);
             }
@@ -1276,9 +1501,8 @@
             const chatsQuery = query(collection(db, "chats"));
             const chatsSnap = await getDocs(chatsQuery);
             for (const chatDoc of chatsSnap.docs) {
-                const chatData = chatDoc.data();
-                if (chatData.type === 'group') continue;
-                const participants = chatData.participants || [];
+                if (chatDoc.data().type === 'group') continue;
+                const participants = chatDoc.data().participants || [];
                 if (participants.includes(currentUser.uid)) {
                     const otherId = participants.find(p => p !== currentUser.uid);
                     if (otherId && !chatsSet.has(otherId)) {
@@ -1297,7 +1521,7 @@
             const chatsList = document.getElementById('chatsList');
             chatsList.innerHTML = '';
             if (chatsSet.size === 0) {
-                chatsList.innerHTML = '<div style="padding: 20px; text-align: center; color: #88A9C4;">Нет чатов<br><span style="font-size: 11px;">Нажмите ➕ для поиска</span></div>';
+                chatsList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Нет чатов<br><span style="font-size: 11px;">Нажмите ➕ для поиска</span></div>';
                 return;
             }
             
@@ -1311,7 +1535,7 @@
                 chatDiv.innerHTML = `
                     <div class="chat-avatar-small">${avatarText}</div>
                     <div class="chat-info-small">
-                        <div class="chat-name">${displayName} ${chat.type === 'group' ? '<span style="background:#9C27B0; padding:2px 6px; border-radius:10px; font-size:10px;">Группа</span>' : (isContact ? '' : '<span style="background:#E53935; padding:2px 6px; border-radius:10px; font-size:10px;">Не в контактах</span>')}</div>
+                        <div class="chat-name">${displayName} ${chat.type === 'group' ? '<span style="background:#9C27B0; padding:2px 6px; border-radius:10px; font-size:10px;">Группа</span>' : (isContact ? '' : '<span style="background:var(--danger); padding:2px 6px; border-radius:10px; font-size:10px;">Не в контактах</span>')}</div>
                         <div class="chat-last-message">${chat.type === 'group' ? '👥 Групповой чат' : (chat.globalId?.substring(0, 12) || '...')}</div>
                     </div>
                     <button class="delete-chat-icon" onclick="event.stopPropagation(); deleteChat('${uid}', '${chat.type}')">🗑</button>
@@ -1387,7 +1611,7 @@
                     }
                     const messageDiv = document.createElement('div');
                     messageDiv.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
-                    messageDiv.innerHTML = `${!isSent ? `<div style="font-size: 10px; color: #64B5F6; margin-bottom: 4px;">${senderName}</div>` : ''}<div>${escapeHtml(decryptedText)}</div><div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div><div class="message-self-destruct">💣 Самоуничтожится через 5 секунд</div>`;
+                    messageDiv.innerHTML = `${!isSent ? `<div style="font-size: 10px; color: var(--accent); margin-bottom: 4px;">${senderName}</div>` : ''}<div>${escapeHtml(decryptedText)}</div><div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div><div class="message-self-destruct">💣 Самоуничтожится через 5 секунд</div>`;
                     messagesArea.appendChild(messageDiv);
                     if (msg.messageId && !destructTimeouts[msg.messageId] && !isSent) {
                         destructTimeouts[msg.messageId] = setTimeout(async () => {
