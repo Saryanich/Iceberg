@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=1.0, viewport-fit=cover">
     <title>Айсберг - Защищённый мессенджер</title>
     
-    <!-- ВСЕ ЛОГОТИПЫ ЗАМЕНЕНЫ НА УКАЗАННЫЙ URL -->
     <link rel="icon" type="image/jpeg" href="https://i.ibb.co/8JY0bXs/IMG-0335.jpg">
     <link rel="apple-touch-icon" href="https://i.ibb.co/8JY0bXs/IMG-0335.jpg">
     
@@ -34,6 +33,8 @@
             display: flex;
             flex-direction: column;
             position: relative;
+            height: 100vh;
+            overflow: hidden;
         }
 
         #particles-js {
@@ -136,81 +137,11 @@
             display: flex;
             flex-direction: column;
             width: 100%;
-            max-width: 1400px;
+            height: 100vh;
             margin: 0 auto;
             position: relative;
             z-index: 1;
-        }
-
-        /* Улучшенные медиа-запросы для больших экранов */
-        @media (min-width: 1400px) {
-            .app-container {
-                max-width: 1400px;
-                margin: 0 auto;
-            }
-            .contacts-screen {
-                max-width: 380px;
-            }
-        }
-
-        @media (min-width: 1200px) and (max-width: 1399px) {
-            .contacts-screen {
-                width: 360px;
-            }
-            .chat-avatar-small {
-                width: 60px;
-                height: 60px;
-                font-size: 26px;
-            }
-            .message-bubble {
-                max-width: 55%;
-                font-size: 16px;
-            }
-        }
-
-        @media (min-width: 800px) and (max-width: 1199px) {
-            .contacts-screen {
-                width: 320px;
-            }
-            .chat-avatar-small {
-                width: 56px;
-                height: 56px;
-                font-size: 24px;
-            }
-            .message-bubble {
-                max-width: 60%;
-                font-size: 15px;
-            }
-        }
-
-        @media (min-width: 430px) and (max-width: 799px) {
-            .contacts-screen {
-                max-width: 340px;
-            }
-            .chat-avatar-small {
-                width: 52px;
-                height: 52px;
-                font-size: 22px;
-            }
-            .message-bubble {
-                max-width: 75%;
-                font-size: 15px;
-            }
-        }
-
-        @media (max-width: 429px) {
-            .contacts-screen {
-                width: 100%;
-            }
-            .chat-avatar-small {
-                width: 48px;
-                height: 48px;
-                font-size: 20px;
-            }
-            .message-bubble {
-                max-width: 85%;
-                font-size: 14px;
-            }
+            overflow: hidden;
         }
 
         .auth-card {
@@ -308,7 +239,7 @@
 
         .messenger-container {
             display: flex;
-            height: calc(100vh - 60px);
+            height: 100vh;
             width: 100%;
             background: transparent;
             position: relative;
@@ -316,12 +247,14 @@
 
         .contacts-screen {
             width: 100%;
+            height: 100vh;
             background: var(--bg-secondary);
             border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
             transition: transform 0.3s ease;
             backdrop-filter: blur(4px);
+            position: relative;
         }
 
         @media (min-width: 800px) {
@@ -336,14 +269,13 @@
                 position: absolute;
                 left: 0;
                 top: 0;
-                height: 100%;
-                width: 85%;
-                max-width: 320px;
+                height: 100vh;
+                width: 100%;
+                max-width: 100%;
                 z-index: 10;
                 transform: translateX(0);
             }
             .contacts-screen.hide-on-mobile { transform: translateX(-100%); }
-            .chat-screen { width: 100%; }
         }
 
         .chat-screen {
@@ -352,6 +284,7 @@
             flex-direction: column;
             background: transparent;
             position: relative;
+            height: 100vh;
         }
 
         @media (max-width: 768px) {
@@ -359,13 +292,27 @@
                 position: absolute;
                 left: 0;
                 top: 0;
-                height: 100%;
+                height: 100vh;
                 width: 100%;
                 z-index: 20;
                 transform: translateX(100%);
                 transition: transform 0.3s ease;
             }
             .chat-screen.show-on-mobile { transform: translateX(0); }
+        }
+
+        /* Скрываем чат на десктопе когда не выбран */
+        @media (min-width: 769px) {
+            .chat-screen:not(.has-chat) {
+                display: none;
+            }
+            .contacts-screen {
+                width: 100%;
+                max-width: 100%;
+            }
+            .messenger-container:has(.chat-screen.has-chat) .contacts-screen {
+                width: 380px;
+            }
         }
 
         .chat-header {
@@ -494,7 +441,11 @@
         .plus-menu-item:last-child { border-bottom: none; }
         .plus-menu-item:hover { background: var(--hover); }
 
-        .chats-list { flex: 1; overflow-y: auto; }
+        .chats-list { 
+            flex: 1; 
+            overflow-y: auto; 
+            height: calc(100vh - 180px);
+        }
         .chat-item {
             display: flex;
             align-items: center;
@@ -506,6 +457,8 @@
             position: relative;
         }
         .chat-item:hover { background: var(--hover); }
+        .chat-item.unread { background: rgba(100, 181, 246, 0.1); }
+        
         .chat-item .delete-chat-icon {
             opacity: 0;
             transition: opacity 0.2s;
@@ -530,10 +483,48 @@
             justify-content: center;
             font-weight: 600;
             color: var(--text-primary);
+            position: relative;
         }
-        .chat-info-small { flex: 1; }
-        .chat-name { font-size: 15px; font-weight: 500; color: var(--text-primary); margin-bottom: 2px; }
-        .chat-last-message { font-size: 11px; color: var(--text-secondary); }
+        .chat-info-small { flex: 1; min-width: 0; }
+        .chat-name { 
+            font-size: 15px; 
+            font-weight: 500; 
+            color: var(--text-primary); 
+            margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .chat-last-message { 
+            font-size: 11px; 
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* Индикаторы новых сообщений */
+        .unread-badge {
+            background: var(--accent);
+            color: white;
+            border-radius: 12px;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: bold;
+            min-width: 20px;
+            text-align: center;
+            margin-left: auto;
+        }
+        
+        .unread-dot {
+            width: 10px;
+            height: 10px;
+            background: var(--accent);
+            border-radius: 5px;
+            position: absolute;
+            top: 8px;
+            right: 8px;
+        }
 
         .messages-area {
             flex: 1;
@@ -542,6 +533,7 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
+            height: calc(100vh - 140px);
         }
 
         .message-bubble {
@@ -564,7 +556,8 @@
             align-self: flex-start;
             border-bottom-left-radius: 4px;
         }
-        .message-time { font-size: 9px; color: var(--text-muted); margin-top: 4px; }
+        .message-time { font-size: 9px; color: var(--text-muted); margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+        .message-status { font-size: 12px; }
         .message-image { max-width: 200px; max-height: 200px; border-radius: 12px; margin: 5px 0; cursor: pointer; }
 
         .link-preview {
@@ -589,6 +582,8 @@
             gap: 10px;
             background: var(--bg-secondary);
             flex-wrap: wrap;
+            position: sticky;
+            bottom: 0;
         }
         .chat-input-wrapper { flex: 1; display: flex; gap: 8px; }
         .chat-input {
@@ -614,11 +609,13 @@
 
         .footer {
             text-align: center;
-            padding: 12px 16px;
+            padding: 8px 16px;
             font-size: 10px;
             color: var(--text-muted);
             background: var(--bg-primary);
             border-top: 1px solid var(--border);
+            position: sticky;
+            bottom: 0;
         }
         .footer a { color: var(--accent); text-decoration: none; }
 
@@ -731,7 +728,6 @@
             .chat-input-wrapper { flex-wrap: wrap; }
         }
         
-        /* Улучшенное уведомление */
         .notification-permission {
             position: fixed;
             bottom: 20px;
@@ -779,6 +775,15 @@
                 width: 100%;
             }
         }
+
+        /* Сообщение о доставке */
+        .delivery-status {
+            display: inline-block;
+            margin-left: 4px;
+        }
+        .status-sent { color: var(--text-muted); }
+        .status-delivered { color: var(--success); }
+        .status-read { color: var(--accent); }
     </style>
 </head>
 <body class="theme-dark">
@@ -788,7 +793,6 @@
         <div id="authForm" style="display: flex; height: 100vh; align-items: center; justify-content: center;">
             <div class="auth-card">
                 <div class="logo-area">
-                    <!-- ЗАМЕНЕНО НА НОВЫЙ ЛОГОТИП -->
                     <img src="https://i.ibb.co/8JY0bXs/IMG-0335.jpg" alt="Айсберг" class="logo-img">
                     <div class="logo-title">Айсберг</div>
                 </div>
@@ -848,6 +852,10 @@
                 </div>
                 
                 <div class="chats-list" id="chatsList"></div>
+                <div class="footer">
+                    <p>© 2026 IT Global. Все права защищены.</p>
+                    <p>Связь: <a href="mailto:vasiliy.novikov389@gmail.com">vasiliy.novikov389@gmail.com</a></p>
+                </div>
             </div>
 
             <div id="chatScreen" class="chat-screen">
@@ -858,10 +866,14 @@
                         <h3 id="chatName">Выберите собеседника</h3>
                         <p id="chatStatus">Защищённое соединение</p>
                     </div>
-                    <button id="addContactBtn" class="add-contact-btn" style="display: none;" onclick="addToContacts()">+ Добавить в контакты</button>
-                    <button id="deleteChatBtn" class="delete-chat-btn" style="display: none;" onclick="deleteCurrentChat()">Удалить чат</button>
+                    <button id="addContactBtn" class="add-contact-btn" style="display: none;" onclick="addToContacts()">+ Добавить</button>
+                    <button id="deleteChatBtn" class="delete-chat-btn" style="display: none;" onclick="deleteCurrentChat()">Удалить</button>
                 </div>
-                <div class="messages-area" id="messagesArea"></div>
+                <div class="messages-area" id="messagesArea">
+                    <div style="text-align: center; color: var(--text-muted); margin-top: 40px;">
+                        Выберите чат для начала общения
+                    </div>
+                </div>
                 <div class="chat-input-area" id="chatInputArea" style="display: none;">
                     <div class="chat-input-wrapper">
                         <input type="text" class="chat-input" id="messageInput" placeholder="Введите сообщение..." onkeypress="if(event.key==='Enter') sendMessage()">
@@ -970,11 +982,6 @@
         </div>
     </div>
 
-    <div class="footer">
-        <p>© 2026 IT Global. Все права защищены.</p>
-        <p>Связь с разработчиком: <a href="mailto:vasiliy.novikov389@gmail.com">vasiliy.novikov389@gmail.com</a></p>
-    </div>
-
     <div id="notificationBanner" class="notification-permission" style="display: none;">
         <span>🔔 Включите уведомления, чтобы не пропускать сообщения</span>
         <button onclick="requestNotificationPermission()">Включить</button>
@@ -993,7 +1000,7 @@
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, orderBy, onSnapshot, updateDoc, arrayUnion, arrayRemove, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, orderBy, onSnapshot, updateDoc, arrayUnion, arrayRemove, deleteDoc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth();
@@ -1007,8 +1014,10 @@
         let currentGroupId = null;
         let currentChatId = null;
         let messagesUnsubscribe = null;
+        let chatsUnsubscribe = null;
         let html5QrCode = null;
         let notificationPermission = false;
+        let pendingMessages = new Map(); // Для отслеживания статуса доставки
 
         const ENCRYPTION_LAYERS = 21;
 
@@ -1030,7 +1039,6 @@
         };
 
         function showNotification(title, body, tag) {
-            // ЛОГОТИП В УВЕДОМЛЕНИИ ТОЖЕ ЗАМЕНЕН
             const iconUrl = 'https://i.ibb.co/8JY0bXs/IMG-0335.jpg';
             if (!notificationPermission && Notification.permission === 'granted') {
                 notificationPermission = true;
@@ -1056,33 +1064,26 @@
             }
         }
 
-        // ИНИЦИАЛИЗАЦИЯ ЧАСТИЦ (ТЕМНЕЕ И В ЦВЕТ ТЕМЫ)
+        // ИНИЦИАЛИЗАЦИЯ ЧАСТИЦ
         function initParticles() {
             if (typeof particlesJS !== 'undefined') {
-                // Получаем текущий цвет акцента из стилей
                 const style = getComputedStyle(document.body);
                 const accentColor = style.getPropertyValue('--accent').trim() || '#64B5F6';
                 
-                // Функция для затемнения цвета (уменьшаем яркость)
                 function darkenColor(color, percent) {
-                    // Упрощенная логика для hex (берем первые 7 символов, если есть альфа-канал)
                     let hex = color.startsWith('#') ? color.slice(0, 7) : '#64B5F6';
-                    // Убираем # если есть
                     hex = hex.replace('#', '');
-                    // Конвертируем в RGB
                     let r = parseInt(hex.substring(0, 2), 16);
                     let g = parseInt(hex.substring(2, 4), 16);
                     let b = parseInt(hex.substring(4, 6), 16);
-                    // Затемняем
                     r = Math.max(0, Math.floor(r * (1 - percent/100)));
                     g = Math.max(0, Math.floor(g * (1 - percent/100)));
                     b = Math.max(0, Math.floor(b * (1 - percent/100)));
                     return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
                 }
                 
-                // Создаем массив из 4 оттенков: от темного к более темному
                 const particleColors = [
-                    darkenColor(accentColor, 20), // Основной цвет, но темнее на 20%
+                    darkenColor(accentColor, 20),
                     darkenColor(accentColor, 40),
                     darkenColor(accentColor, 60),
                     darkenColor(accentColor, 80)
@@ -1117,7 +1118,6 @@
             const checkEl = document.getElementById(`theme-${theme}-check`);
             if (checkEl) checkEl.style.display = 'inline';
             
-            // ПЕРЕИНИЦИАЛИЗИРУЕМ ЧАСТИЦЫ ПРИ СМЕНЕ ТЕМЫ, ЧТОБЫ ЦВЕТ ОБНОВИЛСЯ
             setTimeout(() => {
                 if (window.particlesJS) {
                     initParticles();
@@ -1138,7 +1138,6 @@
         window.closeSettings = () => { document.getElementById('settingsModal').style.display = 'none'; };
 
         loadTheme();
-        // Инициализация частиц после загрузки темы
         setTimeout(initParticles, 100);
 
         // Функции шифрования
@@ -1206,6 +1205,7 @@
                 document.getElementById('contactsScreen').classList.remove('hide-on-mobile');
                 document.getElementById('chatScreen').classList.remove('show-on-mobile');
             }
+            document.getElementById('chatScreen').classList.remove('has-chat');
             if (messagesUnsubscribe) messagesUnsubscribe();
             currentContact = null;
             currentChatType = 'private';
@@ -1213,8 +1213,10 @@
             currentChatId = null;
             document.getElementById('chatInputArea').style.display = 'none';
             document.getElementById('chatName').innerText = 'Выберите собеседника';
+            document.getElementById('chatStatus').innerText = 'Защищённое соединение';
             document.getElementById('addContactBtn').style.display = 'none';
             document.getElementById('deleteChatBtn').style.display = 'none';
+            document.getElementById('messagesArea').innerHTML = '<div style="text-align: center; color: var(--text-muted); margin-top: 40px;">Выберите чат для начала общения</div>';
         };
 
         window.addToContacts = async () => {
@@ -1245,7 +1247,6 @@
                 });
                 document.getElementById('addContactBtn').style.display = 'none';
                 alert(`✅ ${contactData.nickname || contactData.globalId} добавлен в контакты`);
-                loadChats();
             } catch (error) { alert('Ошибка при добавлении в контакты'); }
         };
 
@@ -1265,7 +1266,6 @@
             }
             await deleteDoc(doc(db, "chats", currentChatId));
             closeChat();
-            loadChats();
             alert('Чат удалён');
         };
 
@@ -1307,7 +1307,6 @@
                     })
                 });
                 alert(`✅ ${userData.nickname || userData.globalId} добавлен в контакты!`);
-                loadChats();
             } else {
                 alert(`👤 ${userData.nickname || userData.globalId} уже есть в контактах`);
             }
@@ -1358,7 +1357,6 @@
                     })
                 });
                 alert(`✅ ${userData.nickname || userData.globalId} добавлен в контакты!`);
-                loadChats();
             } else {
                 alert(`👤 ${userData.nickname || userData.globalId} уже есть в контактах`);
             }
@@ -1407,7 +1405,6 @@
             }
             closeCreateGroupModal();
             alert(`Группа "${groupName}" создана!`);
-            loadChats();
         };
 
         function generateGlobalId() {
@@ -1453,12 +1450,24 @@
             let chatId = currentChatType === 'group' && currentGroupId ? currentGroupId : [currentUser.uid, currentContact.uid].sort().join('_');
             const messageId = Date.now().toString() + Math.random().toString(36);
             const messageData = {
-                from: currentUser.uid, text: imageData, isImage: true, timestamp: new Date(), messageId: messageId
+                from: currentUser.uid, text: imageData, isImage: true, timestamp: serverTimestamp(), 
+                messageId: messageId, status: 'sent'
             };
             if (currentChatType === 'group') messageData.fromNickname = currentUserData.nickname || 'Пользователь';
             else messageData.to = currentContact.uid;
-            await addDoc(collection(db, "chats", chatId, "messages"), messageData);
-            await updateDoc(doc(db, "chats", chatId), { lastMessageTime: new Date() });
+            
+            try {
+                const docRef = await addDoc(collection(db, "chats", chatId, "messages"), messageData);
+                await updateDoc(doc(db, "chats", chatId), { lastMessageTime: serverTimestamp() });
+                
+                // Отмечаем как доставленное
+                setTimeout(async () => {
+                    await updateDoc(doc(db, "chats", chatId, "messages", docRef.id), { status: 'delivered' });
+                }, 500);
+            } catch (error) {
+                console.error('Ошибка отправки:', error);
+                alert('Ошибка отправки. Попробуйте снова.');
+            }
         }
 
         // Функции для предпросмотра ссылок
@@ -1484,75 +1493,128 @@
 
         function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
 
-        // Загрузка чатов
-        async function loadChats() {
-            const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-            const userData = userDoc.data();
-            const contacts = userData.contacts || [];
-            const userGroups = userData.groups || [];
-            const chatsSet = new Map();
+        // Загрузка чатов с индикаторами новых сообщений
+        function loadChats() {
+            if (chatsUnsubscribe) chatsUnsubscribe();
             
-            for (const contact of contacts) {
-                chatsSet.set(contact.uid, {
-                    uid: contact.uid, globalId: contact.globalId, nickname: contact.nickname,
-                    email: contact.email, isContact: true, type: 'private'
-                });
-            }
-            for (const groupId of userGroups) {
-                const groupDoc = await getDoc(doc(db, "chats", groupId));
-                if (groupDoc.exists()) {
-                    const groupData = groupDoc.data();
-                    chatsSet.set(groupId, { uid: groupId, name: groupData.name, type: 'group', avatar: groupData.avatar || '👥', participants: groupData.participants });
-                }
-            }
             const chatsQuery = query(collection(db, "chats"));
-            const chatsSnap = await getDocs(chatsQuery);
-            for (const chatDoc of chatsSnap.docs) {
-                if (chatDoc.data().type === 'group') continue;
-                const participants = chatDoc.data().participants || [];
-                if (participants.includes(currentUser.uid)) {
-                    const otherId = participants.find(p => p !== currentUser.uid);
-                    if (otherId && !chatsSet.has(otherId)) {
-                        const otherDoc = await getDoc(doc(db, "users", otherId));
-                        if (otherDoc.exists()) {
-                            const otherData = otherDoc.data();
-                            chatsSet.set(otherId, {
-                                uid: otherId, globalId: otherData.globalId, nickname: otherData.nickname,
-                                email: otherData.email, isContact: false, type: 'private'
-                            });
+            chatsUnsubscribe = onSnapshot(chatsQuery, async (snapshot) => {
+                const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+                const userData = userDoc.data();
+                const contacts = userData.contacts || [];
+                const userGroups = userData.groups || [];
+                const chatsSet = new Map();
+                
+                // Загружаем информацию о непрочитанных сообщениях
+                const unreadCounts = new Map();
+                for (const chatDoc of snapshot.docs) {
+                    const chatData = chatDoc.data();
+                    const chatId = chatDoc.id;
+                    
+                    // Проверяем, имеет ли пользователь доступ к чату
+                    let hasAccess = false;
+                    if (chatData.type === 'group') {
+                        hasAccess = userGroups.includes(chatId);
+                    } else {
+                        const participants = chatData.participants || [];
+                        hasAccess = participants.includes(currentUser.uid);
+                    }
+                    
+                    if (hasAccess) {
+                        // Считаем непрочитанные сообщения
+                        const messagesRef = collection(db, "chats", chatId, "messages");
+                        const unreadQuery = query(messagesRef, where("from", "!=", currentUser.uid), where("status", "!=", "read"));
+                        const unreadSnap = await getDocs(unreadQuery);
+                        unreadCounts.set(chatId, unreadSnap.size);
+                    }
+                }
+                
+                // Строим список чатов
+                for (const contact of contacts) {
+                    const chatId = [currentUser.uid, contact.uid].sort().join('_');
+                    chatsSet.set(contact.uid, {
+                        uid: contact.uid, globalId: contact.globalId, nickname: contact.nickname,
+                        email: contact.email, isContact: true, type: 'private', chatId: chatId,
+                        unread: unreadCounts.get(chatId) || 0
+                    });
+                }
+                
+                for (const groupId of userGroups) {
+                    const groupDoc = await getDoc(doc(db, "chats", groupId));
+                    if (groupDoc.exists()) {
+                        const groupData = groupDoc.data();
+                        chatsSet.set(groupId, { 
+                            uid: groupId, name: groupData.name, type: 'group', 
+                            avatar: groupData.avatar || '👥', participants: groupData.participants,
+                            unread: unreadCounts.get(groupId) || 0
+                        });
+                    }
+                }
+                
+                // Добавляем чаты с незнакомыми пользователями
+                for (const chatDoc of snapshot.docs) {
+                    if (chatDoc.data().type === 'group') continue;
+                    const participants = chatDoc.data().participants || [];
+                    if (participants.includes(currentUser.uid)) {
+                        const otherId = participants.find(p => p !== currentUser.uid);
+                        if (otherId && !chatsSet.has(otherId)) {
+                            const otherDoc = await getDoc(doc(db, "users", otherId));
+                            if (otherDoc.exists()) {
+                                const otherData = otherDoc.data();
+                                chatsSet.set(otherId, {
+                                    uid: otherId, globalId: otherData.globalId, nickname: otherData.nickname,
+                                    email: otherData.email, isContact: false, type: 'private',
+                                    unread: unreadCounts.get(chatDoc.id) || 0
+                                });
+                            }
                         }
                     }
                 }
-            }
-            
-            const chatsList = document.getElementById('chatsList');
-            chatsList.innerHTML = '';
-            if (chatsSet.size === 0) {
-                chatsList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Нет чатов<br><span style="font-size: 11px;">Нажмите + для поиска</span></div>';
-                return;
-            }
-            
-            for (const [uid, chat] of chatsSet) {
-                const chatDiv = document.createElement('div');
-                chatDiv.className = 'chat-item';
-                const displayName = chat.type === 'group' ? chat.name : (chat.nickname || chat.globalId?.substring(0, 8));
-                const avatarText = chat.type === 'group' ? '👥' : (chat.nickname?.charAt(0).toUpperCase() || '👤');
-                const isContact = chat.type !== 'group' && chat.isContact;
                 
-                chatDiv.innerHTML = `
-                    <div class="chat-avatar-small" style="width: 48px; height: 48px; font-size: 20px;">${avatarText}</div>
-                    <div class="chat-info-small">
-                        <div class="chat-name">${displayName} ${chat.type === 'group' ? '<span style="background:#9C27B0; padding:2px 6px; border-radius:10px; font-size:10px;">Группа</span>' : (isContact ? '' : '<span style="background:var(--danger); padding:2px 6px; border-radius:10px; font-size:10px;">Не в контактах</span>')}</div>
-                        <div class="chat-last-message">${chat.type === 'group' ? 'Групповой чат' : (chat.globalId?.substring(0, 12) || '...')}</div>
-                    </div>
-                    <button class="delete-chat-icon" onclick="event.stopPropagation(); deleteChat('${uid}', '${chat.type}')">🗑</button>
-                `;
-                chatDiv.addEventListener('click', () => {
-                    if (chat.type === 'group') selectGroup(uid, chat);
-                    else selectContact(chat);
+                const chatsList = document.getElementById('chatsList');
+                chatsList.innerHTML = '';
+                
+                // Сортируем чаты: сначала с непрочитанными, потом по времени
+                const sortedChats = Array.from(chatsSet.entries()).sort((a, b) => {
+                    if (a[1].unread > 0 && b[1].unread === 0) return -1;
+                    if (a[1].unread === 0 && b[1].unread > 0) return 1;
+                    return 0;
                 });
-                chatsList.appendChild(chatDiv);
-            }
+                
+                if (sortedChats.length === 0) {
+                    chatsList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Нет чатов<br><span style="font-size: 11px;">Нажмите + для поиска</span></div>';
+                    return;
+                }
+                
+                for (const [uid, chat] of sortedChats) {
+                    const chatDiv = document.createElement('div');
+                    chatDiv.className = `chat-item ${chat.unread > 0 ? 'unread' : ''}`;
+                    const displayName = chat.type === 'group' ? chat.name : (chat.nickname || chat.globalId?.substring(0, 8));
+                    const avatarText = chat.type === 'group' ? '👥' : (chat.nickname?.charAt(0).toUpperCase() || '👤');
+                    const isContact = chat.type !== 'group' && chat.isContact;
+                    
+                    chatDiv.innerHTML = `
+                        <div class="chat-avatar-small" style="width: 48px; height: 48px; font-size: 20px; position: relative;">
+                            ${avatarText}
+                            ${chat.unread > 0 ? '<span class="unread-dot"></span>' : ''}
+                        </div>
+                        <div class="chat-info-small">
+                            <div class="chat-name">
+                                ${displayName} 
+                                ${chat.type === 'group' ? '<span style="background:#9C27B0; padding:2px 6px; border-radius:10px; font-size:10px;">Группа</span>' : (isContact ? '' : '<span style="background:var(--danger); padding:2px 6px; border-radius:10px; font-size:10px;">Не в контактах</span>')}
+                                ${chat.unread > 0 ? `<span class="unread-badge">${chat.unread}</span>` : ''}
+                            </div>
+                            <div class="chat-last-message">${chat.type === 'group' ? 'Групповой чат' : (chat.globalId?.substring(0, 12) || '...')}</div>
+                        </div>
+                        <button class="delete-chat-icon" onclick="event.stopPropagation(); deleteChat('${uid}', '${chat.type}')">🗑</button>
+                    `;
+                    chatDiv.addEventListener('click', () => {
+                        if (chat.type === 'group') selectGroup(uid, chat);
+                        else selectContact(chat);
+                    });
+                    chatsList.appendChild(chatDiv);
+                }
+            });
         }
         
         window.deleteChat = async (uid, type) => {
@@ -1575,7 +1637,6 @@
             }
             await deleteDoc(doc(db, "chats", chatId));
             if (currentChatId === chatId) closeChat();
-            loadChats();
             alert('Чат удалён');
         };
 
@@ -1584,27 +1645,44 @@
             currentGroupId = groupId;
             currentChatId = groupId;
             currentContact = null;
+            
+            document.getElementById('chatScreen').classList.add('has-chat');
             document.getElementById('chatName').innerHTML = `${groupData.name} <span style="background:#9C27B0; padding:2px 6px; border-radius:10px; font-size:10px;">Группа</span>`;
             document.getElementById('chatStatus').innerHTML = `👥 ${groupData.participants?.length || 0} участников | 21 слой шифрования`;
             document.getElementById('chatAvatar').innerHTML = groupData.avatar || '👥';
             document.getElementById('chatInputArea').style.display = 'flex';
             document.getElementById('addContactBtn').style.display = 'none';
             document.getElementById('deleteChatBtn').style.display = 'block';
+            
             if (window.innerWidth <= 768) {
                 document.getElementById('contactsScreen').classList.add('hide-on-mobile');
                 document.getElementById('chatScreen').classList.add('show-on-mobile');
             }
+            
             if (messagesUnsubscribe) messagesUnsubscribe();
             const messagesRef = collection(db, "chats", groupId, "messages");
             const q = query(messagesRef, orderBy("timestamp", "asc"));
+            
             messagesUnsubscribe = onSnapshot(q, async (snapshot) => {
                 const messagesArea = document.getElementById('messagesArea');
                 messagesArea.innerHTML = '';
+                
+                // Отмечаем сообщения как прочитанные
+                const batch = writeBatch(db);
+                for (const docSnap of snapshot.docs) {
+                    const msg = docSnap.data();
+                    if (msg.from !== currentUser.uid && msg.status !== 'read') {
+                        batch.update(doc(db, "chats", groupId, "messages", docSnap.id), { status: 'read' });
+                    }
+                }
+                await batch.commit();
+                
                 for (const docSnap of snapshot.docs) {
                     const msg = docSnap.data();
                     const isSent = msg.from === currentUser.uid;
                     let decryptedText = msg.text;
                     let senderName = msg.fromNickname || 'Пользователь';
+                    
                     if (!senderName && msg.from !== currentUser.uid) {
                         const userDoc = await getDoc(doc(db, "users", msg.from));
                         if (userDoc.exists()) senderName = userDoc.data().nickname || 'Пользователь';
@@ -1636,9 +1714,19 @@
                         }
                     }
                     
+                    const statusIcon = isSent ? (msg.status === 'sent' ? '✓' : msg.status === 'delivered' ? '✓✓' : msg.status === 'read' ? '✓✓' : '') : '';
+                    const statusColor = msg.status === 'read' ? 'var(--accent)' : 'var(--text-muted)';
+                    
                     const messageDiv = document.createElement('div');
                     messageDiv.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
-                    messageDiv.innerHTML = `${!isSent ? `<div style="font-size: 10px; color: var(--accent); margin-bottom: 4px;">${escapeHtml(senderName)}</div>` : ''}${content}<div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div>`;
+                    messageDiv.innerHTML = `
+                        ${!isSent ? `<div style="font-size: 10px; color: var(--accent); margin-bottom: 4px;">${escapeHtml(senderName)}</div>` : ''}
+                        ${content}
+                        <div class="message-time">
+                            ${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}
+                            ${isSent ? `<span class="message-status" style="color: ${statusColor};">${statusIcon}</span>` : ''}
+                        </div>
+                    `;
                     messagesArea.appendChild(messageDiv);
                     
                     if (!isSent && !document.hasFocus()) {
@@ -1665,7 +1753,8 @@
             currentGroupId = null;
             currentChatId = [currentUser.uid, currentContact.uid].sort().join('_');
             
-            // Проверяем онлайн статус
+            document.getElementById('chatScreen').classList.add('has-chat');
+            
             const contactDoc = await getDoc(doc(db, "users", currentContact.uid));
             const isOnline = contactDoc.exists() ? (contactDoc.data().online || false) : false;
             
@@ -1686,15 +1775,36 @@
                 document.getElementById('contactsScreen').classList.add('hide-on-mobile');
                 document.getElementById('chatScreen').classList.add('show-on-mobile');
             }
+            
             if (messagesUnsubscribe) messagesUnsubscribe();
             const chatRef = doc(db, "chats", currentChatId);
             const chatDoc = await getDoc(chatRef);
-            if (!chatDoc.exists()) { await setDoc(chatRef, { participants: [currentUser.uid, currentContact.uid], createdAt: new Date(), lastMessageTime: null, type: 'private' }); }
+            if (!chatDoc.exists()) { 
+                await setDoc(chatRef, { 
+                    participants: [currentUser.uid, currentContact.uid], 
+                    createdAt: serverTimestamp(), 
+                    lastMessageTime: null, 
+                    type: 'private' 
+                }); 
+            }
+            
             const messagesRef = collection(db, "chats", currentChatId, "messages");
             const q = query(messagesRef, orderBy("timestamp", "asc"));
+            
             messagesUnsubscribe = onSnapshot(q, async (snapshot) => {
                 const messagesArea = document.getElementById('messagesArea');
                 messagesArea.innerHTML = '';
+                
+                // Отмечаем сообщения как прочитанные
+                const batch = writeBatch(db);
+                for (const docSnap of snapshot.docs) {
+                    const msg = docSnap.data();
+                    if (msg.from !== currentUser.uid && msg.status !== 'read') {
+                        batch.update(doc(db, "chats", currentChatId, "messages", docSnap.id), { status: 'read' });
+                    }
+                }
+                await batch.commit();
+                
                 for (const docSnap of snapshot.docs) {
                     const msg = docSnap.data();
                     const isSent = msg.from === currentUser.uid;
@@ -1726,9 +1836,18 @@
                         }
                     }
                     
+                    const statusIcon = isSent ? (msg.status === 'sent' ? '✓' : msg.status === 'delivered' ? '✓✓' : msg.status === 'read' ? '✓✓' : '') : '';
+                    const statusColor = msg.status === 'read' ? 'var(--accent)' : 'var(--text-muted)';
+                    
                     const messageDiv = document.createElement('div');
                     messageDiv.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
-                    messageDiv.innerHTML = `${content}<div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div>`;
+                    messageDiv.innerHTML = `
+                        ${content}
+                        <div class="message-time">
+                            ${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}
+                            ${isSent ? `<span class="message-status" style="color: ${statusColor};">${statusIcon}</span>` : ''}
+                        </div>
+                    `;
                     messagesArea.appendChild(messageDiv);
                     
                     if (!isSent && !document.hasFocus()) {
@@ -1745,15 +1864,38 @@
             const messageInput = document.getElementById('messageInput');
             const text = messageInput.value.trim();
             if (!text) return;
+            
             let chatId = currentChatType === 'group' && currentGroupId ? currentGroupId : [currentUser.uid, currentContact.uid].sort().join('_');
             const encryptedText = await multiLayerEncrypt(text);
             const messageId = Date.now().toString() + Math.random().toString(36);
-            const messageData = { from: currentUser.uid, text: encryptedText, encrypted: true, timestamp: new Date(), messageId: messageId, encryptionLayers: ENCRYPTION_LAYERS };
+            const messageData = { 
+                from: currentUser.uid, 
+                text: encryptedText, 
+                encrypted: true, 
+                timestamp: serverTimestamp(), 
+                messageId: messageId, 
+                encryptionLayers: ENCRYPTION_LAYERS,
+                status: 'sent'
+            };
+            
             if (currentChatType === 'group') messageData.fromNickname = currentUserData.nickname || 'Пользователь';
             else messageData.to = currentContact.uid;
-            await addDoc(collection(db, "chats", chatId, "messages"), messageData);
-            await updateDoc(doc(db, "chats", chatId), { lastMessageTime: new Date() });
+            
             messageInput.value = '';
+            
+            try {
+                const docRef = await addDoc(collection(db, "chats", chatId, "messages"), messageData);
+                await updateDoc(doc(db, "chats", chatId), { lastMessageTime: serverTimestamp() });
+                
+                // Имитация доставки
+                setTimeout(async () => {
+                    await updateDoc(doc(db, "chats", chatId, "messages", docRef.id), { status: 'delivered' });
+                }, 500);
+            } catch (error) {
+                console.error('Ошибка отправки:', error);
+                alert('Ошибка отправки сообщения. Попробуйте снова.');
+                messageInput.value = text;
+            }
         };
 
         window.register = async () => {
@@ -1766,7 +1908,7 @@
                 const globalId = generateGlobalId();
                 await setDoc(doc(db, "users", userCred.user.uid), {
                     email: email, globalId: globalId, nickname: email.split('@')[0],
-                    createdAt: new Date(), contacts: [], groups: [], online: true, lastSeen: new Date()
+                    createdAt: serverTimestamp(), contacts: [], groups: [], online: true, lastSeen: serverTimestamp()
                 });
                 showMessageUI('Регистрация успешна!', false);
                 setTimeout(() => window.showLogin(), 1500);
@@ -1792,8 +1934,9 @@
 
         window.logout = async () => {
             if (messagesUnsubscribe) messagesUnsubscribe();
+            if (chatsUnsubscribe) chatsUnsubscribe();
             if (currentUser) {
-                await updateDoc(doc(db, "users", currentUser.uid), { online: false, lastSeen: new Date() }).catch(() => {});
+                await updateDoc(doc(db, "users", currentUser.uid), { online: false, lastSeen: serverTimestamp() }).catch(() => {});
             }
             await signOut(auth);
         };
@@ -1818,7 +1961,7 @@
                     const globalId = generateGlobalId();
                     await setDoc(doc(db, "users", user.uid), {
                         email: user.email, globalId: globalId, nickname: user.email.split('@')[0],
-                        createdAt: new Date(), contacts: [], groups: [], online: true, lastSeen: new Date()
+                        createdAt: serverTimestamp(), contacts: [], groups: [], online: true, lastSeen: serverTimestamp()
                     });
                     currentUserData = { globalId, nickname: user.email.split('@')[0] };
                 }
@@ -1831,15 +1974,14 @@
                 loadChats();
             } else {
                 if (messagesUnsubscribe) messagesUnsubscribe();
+                if (chatsUnsubscribe) chatsUnsubscribe();
                 currentContact = null;
                 document.getElementById('authForm').style.display = 'flex';
                 document.getElementById('messengerApp').style.display = 'none';
                 document.getElementById('loginIdentifier').value = '';
                 document.getElementById('loginPassword').value = '';
-                if (window.innerWidth <= 768) {
-                    document.getElementById('contactsScreen').classList.remove('hide-on-mobile');
-                    document.getElementById('chatScreen').classList.remove('show-on-mobile');
-                }
+                document.getElementById('chatScreen').classList.remove('has-chat', 'show-on-mobile');
+                document.getElementById('contactsScreen').classList.remove('hide-on-mobile');
             }
         });
     </script>
