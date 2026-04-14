@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=1.0, viewport-fit=cover">
     <title>Айсберг - Защищённый мессенджер</title>
     
-    <link rel="icon" type="image/jpeg" href="https://i.ibb.co/WWwR7w2r/IMG-0305.jpg">
-    <link rel="apple-touch-icon" href="https://i.ibb.co/WWwR7w2r/IMG-0305.jpg">
+    <!-- ВСЕ ЛОГОТИПЫ ЗАМЕНЕНЫ НА УКАЗАННЫЙ URL -->
+    <link rel="icon" type="image/jpeg" href="https://i.ibb.co/8JY0bXs/IMG-0335.jpg">
+    <link rel="apple-touch-icon" href="https://i.ibb.co/8JY0bXs/IMG-0335.jpg">
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -17,7 +18,6 @@
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     
     <style>
-        /* ... (все стили как в оригинале, включая исправления для больших экранов) ... */
         * {
             margin: 0;
             padding: 0;
@@ -788,7 +788,8 @@
         <div id="authForm" style="display: flex; height: 100vh; align-items: center; justify-content: center;">
             <div class="auth-card">
                 <div class="logo-area">
-                    <img src="https://i.ibb.co/WWwR7w2r/IMG-0305.jpg" alt="Айсберг" class="logo-img">
+                    <!-- ЗАМЕНЕНО НА НОВЫЙ ЛОГОТИП -->
+                    <img src="https://i.ibb.co/8JY0bXs/IMG-0335.jpg" alt="Айсберг" class="logo-img">
                     <div class="logo-title">Айсберг</div>
                 </div>
                 
@@ -980,6 +981,7 @@
     </div>
 
     <script type="module">
+        // Конфигурация Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyA6GGJxAiao77U7_9mBUEjftmS_FnSWbIw",
             authDomain: "glob-data.firebaseapp.com",
@@ -1010,7 +1012,7 @@
 
         const ENCRYPTION_LAYERS = 21;
 
-        // УВЕДОМЛЕНИЯ - ИСПРАВЛЕННАЯ ВЕРСИЯ
+        // УВЕДОМЛЕНИЯ
         window.requestNotificationPermission = async function() {
             if ('Notification' in window) {
                 const permission = await Notification.requestPermission();
@@ -1028,12 +1030,14 @@
         };
 
         function showNotification(title, body, tag) {
+            // ЛОГОТИП В УВЕДОМЛЕНИИ ТОЖЕ ЗАМЕНЕН
+            const iconUrl = 'https://i.ibb.co/8JY0bXs/IMG-0335.jpg';
             if (!notificationPermission && Notification.permission === 'granted') {
                 notificationPermission = true;
             }
             if (notificationPermission && document.hidden) {
                 try {
-                    new Notification(title, { body: body, tag: tag, icon: 'https://i.ibb.co/WWwR7w2r/IMG-0305.jpg' });
+                    new Notification(title, { body: body, tag: tag, icon: iconUrl });
                 } catch(e) {
                     console.log('Ошибка уведомления:', e);
                 }
@@ -1052,17 +1056,46 @@
             }
         }
 
-        // ИНИЦИАЛИЗАЦИЯ ЧАСТИЦ
+        // ИНИЦИАЛИЗАЦИЯ ЧАСТИЦ (ТЕМНЕЕ И В ЦВЕТ ТЕМЫ)
         function initParticles() {
             if (typeof particlesJS !== 'undefined') {
+                // Получаем текущий цвет акцента из стилей
+                const style = getComputedStyle(document.body);
+                const accentColor = style.getPropertyValue('--accent').trim() || '#64B5F6';
+                
+                // Функция для затемнения цвета (уменьшаем яркость)
+                function darkenColor(color, percent) {
+                    // Упрощенная логика для hex (берем первые 7 символов, если есть альфа-канал)
+                    let hex = color.startsWith('#') ? color.slice(0, 7) : '#64B5F6';
+                    // Убираем # если есть
+                    hex = hex.replace('#', '');
+                    // Конвертируем в RGB
+                    let r = parseInt(hex.substring(0, 2), 16);
+                    let g = parseInt(hex.substring(2, 4), 16);
+                    let b = parseInt(hex.substring(4, 6), 16);
+                    // Затемняем
+                    r = Math.max(0, Math.floor(r * (1 - percent/100)));
+                    g = Math.max(0, Math.floor(g * (1 - percent/100)));
+                    b = Math.max(0, Math.floor(b * (1 - percent/100)));
+                    return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+                }
+                
+                // Создаем массив из 4 оттенков: от темного к более темному
+                const particleColors = [
+                    darkenColor(accentColor, 20), // Основной цвет, но темнее на 20%
+                    darkenColor(accentColor, 40),
+                    darkenColor(accentColor, 60),
+                    darkenColor(accentColor, 80)
+                ];
+                
                 particlesJS('particles-js', {
                     particles: {
                         number: { value: 80, density: { enable: true, value_area: 800 } },
-                        color: { value: ["#00ff00", "#00aa00", "#008800", "#005500"] },
+                        color: { value: particleColors },
                         shape: { type: ["circle", "square", "triangle"] },
-                        opacity: { value: 0.5, random: true, anim: { enable: true, speed: 1, opacity_min: 0.1 } },
+                        opacity: { value: 0.6, random: true, anim: { enable: true, speed: 1, opacity_min: 0.2 } },
                         size: { value: 3, random: true, anim: { enable: true, speed: 2, size_min: 0.1 } },
-                        line_linked: { enable: true, distance: 150, color: "#00aa00", opacity: 0.2, width: 1 },
+                        line_linked: { enable: true, distance: 150, color: particleColors[1], opacity: 0.25, width: 1 },
                         move: { enable: true, speed: 1, direction: "none", random: true, out_mode: "out" }
                     },
                     interactivity: {
@@ -1083,6 +1116,13 @@
             });
             const checkEl = document.getElementById(`theme-${theme}-check`);
             if (checkEl) checkEl.style.display = 'inline';
+            
+            // ПЕРЕИНИЦИАЛИЗИРУЕМ ЧАСТИЦЫ ПРИ СМЕНЕ ТЕМЫ, ЧТОБЫ ЦВЕТ ОБНОВИЛСЯ
+            setTimeout(() => {
+                if (window.particlesJS) {
+                    initParticles();
+                }
+            }, 50);
         };
 
         function loadTheme() {
@@ -1098,7 +1138,8 @@
         window.closeSettings = () => { document.getElementById('settingsModal').style.display = 'none'; };
 
         loadTheme();
-        initParticles();
+        // Инициализация частиц после загрузки темы
+        setTimeout(initParticles, 100);
 
         // Функции шифрования
         function base64Encrypt(text) { return btoa(unescape(encodeURIComponent(text))); }
