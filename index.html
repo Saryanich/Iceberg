@@ -2,601 +2,413 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=1.0, viewport-fit=cover">
-    <title>Айсберг - Защищённый мессенджер</title>
-    
-    <link rel="icon" type="image/jpeg" href="https://i.ibb.co/8JY0bXs/IMG-0335.jpg">
-    <link rel="apple-touch-icon" href="https://i.ibb.co/8JY0bXs/IMG-0335.jpg">
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>IT Global - Управление Global ID</title>
+    <link rel="icon" href="https://i.ibb.co/Y7j6w8KP/bfbf965f-9bf0-44a5-bfdf-6d695106a6e0.webp">
+    <link rel="apple-touch-icon" href="https://i.ibb.co/Y7j6w8KP/bfbf965f-9bf0-44a5-bfdf-6d695106a6e0.webp">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Айсберг">
     <meta name="theme-color" content="#0A0F1E">
-    
-    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-    
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-            user-select: none;
-            -webkit-user-select: none;
-            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #001a00 0%, #003300 50%, #001a00 100%);
             min-height: 100vh;
-            display: flex;
-            flex-direction: column;
+            padding: 20px;
             position: relative;
-            height: 100vh;
-            overflow: hidden;
+            animation: bgPulse 8s ease-in-out infinite;
         }
-
-        #particles-js {
+        @keyframes bgPulse {
+            0%, 100% { background: linear-gradient(135deg, #001a00, #003300, #001a00); }
+            50% { background: linear-gradient(135deg, #002200, #004400, #002200); }
+        }
+        body::before {
+            content: '';
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 0;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(circle at 50% 50%, transparent 0%, rgba(0,0,0,0.3) 100%);
             pointer-events: none;
+            z-index: -1;
         }
-
-        body.theme-dark {
-            --bg-primary: #0A0F1E;
-            --bg-secondary: #0F1A2A;
-            --bg-surface: #1A2A3A;
-            --bg-card: rgba(15, 26, 42, 0.95);
-            --text-primary: #FFFFFF;
-            --text-secondary: #88A9C4;
-            --text-muted: #4A6A8A;
-            --border: #2A3A4A;
-            --accent: #64B5F6;
-            --accent-dark: #1E88E5;
-            --success: #4CAF50;
-            --danger: #E53935;
-            --warning: #FF9800;
-            --message-sent: #1E88E5;
-            --message-received: #1A2A3A;
-            --hover: #1A2A3A;
-            --chat-bg: #0F1A2A;
-        }
+        .container { max-width: 520px; margin: 0 auto; position: relative; }
         
-        body.theme-light {
-            --bg-primary: #F5F7FA;
-            --bg-secondary: #FFFFFF;
-            --bg-surface: #E8ECF0;
-            --bg-card: rgba(255, 255, 255, 0.95);
-            --text-primary: #1C1C1E;
-            --text-secondary: #5B6B7C;
-            --text-muted: #8E9AAB;
-            --border: #D1D9E6;
-            --accent: #3B82F6;
-            --accent-dark: #2563EB;
-            --success: #10B981;
-            --danger: #EF4444;
-            --warning: #F59E0B;
-            --message-sent: #3B82F6;
-            --message-received: #E8ECF0;
-            --hover: #F0F4F9;
-            --chat-bg: #F5F7FA;
-        }
-        
-        body.theme-rose {
-            --bg-primary: #FFF5F7;
-            --bg-secondary: #FFFFFF;
-            --bg-surface: #FCE4EC;
-            --bg-card: rgba(255, 255, 255, 0.95);
-            --text-primary: #4A2B3A;
-            --text-secondary: #8B6B7C;
-            --text-muted: #C4A5B5;
-            --border: #F0D0D8;
-            --accent: #EC4899;
-            --accent-dark: #DB2777;
-            --success: #10B981;
-            --danger: #EF4444;
-            --warning: #F59E0B;
-            --message-sent: #EC4899;
-            --message-received: #FCE4EC;
-            --hover: #FDF2F5;
-            --chat-bg: #FFF5F7;
-        }
-        
-        body.theme-blue {
-            --bg-primary: #F0F9FF;
-            --bg-secondary: #FFFFFF;
-            --bg-surface: #E0F2FE;
-            --bg-card: rgba(255, 255, 255, 0.95);
-            --text-primary: #1A3A5C;
-            --text-secondary: #5B8CB0;
-            --text-muted: #9BBED4;
-            --border: #CCE4F0;
-            --accent: #0EA5E9;
-            --accent-dark: #0284C7;
-            --success: #10B981;
-            --danger: #EF4444;
-            --warning: #F59E0B;
-            --message-sent: #0EA5E9;
-            --message-received: #E0F2FE;
-            --hover: #F0F9FF;
-            --chat-bg: #F0F9FF;
-        }
-
-        body { background: var(--bg-primary); }
-
-        .app-container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            width: 100%;
-            height: 100vh;
-            margin: 0 auto;
-            position: relative;
-            z-index: 1;
-            overflow: hidden;
-        }
-
-        .auth-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
+        .card {
+            background: rgba(0, 34, 0, 0.92);
+            backdrop-filter: blur(12px);
             border-radius: 28px;
             padding: 28px 24px;
-            max-width: 90%;
-            width: 400px;
-            margin: auto;
-            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
-            animation: fadeIn 0.3s ease;
+            margin-bottom: 20px;
+            border: 1.5px solid #00aa00;
+            box-shadow: 0 15px 50px rgba(0, 255, 0, 0.15), 0 0 0 1px rgba(0, 255, 0, 0.1) inset;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+        .card:hover { transform: translateY(-3px); }
+        
+        .logo-img {
+            display: block;
+            margin: 0 auto 16px;
+            width: 100px;
+            height: 100px;
+            border-radius: 24px;
+            object-fit: cover;
+            box-shadow: 0 10px 30px rgba(0, 255, 0, 0.3);
+            border: 2.5px solid #00ff44;
+            transition: transform 0.3s ease;
         }
-
-        .logo-area { text-align: center; margin-bottom: 24px; }
-        .logo-img { width: 64px; height: 64px; border-radius: 18px; margin: 0 auto 12px; display: block; object-fit: cover; }
-        .logo-title { font-size: 24px; font-weight: 700; color: var(--accent); }
-
-        .form-group { margin-bottom: 16px; }
-        .form-label { display: block; font-size: 13px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
-        input {
+        .logo-img:hover { transform: scale(1.02); }
+        .logo-img-small {
+            width: 80px;
+            height: 80px;
+            border-radius: 20px;
+        }
+        
+        h1 {
+            font-size: 32px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #00ff88, #00cc44, #00ff88);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-align: center;
+            margin-bottom: 8px;
+            text-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
+        }
+        .subtitle {
+            text-align: center;
+            color: #00dd66;
+            font-size: 14px;
+            margin-bottom: 28px;
+            opacity: 0.9;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #00ff66;
+            margin-bottom: 18px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid rgba(0, 170, 0, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section-title::before { content: '▌'; color: #00ff00; font-size: 22px; }
+        
+        .form-group { margin-bottom: 20px; }
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #00cc66;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        input, textarea, select {
             width: 100%;
-            padding: 12px 14px;
-            border: 1px solid var(--border);
-            border-radius: 12px;
+            padding: 14px 16px;
+            border: 2px solid #00aa00;
+            border-radius: 16px;
             font-size: 15px;
-            background: var(--bg-secondary);
-            color: var(--text-primary);
+            background: rgba(0, 25, 0, 0.8);
+            color: #00ff88;
+            transition: all 0.3s ease;
+            font-family: inherit;
         }
-        input:focus { outline: none; border-color: var(--accent); }
-
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #00ff44;
+            box-shadow: 0 0 20px rgba(0, 255, 68, 0.4);
+            background: rgba(0, 35, 0, 0.9);
+        }
+        input[readonly] {
+            background: #0a2a0a;
+            cursor: not-allowed;
+            color: #00aa66;
+            border-color: #006600;
+        }
+        
         .btn {
             width: 100%;
-            padding: 12px 20px;
+            padding: 15px 24px;
             border: none;
-            border-radius: 12px;
-            font-size: 15px;
-            font-weight: 600;
+            border-radius: 16px;
+            font-size: 16px;
+            font-weight: 700;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s ease;
+            font-family: inherit;
+            position: relative;
+            overflow: hidden;
         }
-        .btn:active { transform: scale(0.97); }
-        .btn-primary { background: var(--accent); color: white; }
-        .btn-secondary { background: transparent; color: var(--accent); border: 1px solid var(--border); }
-        .btn-danger { background: var(--danger); color: white; }
-
-        .divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
-        .divider-line { flex: 1; height: 1px; background: var(--border); }
-        .divider-text { font-size: 11px; color: var(--text-muted); }
-        .switch-link { text-align: center; margin-top: 16px; font-size: 13px; color: var(--accent); cursor: pointer; }
-
-        .message {
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s ease;
+        }
+        .btn:hover::before { left: 100%; }
+        .btn:active { transform: scale(0.96); }
+        .btn-primary {
+            background: linear-gradient(135deg, #008800, #00cc33, #00ff55);
+            color: #001a00;
+            box-shadow: 0 8px 25px rgba(0, 255, 0, 0.3);
+        }
+        .btn-secondary {
+            background: transparent;
+            color: #00ff66;
+            border: 2px solid #00aa00;
+        }
+        .btn-danger {
+            background: linear-gradient(135deg, #991111, #cc3333, #ff4444);
+            color: white;
+        }
+        .btn-warning {
+            background: linear-gradient(135deg, #cc7700, #ffaa00, #ffcc44);
+            color: #1a1a00;
+        }
+        .copy-btn {
+            background: #008800;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-size: 13px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .copy-btn:hover { background: #00aa00; }
+        
+        .global-id-box {
+            background: linear-gradient(135deg, rgba(0, 50, 0, 0.7), rgba(0, 30, 0, 0.9));
+            border-radius: 20px;
+            padding: 24px;
+            text-align: center;
+            margin: 24px 0;
+            border: 2.5px solid #00ff44;
+            position: relative;
+            overflow: hidden;
+        }
+        .global-id-box::before {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%; width: 200%; height: 200%;
+            background: radial-gradient(circle, rgba(0,255,0,0.05) 0%, transparent 70%);
+            animation: rotate 10s linear infinite;
+        }
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .global-id-value {
+            font-size: 22px;
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            background: #001a00;
+            padding: 16px;
+            border-radius: 14px;
+            color: #00ff66;
+            word-break: break-all;
+            letter-spacing: 2.5px;
+            margin: 12px 0;
+            border: 1.5px solid #00aa33;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .qr-container {
+            display: flex;
+            justify-content: center;
+            margin: 24px 0;
+            padding: 24px;
+            background: white;
+            border-radius: 20px;
+        }
+        
+        .trusted-device-card {
+            background: linear-gradient(135deg, #003300, #006600);
+            border-radius: 20px;
+            padding: 20px;
+            text-align: center;
+            margin: 20px 0;
+            border: 2px solid #00ff44;
+            position: relative;
+        }
+        .trusted-badge {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #00ff44;
+            color: #001a00;
+            padding: 4px 16px;
+            border-radius: 20px;
             font-size: 12px;
+            font-weight: bold;
+        }
+        .trusted-device-name {
+            font-size: 16px;
+            font-weight: bold;
+            color: #00ff88;
+            margin: 15px 0 5px;
+        }
+        .trusted-device-details {
+            font-size: 11px;
+            color: #88ff88;
+            opacity: 0.8;
+        }
+        
+        .two-factor-code {
+            background: linear-gradient(135deg, #000c00, #001a00);
+            border: 3.5px solid #00ff44;
+            border-radius: 24px;
+            padding: 35px 25px;
+            text-align: center;
+            margin: 24px 0;
+            animation: codePulse 2s ease-in-out infinite;
+        }
+        @keyframes codePulse {
+            0%, 100% { box-shadow: 0 0 30px rgba(0, 255, 68, 0.3); border-color: #00ff44; }
+            50% { box-shadow: 0 0 60px rgba(0, 255, 68, 0.6); border-color: #88ff88; }
+        }
+        .code-display {
+            font-size: 72px;
+            font-weight: 900;
+            letter-spacing: 24px;
+            color: #00ff66;
+            font-family: 'Courier New', monospace;
+            text-shadow: 0 0 30px #00ff44;
+            margin: 15px 0;
+        }
+        .timer {
+            color: #ffbb33;
+            margin-top: 12px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .warning-box {
+            background: rgba(255, 170, 0, 0.12);
+            border: 1.5px solid #ffaa00;
+            border-radius: 16px;
+            padding: 16px;
+            margin: 20px 0;
+            color: #ffcc66;
+            font-size: 13px;
+        }
+        .danger-box {
+            background: rgba(204, 51, 51, 0.12);
+            border: 1.5px solid #cc3333;
+            border-radius: 16px;
+            padding: 16px;
+            margin: 20px 0;
+            color: #ff8888;
+        }
+        .success-box {
+            background: rgba(0, 170, 0, 0.12);
+            border: 1.5px solid #00aa00;
+            border-radius: 16px;
+            padding: 16px;
+            margin: 20px 0;
+            color: #88ff88;
+        }
+        
+        .message {
+            font-size: 14px;
             text-align: center;
             margin-top: 16px;
-            padding: 10px;
-            border-radius: 12px;
+            padding: 14px 18px;
+            border-radius: 14px;
             display: none;
+            font-weight: 500;
         }
-        .message-success { background: rgba(76, 175, 80, 0.2); color: var(--success); display: block; }
-        .message-error { background: rgba(229, 57, 53, 0.2); color: var(--danger); display: block; }
-
-        .code-input-container { display: flex; gap: 8px; justify-content: center; margin: 20px 0; }
-        .code-input {
-            width: 50px;
-            height: 60px;
-            text-align: center;
-            font-size: 28px;
-            font-weight: bold;
-            border: 2px solid var(--border);
-            border-radius: 12px;
-            background: var(--bg-secondary);
-            color: var(--text-primary);
+        .message-success { background: rgba(0, 100, 0, 0.7); color: #aaffaa; border: 1px solid #00ff44; display: block; }
+        .message-error { background: rgba(120, 0, 0, 0.7); color: #ffaaaa; border: 1px solid #ff4444; display: block; }
+        
+        .avatar {
+            width: 88px;
+            height: 88px;
+            background: linear-gradient(135deg, #008800, #00dd44, #00ff88);
+            border-radius: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 40px;
+            font-weight: 700;
+            color: #001a00;
+            border: 3px solid #00ff66;
         }
-        .code-input:focus { border-color: var(--accent); }
-
-        .warning-box {
-            background: rgba(255, 152, 0, 0.1);
-            border: 1px solid var(--warning);
-            border-radius: 12px;
-            padding: 12px;
-            margin: 16px 0;
-            color: var(--warning);
-            font-size: 12px;
+        
+        .lock-status {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 700;
         }
-
-        .danger-box {
-            background: rgba(229, 57, 53, 0.1);
-            border: 1px solid var(--danger);
-            border-radius: 12px;
-            padding: 12px;
-            margin: 16px 0;
-            color: var(--danger);
-            font-size: 12px;
-        }
-
+        .lock-active { background: #cc3333; color: white; }
+        .lock-inactive { background: #00aa33; color: white; }
+        
+        .flex-buttons { display: flex; gap: 14px; margin-top: 20px; }
+        .flex-buttons button { flex: 1; }
+        
+        .divider { display: flex; align-items: center; gap: 14px; margin: 24px 0; }
+        .divider-line { flex: 1; height: 2px; background: linear-gradient(90deg, transparent, #00aa00, transparent); }
+        .divider-text { font-size: 12px; color: #00aa66; font-weight: 600; }
+        
         .checkbox-label {
             display: flex;
             align-items: center;
-            gap: 8px;
-            color: var(--text-secondary);
-            font-size: 13px;
-            margin: 16px 0;
-            cursor: pointer;
-        }
-
-        .device-info {
-            background: rgba(100, 181, 246, 0.1);
-            border: 1px solid var(--accent);
-            border-radius: 12px;
-            padding: 12px;
-            margin: 16px 0;
-            color: var(--text-secondary);
-            font-size: 12px;
-        }
-
-        .messenger-container {
-            display: flex;
-            height: 100vh;
-            width: 100%;
-            position: relative;
-        }
-
-        .sidebar {
-            width: 380px;
-            height: 100vh;
-            background: var(--bg-secondary);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            backdrop-filter: blur(4px);
-            z-index: 10;
-        }
-
-        @media (max-aspect-ratio: 9/16) {
-            .sidebar { position: absolute; width: 100%; max-width: 100%; }
-            .sidebar.hide-on-mobile { transform: translateX(-100%); }
-            .chat-screen {
-                position: absolute;
-                width: 100%;
-                z-index: 20;
-                transform: translateX(100%);
-                transition: transform 0.3s ease;
-            }
-            .chat-screen.show-on-mobile { transform: translateX(0); }
-            .back-btn { display: block !important; }
-        }
-
-        @media (min-aspect-ratio: 9/16) {
-            .sidebar { position: relative; transform: none !important; }
-            .chat-screen { flex: 1; position: relative; transform: none !important; display: flex !important; }
-            .back-btn { display: none !important; }
-            .messenger-container { flex-direction: row; }
-        }
-
-        .chat-screen {
-            display: flex;
-            flex-direction: column;
-            background: transparent;
-            height: 100vh;
-        }
-
-        .tabs-container {
-            display: flex;
-            border-bottom: 1px solid var(--border);
-            background: var(--bg-secondary);
-            padding: 0 16px;
-            gap: 24px;
-        }
-
-        .tab {
-            padding: 16px 0;
-            font-size: 15px;
-            font-weight: 500;
-            color: var(--text-secondary);
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-            position: relative;
-        }
-        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-
-        .tab-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
-        .tab-pane { display: none; flex: 1; overflow-y: auto; }
-        .tab-pane.active { display: flex; }
-
-        .chat-header {
-            padding: 16px;
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .back-btn {
-            background: none;
-            border: none;
-            color: var(--accent);
-            font-size: 24px;
-            cursor: pointer;
-            padding: 8px;
-        }
-
-        .chat-avatar {
-            width: 44px;
-            height: 44px;
-            background: var(--accent);
-            border-radius: 22px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 22px;
-            color: white;
-            flex-shrink: 0;
-        }
-
-        .chat-info { flex: 1; }
-        .chat-info h3 { font-size: 16px; color: var(--text-primary); }
-        .chat-info p { font-size: 11px; color: var(--text-secondary); }
-
-        .add-contact-btn { background: var(--success); color: white; border: none; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; }
-        .delete-chat-btn { background: var(--danger); color: white; border: none; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; }
-
-        .online-status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-        .online { background-color: var(--success); }
-        .offline { background-color: var(--text-muted); }
-
-        .user-profile {
-            padding: 16px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: var(--bg-secondary);
-        }
-
-        .user-info { display: flex; align-items: center; gap: 10px; }
-        .user-avatar {
-            width: 44px;
-            height: 44px;
-            background: var(--accent);
-            border-radius: 22px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            font-weight: 600;
-            color: white;
-        }
-        .user-details h4 { font-size: 14px; color: var(--text-primary); }
-        .user-details p { font-size: 10px; color: var(--text-secondary); }
-        .logout-btn { background: none; border: none; color: var(--text-secondary); font-size: 18px; cursor: pointer; padding: 8px; }
-
-        .search-area { padding: 12px; border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
-        .search-input {
-            flex: 1;
-            background: var(--bg-surface);
-            border: none;
-            padding: 10px 14px;
-            font-size: 14px;
-            border-radius: 20px;
-            color: var(--text-primary);
-        }
-        .plus-btn {
-            background: var(--accent);
-            color: white;
-            border: none;
-            width: 44px;
-            height: 44px;
-            border-radius: 22px;
-            font-size: 24px;
-            cursor: pointer;
-        }
-
-        .chats-list, .contacts-list { flex: 1; overflow-y: auto; }
-        
-        .chat-item, .contact-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            cursor: pointer;
-            border-bottom: 1px solid var(--border);
-        }
-        .chat-item:hover, .contact-item:hover { background: var(--hover); }
-        .chat-item.unread { background: rgba(100, 181, 246, 0.1); }
-        
-        .avatar-small {
-            width: 48px;
-            height: 48px;
-            background: var(--bg-surface);
-            border-radius: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            font-size: 20px;
-            color: var(--text-primary);
-            flex-shrink: 0;
-        }
-        
-        .info-small { flex: 1; }
-        .name-row { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
-        .item-name { font-size: 15px; font-weight: 500; color: var(--text-primary); }
-        .item-subtitle { font-size: 11px; color: var(--text-secondary); }
-
-        .messages-area {
-            flex: 1;
-            overflow-y: auto;
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .message-bubble {
-            max-width: 70%;
-            padding: 10px 14px;
-            border-radius: 18px;
-            font-size: 14px;
-            word-wrap: break-word;
-        }
-        .message-sent {
-            background: var(--message-sent);
-            color: white;
-            align-self: flex-end;
-            border-bottom-right-radius: 4px;
-        }
-        .message-received {
-            background: var(--message-received);
-            color: var(--text-primary);
-            align-self: flex-start;
-            border-bottom-left-radius: 4px;
-        }
-        .message-time { font-size: 9px; color: var(--text-muted); margin-top: 4px; display: flex; gap: 4px; justify-content: flex-end; }
-
-        .chat-input-area {
-            padding: 12px 16px;
-            border-top: 1px solid var(--border);
-            display: flex;
             gap: 10px;
-            background: var(--bg-secondary);
-        }
-        .chat-input-wrapper { flex: 1; display: flex; gap: 8px; }
-        .chat-input {
-            flex: 1;
-            background: var(--bg-surface);
-            border: none;
-            padding: 12px 16px;
-            border-radius: 24px;
-            color: var(--text-primary);
-        }
-        .attach-btn {
-            background: var(--bg-surface);
-            border: none;
-            width: 44px;
-            height: 44px;
-            border-radius: 22px;
-            font-size: 20px;
+            color: #00dd77;
+            font-size: 14px;
+            margin: 20px 0;
             cursor: pointer;
-            color: var(--text-secondary);
+            padding: 10px;
+            border-radius: 12px;
         }
-        .send-btn { width: auto; padding: 12px 24px; }
-
-        .footer {
-            text-align: center;
-            padding: 8px 16px;
-            font-size: 10px;
-            color: var(--text-muted);
-            background: var(--bg-primary);
-            border-top: 1px solid var(--border);
-        }
-
-        .empty-state { text-align: center; color: var(--text-muted); padding: 40px 20px; }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.8);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-        .modal-content {
-            background: var(--bg-secondary);
-            border-radius: 24px;
-            padding: 20px;
-            max-width: 90%;
-            width: 400px;
-            border: 1px solid var(--border);
-        }
-        .modal-header { display: flex; justify-content: space-between; margin-bottom: 16px; }
-        .modal-header h3 { color: var(--text-primary); }
-        .close-modal { font-size: 24px; cursor: pointer; color: var(--text-secondary); }
-
-        .plus-menu {
-            display: none;
-            position: absolute;
-            top: 70px;
-            right: 20px;
-            background: var(--bg-secondary);
-            border-radius: 16px;
-            z-index: 100;
-            border: 1px solid var(--border);
-        }
-        .plus-menu-item {
-            padding: 14px 20px;
-            color: var(--text-primary);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            border-bottom: 1px solid var(--border);
-        }
-        .plus-menu-item:last-child { border-bottom: none; }
-
-        .settings-card {
-            background: var(--bg-secondary);
-            border-radius: 20px;
-            padding: 20px;
-            margin-bottom: 16px;
-            border: 1px solid var(--border);
-        }
-        .settings-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 16px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid var(--border);
-        }
-        .theme-option {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 0;
-            cursor: pointer;
-            border-bottom: 1px solid var(--border);
-        }
-        .theme-option:last-child { border-bottom: none; }
-        .theme-name { color: var(--text-primary); font-size: 14px; }
-        .theme-preview { width: 60px; height: 30px; border-radius: 15px; display: flex; overflow: hidden; border: 1px solid var(--border); }
-        .theme-preview-dark { background: #0A0F1E; width: 33%; }
-        .theme-preview-light { background: #F5F7FA; width: 33%; }
-        .theme-preview-rose { background: #FFF5F7; width: 33%; }
-        .theme-preview-blue { background: #F0F9FF; width: 33%; }
-        .theme-check { color: var(--accent); margin-left: 8px; }
+        .checkbox-label:hover { background: rgba(0, 100, 0, 0.3); }
+        .checkbox-label input { width: 20px; height: 20px; accent-color: #00ff44; cursor: pointer; }
         
-        /* Стиль для цифровой клавиатуры на мобильных */
+        .code-input-container { display: flex; gap: 12px; justify-content: center; margin: 24px 0; }
+        .code-input {
+            width: 60px;
+            height: 70px;
+            text-align: center;
+            font-size: 34px;
+            font-weight: 700;
+            border: 3px solid #00aa00;
+            border-radius: 16px;
+            background: #001a00;
+            color: #00ff66;
+            font-family: 'Courier New', monospace;
+        }
+        .code-input:focus { border-color: #00ff44; box-shadow: 0 0 25px #00ff44; }
+        
+        .info-text { color: #00aa66; font-size: 13px; text-align: center; margin-top: 18px; }
+        
+        .switch-device-btn {
+            background: #ffaa00;
+            color: #1a1a00;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 15px;
+            width: 100%;
+        }
+        .switch-device-btn:hover { background: #ffcc44; }
+        
+        @media (max-width: 480px) {
+            body { padding: 12px; }
+            .card { padding: 22px 18px; }
+            .global-id-value { font-size: 18px; padding: 12px; }
+            .code-display { font-size: 56px; letter-spacing: 16px; }
+            .code-input { width: 50px; height: 60px; font-size: 28px; }
+            h1 { font-size: 26px; }
+        }
+        
         input[type="number"] {
             -moz-appearance: textfield;
         }
@@ -607,245 +419,249 @@
         }
     </style>
 </head>
-<body class="theme-dark">
-    <div id="particles-js"></div>
-    
-    <div class="app-container">
-        <div id="authForm" style="display: flex; height: 100vh; align-items: center; justify-content: center;">
-            <div class="auth-card">
-                <div class="logo-area">
-                    <img src="https://i.ibb.co/8JY0bXs/IMG-0335.jpg" alt="Айсберг" class="logo-img">
-                    <div class="logo-title">Айсберг</div>
+<body>
+    <div class="container">
+        <!-- ФОРМА АВТОРИЗАЦИИ -->
+        <div id="authForm" class="card">
+            <img src="https://i.ibb.co/Y7j6w8KP/bfbf965f-9bf0-44a5-bfdf-6d695106a6e0.webp" alt="IT Global" class="logo-img">
+            <h1>IT Global</h1>
+            <div class="subtitle">Единый идентификатор</div>
+            
+            <div id="loginMode">
+                <div class="form-group">
+                    <label class="form-label">📧 Email или Global ID</label>
+                    <input type="text" id="loginIdentifier" placeholder="your@email.com или Global ID" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">🔒 Пароль</label>
+                    <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+                </div>
+                <button class="btn btn-primary" onclick="login()">🚪 Войти</button>
+                <div class="divider">
+                    <div class="divider-line"></div>
+                    <div class="divider-text">или</div>
+                    <div class="divider-line"></div>
+                </div>
+                <button class="btn btn-secondary" onclick="showRegister()">✨ Создать Global ID</button>
+            </div>
+            
+            <div id="registerMode" style="display:none;">
+                <img src="https://i.ibb.co/Y7j6w8KP/bfbf965f-9bf0-44a5-bfdf-6d695106a6e0.webp" alt="IT Global" class="logo-img logo-img-small">
+                <h1>Регистрация</h1>
+                <div class="subtitle">Создание Global ID</div>
+                <div class="form-group">
+                    <label class="form-label">📧 Email</label>
+                    <input type="email" id="regEmail" placeholder="your@email.com">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">🔒 Пароль (мин. 6 символов)</label>
+                    <input type="password" id="regPassword" placeholder="••••••••">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">🔒 Подтверждение пароля</label>
+                    <input type="password" id="regConfirm" placeholder="••••••••">
+                </div>
+                <button class="btn btn-primary" onclick="register()">✅ Зарегистрироваться</button>
+                <button class="btn btn-secondary" onclick="showLogin()" style="margin-top: 12px;">← Назад</button>
+            </div>
+            
+            <!-- 2FA при входе с нового устройства -->
+            <div id="twoFactorLoginMode" style="display:none;">
+                <img src="https://i.ibb.co/Y7j6w8KP/bfbf965f-9bf0-44a5-bfdf-6d695106a6e0.webp" alt="IT Global" class="logo-img logo-img-small">
+                <div style="text-align:center; margin-bottom:20px;">
+                    <div style="font-size:48px; margin-bottom:10px;">🔐</div>
+                    <h3 style="color:#00ff66; margin-bottom:8px;">Новое устройство!</h3>
+                    <p style="color:#ffaa00; font-size:14px; font-weight:bold;">Вход с недоверенного устройства</p>
+                    <p style="color:#00cc66; font-size:13px; margin-top:10px;">Введите код из <strong>доверенного устройства</strong></p>
                 </div>
                 
-                <div id="loginMode">
-                    <div class="form-group">
-                        <label class="form-label">Global ID или Email</label>
-                        <input type="text" id="loginIdentifier" placeholder="Global ID или your@email.com" autocomplete="username">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Пароль</label>
-                        <input type="password" id="loginPassword" placeholder="Введите пароль" autocomplete="current-password">
-                    </div>
-                    <button class="btn btn-primary" onclick="login()">Войти в Айсберг</button>
-                    <div class="divider">
-                        <div class="divider-line"></div>
-                        <div class="divider-text">или</div>
-                        <div class="divider-line"></div>
-                    </div>
-                    <button class="btn btn-secondary" onclick="showRegister()">Создать аккаунт</button>
+                <div class="warning-box" style="background:rgba(255,170,0,0.2); border-color:#ffaa00;">
+                    <strong>🆕 Информация о новом устройстве:</strong><br>
+                    <span id="newDeviceIp">Загрузка...</span><br>
+                    <span id="newDeviceBrowser">Загрузка...</span>
                 </div>
-
-                <div id="registerMode" style="display:none;">
-                    <div class="form-group">
-                        <label class="form-label">Email</label>
-                        <input type="email" id="regEmail" placeholder="your@email.com">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Пароль (минимум 6 символов)</label>
-                        <input type="password" id="regPassword" placeholder="Введите пароль">
-                    </div>
-                    <button class="btn btn-primary" onclick="register()">Зарегистрироваться</button>
-                    <div class="switch-link" onclick="showLogin()">Уже есть аккаунт? Войти</div>
+                
+                <div class="code-input-container">
+                    <input type="text" class="code-input" maxlength="1" id="code1" oninput="moveToNext(this,0)" inputmode="numeric" pattern="\d*">
+                    <input type="text" class="code-input" maxlength="1" id="code2" oninput="moveToNext(this,1)" inputmode="numeric" pattern="\d*">
+                    <input type="text" class="code-input" maxlength="1" id="code3" oninput="moveToNext(this,2)" inputmode="numeric" pattern="\d*">
+                    <input type="text" class="code-input" maxlength="1" id="code4" oninput="moveToNext(this,3)" inputmode="numeric" pattern="\d*">
                 </div>
-
-                <div id="twoFactorMode" style="display:none;">
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <div style="font-size: 40px; margin-bottom: 10px;">🔐</div>
-                        <h3 style="color: var(--text-primary); margin-bottom: 8px;">Подтверждение входа</h3>
-                        <p style="color: var(--text-secondary); font-size: 13px;">Введите код из приложения Global ID</p>
-                    </div>
-                    
-                    <div class="device-info" id="newDeviceInfo">
-                        Обнаружено новое устройство или IP-адрес
-                    </div>
-                    
-                    <div class="code-input-container">
-                        <input type="text" class="code-input" maxlength="1" id="code1" oninput="moveToNext(this, 0)" inputmode="numeric" pattern="\d*">
-                        <input type="text" class="code-input" maxlength="1" id="code2" oninput="moveToNext(this, 1)" inputmode="numeric" pattern="\d*">
-                        <input type="text" class="code-input" maxlength="1" id="code3" oninput="moveToNext(this, 2)" inputmode="numeric" pattern="\d*">
-                        <input type="text" class="code-input" maxlength="1" id="code4" oninput="moveToNext(this, 3)" inputmode="numeric" pattern="\d*">
-                    </div>
-                    
-                    <div class="warning-box">
-                        <strong>⚠️ Внимание!</strong><br>
-                        Никогда не сообщайте этот код никому.
-                    </div>
-                    
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="trustDevice">
-                        <span>✅ Запомнить это устройство</span>
-                    </label>
-                    
-                    <button class="btn btn-primary" onclick="verify2FA()">Подтвердить</button>
-                    <button class="btn btn-secondary" onclick="cancel2FA()" style="margin-top: 10px;">Отмена</button>
-                    
-                    <div id="twoFactorMessage" class="message"></div>
+                
+                <div class="warning-box">
+                    <strong>⚠️ ВНИМАНИЕ!</strong><br>
+                    Код отображается на ВАШЕМ доверенном устройстве.<br>
+                    Никогда не сообщайте этот код никому!
                 </div>
-
-                <div id="blockedMode" style="display:none;">
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <div style="font-size: 40px; margin-bottom: 10px;">🚫</div>
-                        <h3 style="color: var(--danger); margin-bottom: 8px;">Доступ запрещён</h3>
-                        <p style="color: var(--text-secondary); font-size: 13px;">Ваш аккаунт заблокирован</p>
-                    </div>
-                    
-                    <div class="danger-box">
-                        <strong>🔒 Аккаунт заблокирован</strong><br>
-                        Доступ к Айсбергу временно приостановлен. Разблокируйте аккаунт в приложении Global ID.
-                    </div>
-                    
-                    <button class="btn btn-secondary" onclick="cancelBlocked()">Вернуться к входу</button>
-                    
-                    <div id="blockedMessage" class="message"></div>
-                </div>
-
-                <div id="authMessage" class="message"></div>
+                
+                <button class="btn btn-primary" onclick="verifyLogin2FA()">✅ Подтвердить вход</button>
+                <button class="btn btn-secondary" onclick="cancelLogin2FA()" style="margin-top:10px;">❌ Отмена</button>
+                <div id="twoFactorMessage" class="message"></div>
             </div>
+            
+            <!-- Экран разблокировки -->
+            <div id="unlockMode" style="display:none;">
+                <img src="https://i.ibb.co/Y7j6w8KP/bfbf965f-9bf0-44a5-bfdf-6d695106a6e0.webp" alt="IT Global" class="logo-img logo-img-small" style="border-color: #ff4444;">
+                <div style="text-align:center; margin-bottom:20px;">
+                    <div style="font-size:48px; margin-bottom:10px;">🔒</div>
+                    <h3 style="color:#ff6666; margin-bottom:8px;">Аккаунт заблокирован</h3>
+                    <p style="color:#ffaa00; font-size:14px;">Введите пароль для разблокировки</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">🔒 Пароль</label>
+                    <input type="password" id="unlockPassword" placeholder="Введите пароль">
+                </div>
+                <div class="danger-box">
+                    <strong>🚨 ЭКСТРЕННАЯ БЛОКИРОВКА АКТИВНА</strong><br>
+                    Все сессии завершены. Требуется пароль для восстановления.
+                </div>
+                <button class="btn btn-warning" onclick="unlockAccount()">🔓 Разблокировать</button>
+                <button class="btn btn-secondary" onclick="cancelUnlock()" style="margin-top:10px;">← Назад</button>
+                <div id="unlockMessage" class="message"></div>
+            </div>
+            
+            <div id="authMessage" class="message"></div>
         </div>
 
-        <div id="messengerApp" style="display: none;" class="messenger-container">
-            <div id="sidebar" class="sidebar">
-                <div class="user-profile">
-                    <div class="user-info">
-                        <div class="user-avatar" id="userAvatar">U</div>
-                        <div class="user-details">
-                            <h4 id="userName"></h4>
-                            <p id="userGlobalId"></p>
+        <!-- ПАНЕЛЬ ПРОФИЛЯ -->
+        <div id="profilePanel" style="display:none;">
+            <!-- Экстренная блокировка -->
+            <div class="card">
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                    <div>
+                        <h2 class="section-title" style="border-bottom:none; margin-bottom:0;">🛡️ Безопасность</h2>
+                        <div id="lockStatusDisplay">
+                            <span class="lock-status lock-inactive">● Аккаунт активен</span>
                         </div>
                     </div>
-                    <button class="logout-btn" onclick="showSettings()" title="Настройки">⚙️</button>
-                    <button class="logout-btn" onclick="logout()" title="Выйти">🚪</button>
+                    <button class="btn-danger" onclick="emergencyLock()" style="width:auto; padding:12px 20px;">
+                        🚨 ЭКСТРЕННАЯ БЛОКИРОВКА
+                    </button>
                 </div>
-                
-                <div class="search-area">
-                    <input type="text" class="search-input" placeholder="Поиск..." id="searchInput">
-                    <button class="plus-btn" id="plusBtn">+</button>
-                </div>
-                
-                <div class="tabs-container">
-                    <div class="tab active" onclick="switchTab('chats')">Чаты</div>
-                    <div class="tab" onclick="switchTab('contacts')">Контакты</div>
-                </div>
-                
-                <div class="tab-content">
-                    <div id="chatsPane" class="tab-pane active">
-                        <div class="chats-list" id="chatsList"></div>
-                    </div>
-                    <div id="contactsPane" class="tab-pane">
-                        <div class="contacts-list" id="contactsList"></div>
-                    </div>
-                </div>
-                
-                <div class="footer">
-                    <p>© 2026 IT Global. Все права защищены.</p>
+                <div class="info-text" style="color:#ff6666; margin-top:10px;">
+                    Мгновенная блокировка всех входов
                 </div>
             </div>
 
-            <div id="chatScreen" class="chat-screen">
-                <div class="chat-header">
-                    <button class="back-btn" onclick="closeChat()">←</button>
-                    <div class="chat-avatar" id="chatAvatar">🧊</div>
-                    <div class="chat-info">
-                        <h3 id="chatName">Выберите чат</h3>
-                        <p id="chatStatus">Защищённое соединение</p>
+            <!-- ДОВЕРЕННОЕ УСТРОЙСТВО (ТОЛЬКО 1) -->
+            <div class="card">
+                <h2 class="section-title">⭐ Доверенное устройство</h2>
+                <div id="trustedDeviceCard" class="trusted-device-card">
+                    <div class="trusted-badge">ЕДИНСТВЕННОЕ ДОВЕРЕННОЕ УСТРОЙСТВО</div>
+                    <div id="trustedDeviceInfo" style="min-height: 80px;">
+                        <div class="info-text">Загрузка информации об устройстве...</div>
                     </div>
-                    <button id="addContactBtn" class="add-contact-btn" style="display: none;" onclick="addToContacts()">+ Добавить</button>
-                    <button id="deleteChatBtn" class="delete-chat-btn" style="display: none;" onclick="deleteCurrentChat()">Удалить</button>
-                </div>
-                <div class="messages-area" id="messagesArea">
-                    <div class="empty-state">Выберите чат для начала общения</div>
-                </div>
-                <div class="chat-input-area" id="chatInputArea" style="display: none;">
-                    <div class="chat-input-wrapper">
-                        <input type="text" class="chat-input" id="messageInput" placeholder="Введите сообщение...">
-                        <button class="attach-btn" id="attachPhotoBtn">📷</button>
-                        <button class="btn btn-primary send-btn" onclick="sendMessage()">Отправить</button>
+                    <button id="switchDeviceBtn" class="switch-device-btn" onclick="startDeviceSwitch()" style="display: none;">
+                        🔄 Сменить доверенное устройство
+                    </button>
+                    <div id="switchDeviceWarning" class="warning-box" style="display:none; margin-top:15px;">
+                        <strong>⚠️ Смена доверенного устройства</strong><br>
+                        На новое устройство будет отправлен код подтверждения.<br>
+                        Старое устройство потеряет статус доверенного.
                     </div>
-                    <input type="file" id="photoInput" accept="image/*" style="display: none;">
+                </div>
+                <div class="info-text" style="color:#00aa66; margin-top:10px;">
+                    ✅ Только ОДНО устройство может быть доверенным.<br>
+                    Все остальные устройства требуют 2FA код при входе.
+                </div>
+            </div>
+
+            <!-- 2FA Коды -->
+            <div class="card">
+                <div class="avatar">🔐</div>
+                <h1>Коды для входа</h1>
+                <div class="subtitle">Появляются при входе с нового устройства</div>
+                <div id="twoFactorSection">
+                    <div class="two-factor-code" id="codeBlock" style="display:none;">
+                        <div style="font-size:12px; color:#00aa00;">КОД ДЛЯ ПОДТВЕРЖДЕНИЯ ВХОДА</div>
+                        <div class="code-display" id="currentCode">----</div>
+                        <div class="timer" id="codeTimer">5:00</div>
+                        <div class="info-text" style="margin-top:15px;">
+                            Код действителен 5 минут<br>
+                            Введите его на новом устройстве
+                        </div>
+                    </div>
+                    <div id="noCodeMessage" style="text-align:center; padding:30px; color:#00aa00;">
+                        <div style="font-size:48px;">🛡️</div>
+                        <p>Нет активных запросов на вход</p>
+                        <p style="font-size:12px; margin-top:10px;">Код появится здесь, когда кто-то<br>попытается войти с нового устройства</p>
+                    </div>
+                    <div class="warning-box">
+                        <strong>⚠️ ВНИМАНИЕ!</strong><br>
+                        Никогда не сообщайте этот код никому!<br>
+                        Сотрудники IT Global никогда не запрашивают коды.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Основная информация -->
+            <div class="card">
+                <div class="avatar" id="userAvatar">👤</div>
+                <h1 id="userName">Пользователь</h1>
+                <div class="subtitle" id="userEmail">email@example.com</div>
+                
+                <div class="global-id-box">
+                    <div style="font-size:12px; color:#00aa00; margin-bottom:8px;">🔑 Ваш Global ID</div>
+                    <div class="global-id-value" id="globalIdValue">—</div>
+                    <button class="copy-btn" onclick="copyGlobalId()">📋 Копировать Global ID</button>
+                </div>
+
+                <div class="qr-container" id="qrContainer"></div>
+                <div class="info-text">Отсканируйте QR-код, чтобы поделиться Global ID</div>
+            </div>
+
+            <!-- Личные данные -->
+            <div class="card">
+                <h2 class="section-title">👤 Личные данные</h2>
+                
+                <div class="form-group">
+                    <label class="form-label">Основная почта</label>
+                    <input type="email" id="mainEmail" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">ФИО</label>
+                    <input type="text" id="fullName" placeholder="Иванов Иван Иванович">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Дата рождения</label>
+                    <input type="date" id="birthDate">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Номер телефона</label>
+                    <input type="tel" id="phoneNumber" placeholder="+7 999 123-45-67">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Telegram</label>
+                    <input type="text" id="telegram" placeholder="@username">
+                </div>
+            </div>
+
+            <!-- Кнопки -->
+            <div class="card">
+                <div class="flex-buttons">
+                    <button class="btn btn-primary" onclick="saveProfile()">💾 Сохранить</button>
+                    <button class="btn btn-danger" onclick="logout()">🚪 Выйти</button>
+                </div>
+                <div id="profileMessage" class="message"></div>
+            </div>
+
+            <div class="card">
+                <h2 class="section-title">ℹ️ Что такое Global ID?</h2>
+                <p style="color:#00cc66; font-size:13px; line-height:1.6;">
+                    Global ID — уникальный идентификатор в экосистеме IT Global.<br>
+                    Используется во всех сервисах: GloBank, Айсберг.<br>
+                    <strong>Только одно устройство может быть доверенным.</strong>
+                </p>
+                <div class="success-box" style="margin-top:16px;">
+                    <strong>🔒 Максимальная защита</strong><br>
+                    Вход с любого другого устройства требует 2FA кода с доверенного устройства.
                 </div>
             </div>
         </div>
     </div>
-
-    <div id="plusMenu" class="plus-menu">
-        <div class="plus-menu-item" onclick="showCreateGroupModal()">👥 Создать группу</div>
-        <div class="plus-menu-item" onclick="showSearchModal()">🔍 Найти по Global ID</div>
-        <div class="plus-menu-item" onclick="openScanner()">📷 Сканировать QR</div>
-    </div>
-
-    <div id="settingsModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Настройки</h3>
-                <span class="close-modal" onclick="closeSettings()">&times;</span>
-            </div>
-            <div class="settings-card">
-                <div class="settings-title">Тема оформления</div>
-                <div class="theme-option" onclick="setTheme('dark')">
-                    <span class="theme-name">Тёмная</span>
-                    <div class="theme-preview">
-                        <div class="theme-preview-dark"></div>
-                        <div class="theme-preview-dark"></div>
-                        <div class="theme-preview-dark"></div>
-                    </div>
-                    <span id="theme-dark-check" class="theme-check">✓</span>
-                </div>
-                <div class="theme-option" onclick="setTheme('light')">
-                    <span class="theme-name">Светлая</span>
-                    <div class="theme-preview">
-                        <div class="theme-preview-light"></div>
-                        <div class="theme-preview-light"></div>
-                        <div class="theme-preview-light"></div>
-                    </div>
-                    <span id="theme-light-check" class="theme-check" style="display: none;">✓</span>
-                </div>
-                <div class="theme-option" onclick="setTheme('rose')">
-                    <span class="theme-name">Розовая</span>
-                    <div class="theme-preview">
-                        <div class="theme-preview-rose"></div>
-                        <div class="theme-preview-rose"></div>
-                        <div class="theme-preview-rose"></div>
-                    </div>
-                    <span id="theme-rose-check" class="theme-check" style="display: none;">✓</span>
-                </div>
-                <div class="theme-option" onclick="setTheme('blue')">
-                    <span class="theme-name">Голубая</span>
-                    <div class="theme-preview">
-                        <div class="theme-preview-blue"></div>
-                        <div class="theme-preview-blue"></div>
-                        <div class="theme-preview-blue"></div>
-                    </div>
-                    <span id="theme-blue-check" class="theme-check" style="display: none;">✓</span>
-                </div>
-            </div>
-            <button class="btn btn-secondary" onclick="closeSettings()">Закрыть</button>
-        </div>
-    </div>
-
-    <div id="searchModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Поиск по Global ID</h3>
-                <span class="close-modal" onclick="closeSearchModal()">&times;</span>
-            </div>
-            <input type="text" id="searchGlobalIdInput" placeholder="Введите Global ID" style="width: 100%; margin: 10px 0;">
-            <button class="btn btn-primary" onclick="searchByGlobalId()">Найти</button>
-        </div>
-    </div>
-
-    <div id="scannerModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Сканирование QR-кода</h3>
-                <span class="close-modal" onclick="closeScanner()">&times;</span>
-            </div>
-            <div id="qr-reader" style="width: 100%;"></div>
-            <button class="btn btn-secondary" onclick="closeScanner()" style="margin-top: 12px;">Отмена</button>
-        </div>
-    </div>
-
+    
     <script type="module">
+        // ==================== КОНФИГУРАЦИЯ ====================
         const firebaseConfig = {
             apiKey: "AIzaSyA6GGJxAiao77U7_9mBUEjftmS_FnSWbIw",
             authDomain: "glob-data.firebaseapp.com",
@@ -856,27 +672,34 @@
         };
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs, onSnapshot, serverTimestamp, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth();
         const db = getFirestore();
-        
         auth.setPersistence({ type: 'NONE' });
 
+        // ==================== ПЕРЕМЕННЫЕ ====================
         let currentUser = null;
         let currentUserData = null;
         let pendingUser = null;
-        let pendingLoginResolve = null;
-        let currentIP = null;
+        let pendingEmail = null;
+        let pendingNewTrustedDevice = null; // Для смены доверенного устройства
+        let codeInterval = null;
         let deviceFingerprint = null;
-        let currentContact = null;
-        let currentChatId = null;
-        let chatsListener = null;
-        let messagesListener = null;
-        let blockCheckInterval = null;
+        let currentIP = null;
         let userStatusListener = null;
+
+        // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+        function generateGlobalId() {
+            const chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            return Array.from({length: 22}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+        }
+
+        function generate2FACode() {
+            return Math.floor(1000 + Math.random() * 9000).toString();
+        }
 
         async function getDeviceInfo() {
             try {
@@ -886,87 +709,228 @@
             } catch(e) {
                 currentIP = 'unknown';
             }
-            
             const nav = window.navigator;
             deviceFingerprint = btoa(`${nav.userAgent}-${nav.language}-${screen.width}x${screen.height}-${nav.platform}-${new Date().getTimezoneOffset()}`);
+            
+            document.getElementById('newDeviceIp').innerText = `IP: ${currentIP}`;
+            document.getElementById('newDeviceBrowser').innerText = `Браузер: ${nav.userAgent.substring(0, 60)}...`;
             
             return { ip: currentIP, fingerprint: deviceFingerprint };
         }
 
-        async function isDeviceKnown(uid) {
-            const userDoc = await getDoc(doc(db, "users", uid));
-            const data = userDoc.data();
-            const knownDevices = data?.knownDevices || [];
-            return knownDevices.some(d => d.fingerprint === deviceFingerprint);
+        function showMessage(elementId, text, isError = true) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            el.textContent = text;
+            el.className = `message ${isError ? 'message-error' : 'message-success'}`;
+            el.style.display = 'block';
+            setTimeout(() => { if(el) el.style.display = 'none'; }, 5000);
         }
 
-        async function hasIcebergAccess(uid) {
-            const userDoc = await getDoc(doc(db, "users", uid));
-            const data = userDoc.data();
-            return data?.icebergAccess === true;
-        }
-
-        async function isAccountLocked(uid) {
-            const userDoc = await getDoc(doc(db, "users", uid));
-            const data = userDoc.data();
-            return data?.accountLocked === true;
-        }
-
-        async function addKnownDevice(uid) {
-            const deviceInfo = {
-                fingerprint: deviceFingerprint,
-                ip: currentIP,
-                userAgent: navigator.userAgent,
-                addedAt: new Date(),
-                lastUsed: new Date(),
-                platform: navigator.platform,
-                language: navigator.language
-            };
-            
-            await updateDoc(doc(db, "users", uid), {
-                knownDevices: arrayUnion(deviceInfo)
-            });
-        }
-
-        function generateGlobalId() {
-            const chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-            return Array.from({length: 22}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-        }
-
-        function showMessage(element, text, isError = true) {
-            if (typeof element === 'string') element = document.getElementById(element);
-            if (!element) return;
-            element.textContent = text;
-            element.className = `message ${isError ? 'message-error' : 'message-success'}`;
-            setTimeout(() => { if(element) element.style.display = 'none'; }, 4000);
-        }
-
-        function initParticles() {
-            if (typeof particlesJS !== 'undefined') {
-                particlesJS('particles-js', {
-                    particles: {
-                        number: { value: 80 },
-                        color: { value: '#64B5F6' },
-                        opacity: { value: 0.5 },
-                        size: { value: 3 },
-                        line_linked: { enable: true, color: '#64B5F6' },
-                        move: { enable: true, speed: 1 }
-                    }
+        function generateQR(globalId) {
+            const qrContainer = document.getElementById('qrContainer');
+            if (!qrContainer) return;
+            qrContainer.innerHTML = '';
+            try {
+                new QRCode(qrContainer, {
+                    text: `Global ID: ${globalId}`,
+                    width: 200,
+                    height: 200,
+                    colorDark: "#00aa00",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
                 });
+            } catch(e) {
+                qrContainer.innerHTML = '<div style="padding:20px;text-align:center;color:#00aa00;">🔲 QR-код</div>';
             }
         }
 
-        window.setTheme = function(theme) {
-            document.body.className = `theme-${theme}`;
-            localStorage.setItem('iceberg_theme', theme);
-            document.querySelectorAll('[id^="theme-"]').forEach(el => el.style.display = 'none');
-            document.getElementById(`theme-${theme}-check`).style.display = 'inline';
-            setTimeout(initParticles, 50);
+        // ==================== УПРАВЛЕНИЕ ДОВЕРЕННЫМ УСТРОЙСТВОМ ====================
+        async function getTrustedDevice(uid) {
+            const userDoc = await getDoc(doc(db, "users", uid));
+            const data = userDoc.data();
+            return data?.trustedDevice || null;
+        }
+
+        async function setTrustedDevice(uid, deviceInfo) {
+            await updateDoc(doc(db, "users", uid), {
+                trustedDevice: deviceInfo
+            });
+        }
+
+        async function clearTrustedDevice(uid) {
+            await updateDoc(doc(db, "users", uid), {
+                trustedDevice: null
+            });
+        }
+
+        async function isTrustedDevice(uid) {
+            const trusted = await getTrustedDevice(uid);
+            return trusted?.fingerprint === deviceFingerprint;
+        }
+
+        function renderTrustedDevice(device) {
+            const container = document.getElementById('trustedDeviceInfo');
+            const switchBtn = document.getElementById('switchDeviceBtn');
+            
+            if (!device) {
+                container.innerHTML = `
+                    <div style="color:#ffaa00; padding:20px;">
+                        ⚠️ Доверенное устройство не установлено<br>
+                        <small>При следующем входе оно будет установлено автоматически</small>
+                    </div>
+                `;
+                switchBtn.style.display = 'block';
+                return;
+            }
+            
+            const isCurrent = device.fingerprint === deviceFingerprint;
+            const date = device.addedAt ? new Date(device.addedAt).toLocaleDateString() : 'Неизвестно';
+            
+            container.innerHTML = `
+                <div class="trusted-device-name">
+                    ${isCurrent ? '✅ ТЕКУЩЕЕ УСТРОЙСТВО' : '📱 ДОВЕРЕННОЕ УСТРОЙСТВО'}
+                </div>
+                <div class="trusted-device-details">
+                    ${device.userAgent ? device.userAgent.substring(0, 50) + '...' : 'Неизвестное устройство'}<br>
+                    IP: ${device.ip || 'неизвестно'}<br>
+                    Добавлено: ${date}
+                </div>
+            `;
+            
+            // Кнопка смены устройства видна только если это НЕ текущее доверенное устройство
+            // или если текущее устройство не является доверенным
+            switchBtn.style.display = isCurrent ? 'none' : 'block';
+            
+            if (!isCurrent) {
+                document.getElementById('switchDeviceWarning').style.display = 'block';
+            } else {
+                document.getElementById('switchDeviceWarning').style.display = 'none';
+            }
+        }
+
+        // ==================== СМЕНА ДОВЕРЕННОГО УСТРОЙСТВА ====================
+        window.startDeviceSwitch = async function() {
+            if (!currentUser) return;
+            
+            if (!confirm('⚠️ СМЕНА ДОВЕРЕННОГО УСТРОЙСТВА\n\n' +
+                        'Текущее доверенное устройство потеряет этот статус.\n' +
+                        'На новое устройство будет отправлен код подтверждения.\n\n' +
+                        'Продолжить?')) {
+                return;
+            }
+            
+            // Генерируем код для подтверждения смены устройства
+            const code = generate2FACode();
+            pendingNewTrustedDevice = {
+                fingerprint: deviceFingerprint,
+                ip: currentIP,
+                userAgent: navigator.userAgent,
+                addedAt: new Date()
+            };
+            
+            await updateDoc(doc(db, "users", currentUser.uid), {
+                pendingTrustedSwitchCode: code,
+                pendingTrustedSwitchExpires: new Date(Date.now() + 5 * 60 * 1000),
+                pendingTrustedDeviceInfo: pendingNewTrustedDevice
+            });
+            
+            // Показываем код для подтверждения (на текущем устройстве)
+            alert(`🔐 Код подтверждения: ${code}\n\nВведите его на этом же устройстве для подтверждения смены доверенного устройства.\nКод действителен 5 минут.`);
+            
+            const userCode = prompt('Введите код подтверждения для смены доверенного устройства:');
+            if (userCode === code) {
+                // Подтверждено - меняем доверенное устройство
+                await setTrustedDevice(currentUser.uid, pendingNewTrustedDevice);
+                await updateDoc(doc(db, "users", currentUser.uid), {
+                    pendingTrustedSwitchCode: null,
+                    pendingTrustedSwitchExpires: null,
+                    pendingTrustedDeviceInfo: null
+                });
+                
+                showMessage('profileMessage', '✅ Доверенное устройство успешно изменено!', false);
+                await loadProfile(currentUser);
+            } else {
+                showMessage('profileMessage', '❌ Неверный код. Смена устройства отменена.', true);
+                await updateDoc(doc(db, "users", currentUser.uid), {
+                    pendingTrustedSwitchCode: null,
+                    pendingTrustedSwitchExpires: null,
+                    pendingTrustedDeviceInfo: null
+                });
+            }
+            pendingNewTrustedDevice = null;
         };
 
-        function loadTheme() {
-            const saved = localStorage.getItem('iceberg_theme');
-            setTheme(saved || 'dark');
+        // ==================== 2FA ПРИ ВХОДЕ ====================
+        function display2FACode(code, expires) {
+            const codeBlock = document.getElementById('codeBlock');
+            const noCodeMessage = document.getElementById('noCodeMessage');
+            const currentCode = document.getElementById('currentCode');
+            const codeTimer = document.getElementById('codeTimer');
+            
+            if (!codeBlock || !noCodeMessage) return;
+            
+            codeBlock.style.display = 'block';
+            noCodeMessage.style.display = 'none';
+            currentCode.textContent = code;
+            
+            if (codeInterval) clearInterval(codeInterval);
+            
+            codeInterval = setInterval(() => {
+                const diff = expires.toDate() - new Date();
+                if (diff <= 0) {
+                    clearInterval(codeInterval);
+                    currentCode.textContent = 'ИСТЁК';
+                    codeTimer.textContent = 'Код истёк';
+                    setTimeout(() => {
+                        codeBlock.style.display = 'none';
+                        noCodeMessage.style.display = 'block';
+                    }, 5000);
+                } else {
+                    const m = Math.floor(diff / 60000);
+                    const s = Math.floor((diff % 60000) / 1000);
+                    codeTimer.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+                }
+            }, 1000);
+        }
+
+        function watchFor2FACodes(uid) {
+            onSnapshot(doc(db, "users", uid), (docSnap) => {
+                const data = docSnap.data();
+                
+                // Обновление статуса блокировки
+                const statusDiv = document.getElementById('lockStatusDisplay');
+                if (statusDiv && data) {
+                    if (data.accountLocked) {
+                        statusDiv.innerHTML = '<span class="lock-status lock-active">🔒 АККАУНТ ЗАБЛОКИРОВАН</span>';
+                    } else {
+                        statusDiv.innerHTML = '<span class="lock-status lock-inactive">● Аккаунт активен</span>';
+                    }
+                }
+                
+                // Отображение кода для входа
+                if (data?.pending2FACode && data.pending2FACodeExpires) {
+                    const expires = data.pending2FACodeExpires.toDate();
+                    if (expires > new Date()) {
+                        display2FACode(data.pending2FACode, data.pending2FACodeExpires);
+                    }
+                } else {
+                    const codeBlock = document.getElementById('codeBlock');
+                    const noCodeMessage = document.getElementById('noCodeMessage');
+                    if (codeBlock && noCodeMessage) {
+                        codeBlock.style.display = 'none';
+                        noCodeMessage.style.display = 'block';
+                    }
+                    if (codeInterval) clearInterval(codeInterval);
+                }
+                
+                // Обновление информации о доверенном устройстве
+                if (data?.trustedDevice) {
+                    renderTrustedDevice(data.trustedDevice);
+                } else {
+                    renderTrustedDevice(null);
+                }
+            });
         }
 
         window.moveToNext = (input, index) => {
@@ -974,51 +938,53 @@
                 const next = document.getElementById(`code${index + 2}`);
                 if (next) next.focus();
             }
-            // Ограничиваем только цифры
             input.value = input.value.replace(/[^0-9]/g, '');
         };
 
-        window.cancel2FA = () => {
+        window.cancelLogin2FA = () => {
+            if (pendingUser) {
+                updateDoc(doc(db, "users", pendingUser.uid), {
+                    pending2FACode: null,
+                    pending2FACodeExpires: null,
+                    pendingDeviceInfo: null
+                }).catch(() => {});
+            }
+            
             document.getElementById('loginMode').style.display = 'block';
-            document.getElementById('twoFactorMode').style.display = 'none';
-            ['code1','code2','code3','code4'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.value = '';
-            });
+            document.getElementById('twoFactorLoginMode').style.display = 'none';
+            ['code1','code2','code3','code4'].forEach(id => document.getElementById(id).value = '');
             pendingUser = null;
-            if (pendingLoginResolve) pendingLoginResolve(false);
         };
 
-        window.cancelBlocked = () => {
+        window.cancelUnlock = () => {
             document.getElementById('loginMode').style.display = 'block';
-            document.getElementById('blockedMode').style.display = 'none';
+            document.getElementById('unlockMode').style.display = 'none';
+            pendingUser = null;
+            pendingEmail = null;
         };
 
-        window.verify2FA = async () => {
+        window.verifyLogin2FA = async () => {
             const code = ['code1','code2','code3','code4'].map(id => document.getElementById(id).value).join('');
-            const msgDiv = document.getElementById('twoFactorMessage');
             
             if (code.length !== 4) {
-                showMessage(msgDiv, 'Введите 4 цифры', true);
+                showMessage('twoFactorMessage', 'Введите 4 цифры', true);
                 return;
             }
             
             if (!pendingUser) {
-                showMessage(msgDiv, 'Ошибка сессии', true);
+                showMessage('twoFactorMessage', 'Ошибка сессии', true);
                 return;
             }
             
             const userDoc = await getDoc(doc(db, "users", pendingUser.uid));
             const userData = userDoc.data();
             
-            if (code === userData?.twoFactorCode) {
-                if (document.getElementById('trustDevice').checked) {
-                    await addKnownDevice(pendingUser.uid);
-                }
-                
+            if (code === userData?.pending2FACode) {
+                // Очищаем 2FA данные
                 await updateDoc(doc(db, "users", pendingUser.uid), {
-                    twoFactorCode: null,
-                    twoFactorCodeExpires: null,
+                    pending2FACode: null,
+                    pending2FACodeExpires: null,
+                    pendingDeviceInfo: null,
                     online: true,
                     lastSeen: serverTimestamp(),
                     currentIP: currentIP,
@@ -1026,77 +992,26 @@
                 });
                 
                 document.getElementById('loginMode').style.display = 'none';
-                document.getElementById('twoFactorMode').style.display = 'none';
+                document.getElementById('twoFactorLoginMode').style.display = 'none';
                 document.getElementById('authForm').style.display = 'none';
-                document.getElementById('messengerApp').style.display = 'flex';
+                document.getElementById('profilePanel').style.display = 'block';
                 
-                ['code1','code2','code3','code4'].forEach(id => {
-                    const el = document.getElementById(id);
-                    if (el) el.value = '';
-                });
+                ['code1','code2','code3','code4'].forEach(id => document.getElementById(id).value = '');
                 
-                await loadUserData(pendingUser);
-                startBlockCheck(pendingUser.uid);
+                await loadProfile(pendingUser);
                 startUserStatusListener(pendingUser.uid);
-                
-                if (pendingLoginResolve) pendingLoginResolve(true);
             } else {
-                showMessage(msgDiv, '❌ Неверный код', true);
+                showMessage('twoFactorMessage', '❌ Неверный код', true);
             }
         };
-        
-        // Периодическая проверка блокировки (каждые 5 секунд)
-        function startBlockCheck(uid) {
-            if (blockCheckInterval) clearInterval(blockCheckInterval);
-            
-            blockCheckInterval = setInterval(async () => {
-                if (!currentUser || currentUser.uid !== uid) return;
-                
-                const locked = await isAccountLocked(uid);
-                if (locked) {
-                    console.log('🔒 Аккаунт заблокирован, выход...');
-                    clearInterval(blockCheckInterval);
-                    blockCheckInterval = null;
-                    
-                    // Показываем уведомление о блокировке
-                    alert('⚠️ Ваш аккаунт был заблокирован в Global ID! Доступ к Айсбергу закрыт.');
-                    
-                    // Выходим из системы
-                    await updateDoc(doc(db, "users", uid), {
-                        online: false,
-                        lastSeen: serverTimestamp()
-                    }).catch(() => {});
-                    
-                    await signOut(auth);
-                }
-            }, 5000);
-        }
-        
-        // Слушатель изменения статуса пользователя
-        function startUserStatusListener(uid) {
-            if (userStatusListener) userStatusListener();
-            
-            const userRef = doc(db, "users", uid);
-            userStatusListener = onSnapshot(userRef, (docSnap) => {
-                if (docSnap.exists() && currentUser) {
-                    const data = docSnap.data();
-                    if (data.accountLocked === true) {
-                        // Если заблокирован - выходим
-                        if (blockCheckInterval) clearInterval(blockCheckInterval);
-                        blockCheckInterval = null;
-                        signOut(auth);
-                    }
-                }
-            });
-        }
 
+        // ==================== ВХОД ====================
         window.login = async () => {
-            const identifier = document.getElementById('loginIdentifier').value;
+            const identifier = document.getElementById('loginIdentifier').value.trim();
             const password = document.getElementById('loginPassword').value;
-            const msgDiv = document.getElementById('authMessage');
             
             if (!identifier || !password) {
-                showMessage(msgDiv, 'Заполните все поля', true);
+                showMessage('authMessage', 'Заполните все поля', true);
                 return;
             }
             
@@ -1108,36 +1023,37 @@
                     const q = query(collection(db, "users"), where("globalId", "==", identifier));
                     const snap = await getDocs(q);
                     if (snap.empty) {
-                        showMessage(msgDiv, 'Global ID не найден', true);
+                        showMessage('authMessage', 'Global ID не найден', true);
                         return;
                     }
                     email = snap.docs[0].data().email;
                 }
                 
+                pendingEmail = email;
                 const userCred = await signInWithEmailAndPassword(auth, email, password);
                 const user = userCred.user;
                 
-                // Проверяем блокировку ДО входа
                 if (await isAccountLocked(user.uid)) {
                     await signOut(auth);
                     document.getElementById('loginMode').style.display = 'none';
-                    document.getElementById('blockedMode').style.display = 'block';
+                    document.getElementById('unlockMode').style.display = 'block';
                     return;
                 }
                 
-                // Проверяем доступ к Айсбергу
-                if (!await hasIcebergAccess(user.uid)) {
-                    await updateDoc(doc(db, "users", user.uid), {
-                        icebergAccess: true,
-                        icebergLastLogin: serverTimestamp()
+                pendingUser = user;
+                
+                // Проверяем, есть ли доверенное устройство
+                const trustedDevice = await getTrustedDevice(user.uid);
+                
+                // Если доверенного устройства нет - устанавливаем текущее как доверенное
+                if (!trustedDevice) {
+                    await setTrustedDevice(user.uid, {
+                        fingerprint: deviceFingerprint,
+                        ip: currentIP,
+                        userAgent: navigator.userAgent,
+                        addedAt: new Date()
                     });
-                }
-                
-                // Проверяем, известно ли устройство
-                const deviceKnown = await isDeviceKnown(user.uid);
-                
-                if (deviceKnown) {
-                    // Известное устройство - вход сразу
+                    
                     await updateDoc(doc(db, "users", user.uid), {
                         online: true,
                         lastSeen: serverTimestamp(),
@@ -1146,49 +1062,75 @@
                     });
                     
                     document.getElementById('authForm').style.display = 'none';
-                    document.getElementById('messengerApp').style.display = 'flex';
-                    await loadUserData(user);
-                    startBlockCheck(user.uid);
+                    document.getElementById('profilePanel').style.display = 'block';
+                    await loadProfile(user);
                     startUserStatusListener(user.uid);
-                } else {
-                    // НОВОЕ УСТРОЙСТВО - запрашиваем 2FA СРАЗУ после входа
-                    pendingUser = user;
-                    
-                    // Генерируем 2FA код и сохраняем в БД
-                    const code = Math.floor(1000 + Math.random() * 9000).toString();
+                    return;
+                }
+                
+                // Проверяем, является ли текущее устройство доверенным
+                const isTrusted = trustedDevice.fingerprint === deviceFingerprint;
+                
+                if (isTrusted) {
+                    // Доверенное устройство - вход без 2FA
                     await updateDoc(doc(db, "users", user.uid), {
-                        twoFactorCode: code,
-                        twoFactorCodeExpires: new Date(Date.now() + 5 * 60000)
+                        online: true,
+                        lastSeen: serverTimestamp(),
+                        currentIP: currentIP,
+                        currentDevice: deviceFingerprint
                     });
                     
-                    document.getElementById('newDeviceInfo').innerHTML = `
-                        <strong>🆕 Новое устройство</strong><br>
-                        <strong>IP:</strong> ${currentIP}<br>
-                        <strong>Браузер:</strong> ${navigator.userAgent.substring(0, 50)}...<br>
-                        <strong>Для входа требуется код подтверждения из Global ID</strong>
-                    `;
+                    document.getElementById('authForm').style.display = 'none';
+                    document.getElementById('profilePanel').style.display = 'block';
+                    await loadProfile(user);
+                    startUserStatusListener(user.uid);
+                } else {
+                    // НЕДОВЕРЕННОЕ УСТРОЙСТВО - запрашиваем 2FA
+                    const code = generate2FACode();
+                    await updateDoc(doc(db, "users", user.uid), {
+                        pending2FACode: code,
+                        pending2FACodeExpires: new Date(Date.now() + 5 * 60 * 1000),
+                        pendingDeviceInfo: {
+                            ip: currentIP,
+                            userAgent: navigator.userAgent,
+                            requestedAt: new Date()
+                        }
+                    });
                     
                     document.getElementById('loginMode').style.display = 'none';
-                    document.getElementById('twoFactorMode').style.display = 'block';
+                    document.getElementById('twoFactorLoginMode').style.display = 'block';
                     document.getElementById('code1').focus();
                 }
             } catch (error) {
                 console.error('Ошибка входа:', error);
-                showMessage(msgDiv, 'Неверные данные или доступ запрещён', true);
+                showMessage('authMessage', 'Неверный email/Global ID или пароль', true);
             }
         };
 
+        async function isAccountLocked(uid) {
+            const userDoc = await getDoc(doc(db, "users", uid));
+            const data = userDoc.data();
+            return data?.accountLocked === true;
+        }
+
+        // ==================== РЕГИСТРАЦИЯ ====================
         window.register = async () => {
-            const email = document.getElementById('regEmail').value;
+            const email = document.getElementById('regEmail').value.trim();
             const password = document.getElementById('regPassword').value;
-            const msgDiv = document.getElementById('authMessage');
+            const confirm = document.getElementById('regConfirm').value;
             
-            if (!email || !password) {
-                showMessage(msgDiv, 'Заполните все поля', true);
+            if (!email || !password || !confirm) {
+                showMessage('authMessage', 'Заполните все поля', true);
                 return;
             }
+            
             if (password.length < 6) {
-                showMessage(msgDiv, 'Пароль минимум 6 символов', true);
+                showMessage('authMessage', 'Пароль должен быть минимум 6 символов', true);
+                return;
+            }
+            
+            if (password !== confirm) {
+                showMessage('authMessage', 'Пароли не совпадают', true);
                 return;
             }
             
@@ -1198,8 +1140,17 @@
                 const userCred = await createUserWithEmailAndPassword(auth, email, password);
                 const globalId = generateGlobalId();
                 
+                // При регистрации текущее устройство становится доверенным
+                const trustedDevice = {
+                    fingerprint: deviceFingerprint,
+                    ip: currentIP,
+                    userAgent: navigator.userAgent,
+                    addedAt: new Date()
+                };
+                
                 await setDoc(doc(db, "users", userCred.user.uid), {
-                    email, globalId,
+                    email: email,
+                    globalId: globalId,
                     nickname: email.split('@')[0],
                     createdAt: serverTimestamp(),
                     contacts: [],
@@ -1209,514 +1160,245 @@
                     globalIdAccess: true,
                     icebergAccess: true,
                     accountLocked: false,
-                    knownDevices: [{
-                        fingerprint: deviceFingerprint,
-                        ip: currentIP,
-                        userAgent: navigator.userAgent,
-                        addedAt: new Date(),
-                        lastUsed: new Date()
-                    }],
+                    trustedDevice: trustedDevice,  // Единственное доверенное устройство
                     currentIP: currentIP,
-                    chats: []
+                    currentDevice: deviceFingerprint
                 });
                 
-                showMessage(msgDiv, '✅ Аккаунт создан!', false);
-                setTimeout(() => showLogin(), 1500);
+                showMessage('authMessage', '✅ Global ID успешно создан!', false);
+                setTimeout(() => {
+                    showLogin();
+                    document.getElementById('loginIdentifier').value = email;
+                    document.getElementById('loginPassword').value = password;
+                    login();
+                }, 1500);
             } catch (error) {
-                showMessage(msgDiv, error.message, true);
+                console.error('Ошибка регистрации:', error);
+                showMessage('authMessage', error.message, true);
             }
         };
 
-        window.logout = async () => {
-            // Останавливаем все проверки
-            if (blockCheckInterval) {
-                clearInterval(blockCheckInterval);
-                blockCheckInterval = null;
+        // ==================== ЭКСТРЕННАЯ БЛОКИРОВКА ====================
+        window.emergencyLock = async () => {
+            if (!confirm('🚨 ЭКСТРЕННАЯ БЛОКИРОВКА\n\nВсе сессии будут завершены!\nДля разблокировки потребуется пароль.\n\nПродолжить?')) {
+                return;
             }
-            if (userStatusListener) {
-                userStatusListener();
-                userStatusListener = null;
-            }
-            if (chatsListener) chatsListener();
-            if (messagesListener) messagesListener();
             
+            if (!currentUser) return;
+            
+            try {
+                await updateDoc(doc(db, "users", currentUser.uid), {
+                    accountLocked: true,
+                    lockedAt: serverTimestamp(),
+                    lockedBy: deviceFingerprint,
+                    online: false,
+                    pending2FACode: null,
+                    pending2FACodeExpires: null
+                });
+                
+                document.getElementById('codeBlock').style.display = 'none';
+                document.getElementById('noCodeMessage').style.display = 'block';
+                document.getElementById('lockStatusDisplay').innerHTML = '<span class="lock-status lock-active">🔒 АККАУНТ ЗАБЛОКИРОВАН</span>';
+                
+                showMessage('profileMessage', '🚨 Аккаунт экстренно заблокирован!', false);
+                setTimeout(() => logout(), 2000);
+            } catch (error) {
+                showMessage('profileMessage', '❌ Ошибка: ' + error.message, true);
+            }
+        };
+
+        // ==================== РАЗБЛОКИРОВКА ====================
+        window.unlockAccount = async () => {
+            const password = document.getElementById('unlockPassword').value;
+            
+            if (!password) {
+                showMessage('unlockMessage', 'Введите пароль', true);
+                return;
+            }
+            
+            if (!pendingEmail) {
+                showMessage('unlockMessage', 'Ошибка: email не найден', true);
+                return;
+            }
+            
+            try {
+                const userCred = await signInWithEmailAndPassword(auth, pendingEmail, password);
+                
+                await updateDoc(doc(db, "users", userCred.user.uid), {
+                    accountLocked: false,
+                    lockedAt: null,
+                    lockedBy: null,
+                    pending2FACode: null,
+                    pending2FACodeExpires: null,
+                    online: true,
+                    lastSeen: serverTimestamp()
+                });
+                
+                document.getElementById('unlockMode').style.display = 'none';
+                document.getElementById('authForm').style.display = 'none';
+                document.getElementById('profilePanel').style.display = 'block';
+                
+                await loadProfile(userCred.user);
+                startUserStatusListener(userCred.user.uid);
+                
+                showMessage('profileMessage', '✅ Аккаунт разблокирован!', false);
+            } catch (error) {
+                showMessage('unlockMessage', '❌ Неверный пароль', true);
+            }
+        };
+
+        // ==================== ВЫХОД ====================
+        window.logout = async () => {
+            if (codeInterval) clearInterval(codeInterval);
+            if (userStatusListener) userStatusListener();
             if (currentUser) {
                 await updateDoc(doc(db, "users", currentUser.uid), {
                     online: false,
                     lastSeen: serverTimestamp()
                 }).catch(() => {});
             }
-            
-            // Очищаем pending данные, чтобы при следующем входе не было конфликтов
-            pendingUser = null;
-            
             await signOut(auth);
         };
 
+        // ==================== ОТСЛЕЖИВАНИЕ СТАТУСА ====================
+        function startUserStatusListener(uid) {
+            if (userStatusListener) userStatusListener();
+            
+            const userRef = doc(db, "users", uid);
+            userStatusListener = onSnapshot(userRef, (docSnap) => {
+                if (docSnap.exists() && currentUser && currentUser.uid === uid) {
+                    const data = docSnap.data();
+                    if (data.accountLocked === true) {
+                        alert('⚠️ Ваш аккаунт был заблокирован!');
+                        logout();
+                    }
+                }
+            });
+        }
+
+        // ==================== НАВИГАЦИЯ ====================
         window.showRegister = () => {
             document.getElementById('loginMode').style.display = 'none';
             document.getElementById('registerMode').style.display = 'block';
+            document.getElementById('authMessage').style.display = 'none';
         };
-        
+
         window.showLogin = () => {
             document.getElementById('loginMode').style.display = 'block';
             document.getElementById('registerMode').style.display = 'none';
+            document.getElementById('authMessage').style.display = 'none';
         };
 
-        async function loadUserData(user) {
+        window.copyGlobalId = () => {
+            const gid = document.getElementById('globalIdValue')?.innerText;
+            if (gid && gid !== '—') {
+                navigator.clipboard.writeText(gid);
+                showMessage('profileMessage', '✅ Global ID скопирован!', false);
+            }
+        };
+
+        // ==================== СОХРАНЕНИЕ ПРОФИЛЯ ====================
+        window.saveProfile = async () => {
+            if (!currentUser) return;
+            
+            const profileData = {
+                fullName: document.getElementById('fullName')?.value || '',
+                birthDate: document.getElementById('birthDate')?.value || '',
+                phoneNumber: document.getElementById('phoneNumber')?.value || '',
+                telegram: document.getElementById('telegram')?.value || '',
+                profileCompleted: true,
+                lastUpdated: serverTimestamp()
+            };
+            
+            try {
+                await updateDoc(doc(db, "users", currentUser.uid), profileData);
+                currentUserData = { ...currentUserData, ...profileData };
+                showMessage('profileMessage', '✅ Данные сохранены!', false);
+            } catch (error) {
+                showMessage('profileMessage', '❌ Ошибка: ' + error.message, true);
+            }
+        };
+
+        // ==================== ЗАГРУЗКА ПРОФИЛЯ ====================
+        async function loadProfile(user) {
             currentUser = user;
+            
             const userDoc = await getDoc(doc(db, "users", user.uid));
             currentUserData = userDoc.data();
             
-            document.getElementById('userAvatar').innerText = currentUserData.nickname?.charAt(0).toUpperCase() || 'U';
-            document.getElementById('userName').innerText = currentUserData.nickname || user.email.split('@')[0];
-            document.getElementById('userGlobalId').innerHTML = currentUserData.globalId?.substring(0, 12) + '...' || '—';
-            
-            loadChats();
-            loadContacts();
-            listenForNewMessages();
-        }
-
-        function loadChats() {
-            const chats = currentUserData?.chats || [];
-            const container = document.getElementById('chatsList');
-            
-            if (chats.length === 0) {
-                container.innerHTML = '<div class="empty-state">Нет активных чатов</div>';
-                return;
-            }
-            
-            container.innerHTML = '';
-            chats.forEach(chat => {
-                const div = document.createElement('div');
-                div.className = `chat-item ${chat.unread ? 'unread' : ''}`;
-                div.innerHTML = `
-                    <div class="avatar-small">${chat.nickname?.charAt(0).toUpperCase() || '👤'}</div>
-                    <div class="info-small">
-                        <div class="name-row">
-                            <span class="item-name">${chat.nickname || chat.globalId?.substring(0, 8)}</span>
-                            ${chat.unread ? '<span style="background:var(--accent); color:white; border-radius:10px; padding:2px 8px; font-size:10px;">Новое</span>' : ''}
-                        </div>
-                        <div class="item-subtitle">${chat.lastMessage?.substring(0, 30) || 'Нет сообщений'}</div>
-                    </div>
-                `;
-                div.onclick = () => selectChat(chat);
-                container.appendChild(div);
-            });
-        }
-
-        function loadContacts() {
-            const contacts = currentUserData?.contacts || [];
-            const container = document.getElementById('contactsList');
-            
-            if (contacts.length === 0) {
-                container.innerHTML = '<div class="empty-state">Нет контактов</div>';
-                return;
-            }
-            
-            container.innerHTML = '';
-            contacts.forEach(contact => {
-                const div = document.createElement('div');
-                div.className = 'contact-item';
-                div.innerHTML = `
-                    <div class="avatar-small">${contact.nickname?.charAt(0).toUpperCase() || '👤'}</div>
-                    <div class="info-small">
-                        <div class="name-row">
-                            <span class="item-name">${contact.nickname || contact.globalId?.substring(0, 8)}</span>
-                        </div>
-                        <div class="item-subtitle">${contact.globalId?.substring(0, 12)}...</div>
-                    </div>
-                `;
-                div.onclick = () => selectContact(contact);
-                container.appendChild(div);
-            });
-        }
-
-        async function selectChat(chat) {
-            currentContact = {
-                uid: chat.uid,
-                globalId: chat.globalId,
-                nickname: chat.nickname,
-                email: chat.email
-            };
-            currentChatId = [currentUser.uid, chat.uid].sort().join('_');
-            
-            document.getElementById('chatName').innerText = chat.nickname || chat.globalId?.substring(0, 8);
-            
-            const contactDoc = await getDoc(doc(db, "users", chat.uid));
-            const contactData = contactDoc.data();
-            const isOnline = contactData?.online === true;
-            document.getElementById('chatStatus').innerHTML = `<span class="online-status ${isOnline ? 'online' : 'offline'}"></span> ${isOnline ? 'онлайн' : 'офлайн'} | 21 слой шифрования`;
-            
-            document.getElementById('chatAvatar').innerText = chat.nickname?.charAt(0).toUpperCase() || '🧊';
-            document.getElementById('chatInputArea').style.display = 'flex';
-            document.getElementById('addContactBtn').style.display = 'none';
-            document.getElementById('deleteChatBtn').style.display = 'block';
-            
-            if (window.innerWidth <= 768) {
-                document.getElementById('sidebar').classList.add('hide-on-mobile');
-                document.getElementById('chatScreen').classList.add('show-on-mobile');
-            }
-            
-            await markChatRead(chat.uid);
-            loadMessages();
-        }
-
-        async function selectContact(contact) {
-            const existingChat = currentUserData?.chats?.find(c => c.uid === contact.uid);
-            if (existingChat) {
-                selectChat(existingChat);
-                return;
-            }
-            
-            currentContact = contact;
-            currentChatId = [currentUser.uid, contact.uid].sort().join('_');
-            
-            await updateDoc(doc(db, "users", currentUser.uid), {
-                chats: arrayUnion({
-                    uid: contact.uid,
-                    globalId: contact.globalId,
-                    nickname: contact.nickname,
-                    email: contact.email,
-                    lastMessage: null,
-                    lastMessageTime: null,
-                    unread: false
-                })
-            });
-            
-            document.getElementById('chatName').innerText = contact.nickname || contact.globalId?.substring(0, 8);
-            document.getElementById('chatStatus').innerHTML = `<span class="online-status offline"></span> офлайн | 21 слой шифрования`;
-            document.getElementById('chatAvatar').innerText = contact.nickname?.charAt(0).toUpperCase() || '🧊';
-            document.getElementById('chatInputArea').style.display = 'flex';
-            document.getElementById('addContactBtn').style.display = 'none';
-            document.getElementById('deleteChatBtn').style.display = 'block';
-            
-            if (window.innerWidth <= 768) {
-                document.getElementById('sidebar').classList.add('hide-on-mobile');
-                document.getElementById('chatScreen').classList.add('show-on-mobile');
-            }
-            
-            loadMessages();
-            loadChats();
-        }
-
-        async function markChatRead(contactUid) {
-            const chats = currentUserData?.chats || [];
-            const updatedChats = chats.map(chat => {
-                if (chat.uid === contactUid) {
-                    return { ...chat, unread: false };
-                }
-                return chat;
-            });
-            
-            await updateDoc(doc(db, "users", currentUser.uid), {
-                chats: updatedChats
-            });
-            currentUserData.chats = updatedChats;
-            loadChats();
-        }
-
-        function loadMessages() {
-            if (messagesListener) messagesListener();
-            
-            const messagesRef = collection(db, "messages", currentChatId, "msgs");
-            messagesListener = onSnapshot(query(messagesRef, orderBy("timestamp", "asc")), (snapshot) => {
-                const messagesArea = document.getElementById('messagesArea');
-                
-                if (snapshot.empty) {
-                    messagesArea.innerHTML = '<div class="empty-state">Нет сообщений. Напишите первое!</div>';
-                    return;
-                }
-                
-                messagesArea.innerHTML = '';
-                snapshot.forEach(doc => {
-                    const msg = doc.data();
-                    const isSent = msg.senderId === currentUser.uid;
-                    const div = document.createElement('div');
-                    div.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
-                    div.innerHTML = `
-                        <div>${escapeHtml(msg.text)}</div>
-                        <div class="message-time">${formatTime(msg.timestamp?.toDate())}</div>
-                    `;
-                    messagesArea.appendChild(div);
+            if (!currentUserData) {
+                const globalId = generateGlobalId();
+                await setDoc(doc(db, "users", user.uid), {
+                    email: user.email,
+                    globalId: globalId,
+                    createdAt: serverTimestamp(),
+                    globalIdAccess: true,
+                    icebergAccess: true,
+                    accountLocked: false
                 });
-                messagesArea.scrollTop = messagesArea.scrollHeight;
-            });
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        function formatTime(date) {
-            if (!date) return '';
-            return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        }
-
-        window.sendMessage = async () => {
-            const input = document.getElementById('messageInput');
-            const text = input.value.trim();
-            if (!text || !currentChatId || !currentContact) return;
+                currentUserData = { globalId, email: user.email };
+            }
             
-            const message = {
-                text: text,
-                senderId: currentUser.uid,
-                senderName: currentUserData.nickname,
-                timestamp: serverTimestamp(),
-                read: false
-            };
+            document.getElementById('userName').innerText = currentUserData.fullName || currentUserData.nickname || user.email?.split('@')[0] || 'Пользователь';
+            document.getElementById('userEmail').innerText = user.email;
+            document.getElementById('userAvatar').innerText = (currentUserData.fullName || user.email || 'U').charAt(0).toUpperCase();
+            document.getElementById('globalIdValue').innerText = currentUserData.globalId || '—';
             
-            const messagesRef = collection(db, "messages", currentChatId, "msgs");
-            await setDoc(doc(messagesRef), message);
+            document.getElementById('mainEmail').value = user.email;
+            document.getElementById('fullName').value = currentUserData.fullName || '';
+            document.getElementById('birthDate').value = currentUserData.birthDate || '';
+            document.getElementById('phoneNumber').value = currentUserData.phoneNumber || '';
+            document.getElementById('telegram').value = currentUserData.telegram || '';
             
-            await updateDoc(doc(db, "users", currentUser.uid), {
-                [`chats.${currentUserData.chats.findIndex(c => c.uid === currentContact.uid)}.lastMessage`]: text,
-                [`chats.${currentUserData.chats.findIndex(c => c.uid === currentContact.uid)}.lastMessageTime`]: serverTimestamp()
-            });
-            
-            const contactChats = await getDoc(doc(db, "users", currentContact.uid));
-            const contactData = contactChats.data();
-            const contactChatIndex = contactData?.chats?.findIndex(c => c.uid === currentUser.uid) ?? -1;
-            
-            if (contactChatIndex !== -1) {
-                await updateDoc(doc(db, "users", currentContact.uid), {
-                    [`chats.${contactChatIndex}.lastMessage`]: text,
-                    [`chats.${contactChatIndex}.lastMessageTime`]: serverTimestamp(),
-                    [`chats.${contactChatIndex}.unread`]: true
-                });
+            const statusDiv = document.getElementById('lockStatusDisplay');
+            if (currentUserData.accountLocked) {
+                statusDiv.innerHTML = '<span class="lock-status lock-active">🔒 АККАУНТ ЗАБЛОКИРОВАН</span>';
             } else {
-                await updateDoc(doc(db, "users", currentContact.uid), {
-                    chats: arrayUnion({
-                        uid: currentUser.uid,
-                        globalId: currentUserData.globalId,
-                        nickname: currentUserData.nickname,
-                        email: currentUser.email,
-                        lastMessage: text,
-                        lastMessageTime: serverTimestamp(),
-                        unread: true
-                    })
-                });
+                statusDiv.innerHTML = '<span class="lock-status lock-inactive">● Аккаунт активен</span>';
             }
             
-            input.value = '';
-        };
-
-        function listenForNewMessages() {
-            if (!currentUser) return;
+            if (currentUserData.globalId) {
+                generateQR(currentUserData.globalId);
+            }
             
-            const userRef = doc(db, "users", currentUser.uid);
-            onSnapshot(userRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    currentUserData = docSnap.data();
-                    loadChats();
-                    if (currentContact && currentUserData?.chats?.find(c => c.uid === currentContact.uid)?.unread) {
-                        markChatRead(currentContact.uid);
-                    }
-                }
-            });
+            // Отображаем доверенное устройство
+            renderTrustedDevice(currentUserData.trustedDevice || null);
+            
+            watchFor2FACodes(user.uid);
         }
 
-        window.switchTab = (tab) => {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-            
-            if (tab === 'chats') {
-                document.querySelector('.tab:first-child').classList.add('active');
-                document.getElementById('chatsPane').classList.add('active');
-                loadChats();
-            } else {
-                document.querySelector('.tab:last-child').classList.add('active');
-                document.getElementById('contactsPane').classList.add('active');
-                loadContacts();
-            }
-        };
-
-        window.closeChat = () => {
-            if (window.innerWidth <= 768) {
-                document.getElementById('sidebar').classList.remove('hide-on-mobile');
-                document.getElementById('chatScreen').classList.remove('show-on-mobile');
-            }
-            document.getElementById('chatInputArea').style.display = 'none';
-            currentContact = null;
-            currentChatId = null;
-            if (messagesListener) messagesListener();
-        };
-
-        window.showSettings = () => {
-            document.getElementById('settingsModal').style.display = 'flex';
-        };
-
-        window.closeSettings = () => {
-            document.getElementById('settingsModal').style.display = 'none';
-        };
-
-        window.showSearchModal = () => {
-            document.getElementById('searchModal').style.display = 'flex';
-        };
-
-        window.closeSearchModal = () => {
-            document.getElementById('searchModal').style.display = 'none';
-        };
-
-        window.searchByGlobalId = async () => {
-            const globalId = document.getElementById('searchGlobalIdInput').value.trim();
-            if (!globalId) {
-                alert('Введите Global ID');
-                return;
-            }
-            
-            const q = query(collection(db, "users"), where("globalId", "==", globalId));
-            const snap = await getDocs(q);
-            
-            if (snap.empty) {
-                alert('Пользователь не найден');
-                return;
-            }
-            
-            const userDoc = snap.docs[0];
-            const userData = userDoc.data();
-            
-            if (userDoc.id === currentUser.uid) {
-                alert('Это вы сами');
-                return;
-            }
-            
-            const contact = {
-                uid: userDoc.id,
-                globalId: userData.globalId,
-                nickname: userData.nickname,
-                email: userData.email
-            };
-            
-            const existingContacts = currentUserData?.contacts || [];
-            if (!existingContacts.some(c => c.uid === contact.uid)) {
-                await updateDoc(doc(db, "users", currentUser.uid), {
-                    contacts: arrayUnion(contact)
-                });
-                currentUserData.contacts = [...existingContacts, contact];
-            }
-            
-            closeSearchModal();
-            loadContacts();
-            alert(`✅ ${contact.nickname || contact.globalId} добавлен в контакты`);
-        };
-
-        window.openScanner = () => {
-            document.getElementById('scannerModal').style.display = 'flex';
-            const html5QrCode = new Html5Qrcode("qr-reader");
-            html5QrCode.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: { width: 250, height: 250 } },
-                (decodedText) => {
-                    html5QrCode.stop();
-                    closeScanner();
-                    document.getElementById('searchGlobalIdInput').value = decodedText.replace('Global ID: ', '');
-                    searchByGlobalId();
-                },
-                (error) => {}
-            ).catch(err => console.log(err));
-        };
-
-        window.closeScanner = () => {
-            document.getElementById('scannerModal').style.display = 'none';
-        };
-
-        window.showCreateGroupModal = () => {
-            alert('Функция создания групп будет доступна в следующем обновлении');
-        };
-
-        window.addToContacts = async () => {
-            if (!currentContact) return;
-            
-            const existingContacts = currentUserData?.contacts || [];
-            if (!existingContacts.some(c => c.uid === currentContact.uid)) {
-                await updateDoc(doc(db, "users", currentUser.uid), {
-                    contacts: arrayUnion(currentContact)
-                });
-                currentUserData.contacts = [...existingContacts, currentContact];
-                loadContacts();
-                alert('✅ Контакт добавлен');
-            }
-        };
-
-        window.deleteCurrentChat = async () => {
-            if (!currentContact || !confirm('Удалить чат? История сообщений будет скрыта.')) return;
-            
-            const chats = currentUserData?.chats || [];
-            const updatedChats = chats.filter(c => c.uid !== currentContact.uid);
-            
-            await updateDoc(doc(db, "users", currentUser.uid), {
-                chats: updatedChats
-            });
-            
-            currentUserData.chats = updatedChats;
-            closeChat();
-            loadChats();
-        };
-
-        document.getElementById('plusBtn')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const menu = document.getElementById('plusMenu');
-            menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
-        });
-        
-        document.addEventListener('click', () => {
-            document.getElementById('plusMenu').style.display = 'none';
-        });
-
+        // ==================== АВТОРИЗАЦИЯ ====================
         onAuthStateChanged(auth, async (user) => {
             if (user) {
-                const userDoc = await getDoc(doc(db, "users", user.uid));
-                const userData = userDoc.data();
-                
-                if (userData?.icebergAccess && !userData?.accountLocked) {
-                    currentUser = user;
-                    // Проверяем, не в процессе ли 2FA
-                    const isIn2FA = document.getElementById('twoFactorMode').style.display === 'block';
-                    if (!isIn2FA) {
-                        document.getElementById('authForm').style.display = 'none';
-                        document.getElementById('messengerApp').style.display = 'flex';
-                        await loadUserData(user);
-                        startBlockCheck(user.uid);
-                        startUserStatusListener(user.uid);
-                    }
-                } else if (userData?.accountLocked) {
-                    await signOut(auth);
-                    document.getElementById('loginMode').style.display = 'none';
-                    document.getElementById('blockedMode').style.display = 'block';
-                } else {
-                    await signOut(auth);
+                const isIn2FA = document.getElementById('twoFactorLoginMode').style.display === 'block';
+                if (!isIn2FA) {
+                    document.getElementById('authForm').style.display = 'none';
+                    document.getElementById('profilePanel').style.display = 'block';
+                    await getDeviceInfo();
+                    await loadProfile(user);
+                    startUserStatusListener(user.uid);
                 }
             } else {
-                if (blockCheckInterval) {
-                    clearInterval(blockCheckInterval);
-                    blockCheckInterval = null;
-                }
-                if (userStatusListener) {
-                    userStatusListener();
-                    userStatusListener = null;
-                }
-                if (chatsListener) chatsListener();
-                if (messagesListener) messagesListener();
+                if (codeInterval) clearInterval(codeInterval);
+                if (userStatusListener) userStatusListener();
                 
                 currentUser = null;
                 currentUserData = null;
-                pendingUser = null;
                 
-                document.getElementById('authForm').style.display = 'flex';
-                document.getElementById('messengerApp').style.display = 'none';
+                document.getElementById('authForm').style.display = 'block';
+                document.getElementById('profilePanel').style.display = 'none';
                 document.getElementById('loginMode').style.display = 'block';
-                document.getElementById('twoFactorMode').style.display = 'none';
-                document.getElementById('blockedMode').style.display = 'none';
+                document.getElementById('registerMode').style.display = 'none';
+                document.getElementById('twoFactorLoginMode').style.display = 'none';
+                document.getElementById('unlockMode').style.display = 'none';
+                document.getElementById('codeBlock').style.display = 'none';
+                document.getElementById('noCodeMessage').style.display = 'block';
+                
                 document.getElementById('loginIdentifier').value = '';
                 document.getElementById('loginPassword').value = '';
             }
         });
 
-        loadTheme();
-        initParticles();
         getDeviceInfo();
     </script>
 </body>
