@@ -17,6 +17,7 @@
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     
     <style>
+        /* ... (все стили как в оригинале, включая исправления для больших экранов) ... */
         * {
             margin: 0;
             padding: 0;
@@ -35,7 +36,6 @@
             position: relative;
         }
 
-        /* ЧАСТИЦЫ НА ВСЁМ ЭКРАНЕ */
         #particles-js {
             position: fixed;
             top: 0;
@@ -142,18 +142,75 @@
             z-index: 1;
         }
 
-        @media (min-width: 430px) and (max-width: 800px) {
-            .contacts-screen { max-width: 340px; }
-            .chat-avatar-small { width: 52px; height: 52px; font-size: 22px; }
-            .chat-name { font-size: 16px; }
-            .message-bubble { max-width: 75%; font-size: 15px; }
+        /* Улучшенные медиа-запросы для больших экранов */
+        @media (min-width: 1400px) {
+            .app-container {
+                max-width: 1400px;
+                margin: 0 auto;
+            }
+            .contacts-screen {
+                max-width: 380px;
+            }
         }
 
-        @media (min-width: 800px) {
-            .contacts-screen { max-width: 380px; }
-            .chat-avatar-small { width: 56px; height: 56px; font-size: 24px; }
-            .chat-name { font-size: 17px; }
-            .message-bubble { max-width: 65%; font-size: 15px; }
+        @media (min-width: 1200px) and (max-width: 1399px) {
+            .contacts-screen {
+                width: 360px;
+            }
+            .chat-avatar-small {
+                width: 60px;
+                height: 60px;
+                font-size: 26px;
+            }
+            .message-bubble {
+                max-width: 55%;
+                font-size: 16px;
+            }
+        }
+
+        @media (min-width: 800px) and (max-width: 1199px) {
+            .contacts-screen {
+                width: 320px;
+            }
+            .chat-avatar-small {
+                width: 56px;
+                height: 56px;
+                font-size: 24px;
+            }
+            .message-bubble {
+                max-width: 60%;
+                font-size: 15px;
+            }
+        }
+
+        @media (min-width: 430px) and (max-width: 799px) {
+            .contacts-screen {
+                max-width: 340px;
+            }
+            .chat-avatar-small {
+                width: 52px;
+                height: 52px;
+                font-size: 22px;
+            }
+            .message-bubble {
+                max-width: 75%;
+                font-size: 15px;
+            }
+        }
+
+        @media (max-width: 429px) {
+            .contacts-screen {
+                width: 100%;
+            }
+            .chat-avatar-small {
+                width: 48px;
+                height: 48px;
+                font-size: 20px;
+            }
+            .message-bubble {
+                max-width: 85%;
+                font-size: 14px;
+            }
         }
 
         .auth-card {
@@ -259,7 +316,6 @@
 
         .contacts-screen {
             width: 100%;
-            max-width: 350px;
             background: var(--bg-secondary);
             border-right: 1px solid var(--border);
             display: flex;
@@ -268,12 +324,21 @@
             backdrop-filter: blur(4px);
         }
 
+        @media (min-width: 800px) {
+            .contacts-screen {
+                width: 380px;
+                min-width: 320px;
+            }
+        }
+
         @media (max-width: 768px) {
             .contacts-screen {
                 position: absolute;
                 left: 0;
                 top: 0;
                 height: 100%;
+                width: 85%;
+                max-width: 320px;
                 z-index: 10;
                 transform: translateX(0);
             }
@@ -458,14 +523,11 @@
         .chat-item:hover .delete-chat-icon { opacity: 1; }
 
         .chat-avatar-small {
-            width: 48px;
-            height: 48px;
             background: var(--bg-surface);
             border-radius: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
             font-weight: 600;
             color: var(--text-primary);
         }
@@ -669,11 +731,13 @@
             .chat-input-wrapper { flex-wrap: wrap; }
         }
         
-        /* Уведомление */
+        /* Улучшенное уведомление */
         .notification-permission {
             position: fixed;
             bottom: 20px;
             left: 20px;
+            right: 20px;
+            max-width: 400px;
             background: var(--bg-secondary);
             border-radius: 20px;
             padding: 12px 20px;
@@ -681,15 +745,39 @@
             z-index: 200;
             font-size: 13px;
             box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            backdrop-filter: blur(10px);
         }
         .notification-permission button {
             background: var(--accent);
             color: white;
             border: none;
-            padding: 6px 12px;
+            padding: 8px 16px;
             border-radius: 20px;
-            margin-left: 10px;
             cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .notification-permission button:hover {
+            transform: scale(1.05);
+        }
+        @media (max-width: 480px) {
+            .notification-permission {
+                left: 10px;
+                right: 10px;
+                bottom: 10px;
+                flex-direction: column;
+                text-align: center;
+            }
+            .notification-permission button {
+                width: 100%;
+            }
         }
     </style>
 </head>
@@ -700,7 +788,7 @@
         <div id="authForm" style="display: flex; height: 100vh; align-items: center; justify-content: center;">
             <div class="auth-card">
                 <div class="logo-area">
-                    <img src="https://i.ibb.co/WWwR7w2r/IMG-0305.jpg" alt="GloBank" class="logo-img">
+                    <img src="https://i.ibb.co/WWwR7w2r/IMG-0305.jpg" alt="Айсберг" class="logo-img">
                     <div class="logo-title">Айсберг</div>
                 </div>
                 
@@ -887,7 +975,7 @@
     </div>
 
     <div id="notificationBanner" class="notification-permission" style="display: none;">
-        🔔 Включите уведомления, чтобы не пропускать сообщения
+        <span>🔔 Включите уведомления, чтобы не пропускать сообщения</span>
         <button onclick="requestNotificationPermission()">Включить</button>
     </div>
 
@@ -922,23 +1010,33 @@
 
         const ENCRYPTION_LAYERS = 21;
 
-        // УВЕДОМЛЕНИЯ
-        async function requestNotificationPermission() {
+        // УВЕДОМЛЕНИЯ - ИСПРАВЛЕННАЯ ВЕРСИЯ
+        window.requestNotificationPermission = async function() {
             if ('Notification' in window) {
                 const permission = await Notification.requestPermission();
                 if (permission === 'granted') {
                     notificationPermission = true;
-                    document.getElementById('notificationBanner').style.display = 'none';
+                    const banner = document.getElementById('notificationBanner');
+                    if (banner) banner.style.display = 'none';
+                    showMessageUI('Уведомления включены!', false);
+                } else if (permission === 'denied') {
+                    showMessageUI('Уведомления заблокированы. Измените настройки браузера.', true);
                 }
+            } else {
+                showMessageUI('Ваш браузер не поддерживает уведомления', true);
             }
-        }
+        };
 
         function showNotification(title, body, tag) {
             if (!notificationPermission && Notification.permission === 'granted') {
                 notificationPermission = true;
             }
             if (notificationPermission && document.hidden) {
-                new Notification(title, { body: body, tag: tag, icon: 'https://i.ibb.co/WWwR7w2r/IMG-0305.jpg' });
+                try {
+                    new Notification(title, { body: body, tag: tag, icon: 'https://i.ibb.co/WWwR7w2r/IMG-0305.jpg' });
+                } catch(e) {
+                    console.log('Ошибка уведомления:', e);
+                }
             }
         }
 
@@ -946,29 +1044,34 @@
         if ('Notification' in window) {
             if (Notification.permission === 'granted') {
                 notificationPermission = true;
+                const banner = document.getElementById('notificationBanner');
+                if (banner) banner.style.display = 'none';
             } else if (Notification.permission !== 'denied') {
-                document.getElementById('notificationBanner').style.display = 'flex';
+                const banner = document.getElementById('notificationBanner');
+                if (banner) banner.style.display = 'flex';
             }
         }
 
         // ИНИЦИАЛИЗАЦИЯ ЧАСТИЦ
         function initParticles() {
-            particlesJS('particles-js', {
-                particles: {
-                    number: { value: 80, density: { enable: true, value_area: 800 } },
-                    color: { value: ["#00ff00", "#00aa00", "#008800", "#005500"] },
-                    shape: { type: ["circle", "square", "triangle"] },
-                    opacity: { value: 0.5, random: true, anim: { enable: true, speed: 1, opacity_min: 0.1 } },
-                    size: { value: 3, random: true, anim: { enable: true, speed: 2, size_min: 0.1 } },
-                    line_linked: { enable: true, distance: 150, color: "#00aa00", opacity: 0.2, width: 1 },
-                    move: { enable: true, speed: 1, direction: "none", random: true, out_mode: "out" }
-                },
-                interactivity: {
-                    detect_on: "canvas",
-                    events: { onhover: { enable: true, mode: "repulse" }, onclick: { enable: true, mode: "push" }, resize: true }
-                },
-                retina_detect: true
-            });
+            if (typeof particlesJS !== 'undefined') {
+                particlesJS('particles-js', {
+                    particles: {
+                        number: { value: 80, density: { enable: true, value_area: 800 } },
+                        color: { value: ["#00ff00", "#00aa00", "#008800", "#005500"] },
+                        shape: { type: ["circle", "square", "triangle"] },
+                        opacity: { value: 0.5, random: true, anim: { enable: true, speed: 1, opacity_min: 0.1 } },
+                        size: { value: 3, random: true, anim: { enable: true, speed: 2, size_min: 0.1 } },
+                        line_linked: { enable: true, distance: 150, color: "#00aa00", opacity: 0.2, width: 1 },
+                        move: { enable: true, speed: 1, direction: "none", random: true, out_mode: "out" }
+                    },
+                    interactivity: {
+                        detect_on: "canvas",
+                        events: { onhover: { enable: true, mode: "repulse" }, onclick: { enable: true, mode: "push" }, resize: true }
+                    },
+                    retina_detect: true
+                });
+            }
         }
 
         // Функции темы
@@ -997,57 +1100,7 @@
         loadTheme();
         initParticles();
 
-        // Отправка фото
-        document.getElementById('attachPhotoBtn').addEventListener('click', () => {
-            document.getElementById('photoInput').click();
-        });
-
-        document.getElementById('photoInput').addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = async (event) => {
-                await sendPhoto(event.target.result);
-            };
-            reader.readAsDataURL(file);
-            document.getElementById('photoInput').value = '';
-        });
-
-        async function sendPhoto(imageData) {
-            if (!currentContact && !currentGroupId) return;
-            let chatId = currentChatType === 'group' && currentGroupId ? currentGroupId : [currentUser.uid, currentContact.uid].sort().join('_');
-            const messageId = Date.now().toString() + Math.random().toString(36);
-            const messageData = {
-                from: currentUser.uid, text: imageData, isImage: true, timestamp: new Date(), messageId: messageId
-            };
-            if (currentChatType === 'group') messageData.fromNickname = currentUserData.nickname || 'Пользователь';
-            else messageData.to = currentContact.uid;
-            await addDoc(collection(db, "chats", chatId, "messages"), messageData);
-            await updateDoc(doc(db, "chats", chatId), { lastMessageTime: new Date() });
-        }
-
-        // Предпросмотр ссылок
-        async function fetchLinkPreview(url) {
-            try {
-                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-                const response = await fetch(proxyUrl);
-                const data = await response.json();
-                const html = data.contents;
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                const title = doc.querySelector('title')?.innerText || url;
-                let description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || '';
-                let image = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || '';
-                return { title, description, image, url };
-            } catch (error) { return null; }
-        }
-
-        function extractUrls(text) {
-            const urlRegex = /(https?:\/\/[^\s]+)/g;
-            return text.match(urlRegex) || [];
-        }
-
-        // Шифрование
+        // Функции шифрования
         function base64Encrypt(text) { return btoa(unescape(encodeURIComponent(text))); }
         function base64Decrypt(text) { try { return decodeURIComponent(escape(atob(text))); } catch(e) { return text; } }
         function reverseEncrypt(text) { return text.split('').reverse().join(''); }
@@ -1088,6 +1141,8 @@
                 msgDiv.className = `message ${isError ? 'message-error' : 'message-success'}`;
                 msgDiv.style.display = 'block';
                 setTimeout(() => { if(msgDiv) msgDiv.style.display = 'none'; }, 3000);
+            } else {
+                alert(text);
             }
         }
 
@@ -1104,9 +1159,12 @@
 
         setInterval(updatePresence, 30000);
 
+        // Функции работы с чатами
         window.closeChat = function() {
-            document.getElementById('contactsScreen').classList.remove('hide-on-mobile');
-            document.getElementById('chatScreen').classList.remove('show-on-mobile');
+            if (window.innerWidth <= 768) {
+                document.getElementById('contactsScreen').classList.remove('hide-on-mobile');
+                document.getElementById('chatScreen').classList.remove('show-on-mobile');
+            }
             if (messagesUnsubscribe) messagesUnsubscribe();
             currentContact = null;
             currentChatType = 'private';
@@ -1170,6 +1228,7 @@
             alert('Чат удалён');
         };
 
+        // Обработчики модальных окон
         document.getElementById('plusBtn').addEventListener('click', (e) => {
             e.stopPropagation();
             const menu = document.getElementById('plusMenu');
@@ -1332,48 +1391,59 @@
             return result.join('');
         }
 
-        window.register = async () => {
-            const email = document.getElementById('regEmail').value;
-            const password = document.getElementById('regPassword').value;
-            if (!email || !password) { showMessageUI('Заполните все поля', true); return; }
-            if (password.length < 6) { showMessageUI('Пароль должен быть минимум 6 символов', true); return; }
+        // Функции для работы с фото
+        document.getElementById('attachPhotoBtn').addEventListener('click', () => {
+            document.getElementById('photoInput').click();
+        });
+
+        document.getElementById('photoInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                await sendPhoto(event.target.result);
+            };
+            reader.readAsDataURL(file);
+            document.getElementById('photoInput').value = '';
+        });
+
+        async function sendPhoto(imageData) {
+            if (!currentContact && !currentGroupId) return;
+            let chatId = currentChatType === 'group' && currentGroupId ? currentGroupId : [currentUser.uid, currentContact.uid].sort().join('_');
+            const messageId = Date.now().toString() + Math.random().toString(36);
+            const messageData = {
+                from: currentUser.uid, text: imageData, isImage: true, timestamp: new Date(), messageId: messageId
+            };
+            if (currentChatType === 'group') messageData.fromNickname = currentUserData.nickname || 'Пользователь';
+            else messageData.to = currentContact.uid;
+            await addDoc(collection(db, "chats", chatId, "messages"), messageData);
+            await updateDoc(doc(db, "chats", chatId), { lastMessageTime: new Date() });
+        }
+
+        // Функции для предпросмотра ссылок
+        async function fetchLinkPreview(url) {
             try {
-                const userCred = await createUserWithEmailAndPassword(auth, email, password);
-                const globalId = generateGlobalId();
-                await setDoc(doc(db, "users", userCred.user.uid), {
-                    email: email, globalId: globalId, nickname: email.split('@')[0],
-                    createdAt: new Date(), contacts: [], groups: [], online: true, lastSeen: new Date()
-                });
-                showMessageUI('Регистрация успешна!', false);
-                setTimeout(() => window.showLogin(), 1500);
-            } catch (error) { showMessageUI(error.message, true); }
-        };
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                const response = await fetch(proxyUrl);
+                const data = await response.json();
+                const html = data.contents;
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const title = doc.querySelector('title')?.innerText || url;
+                let description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || '';
+                let image = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || '';
+                return { title, description, image, url };
+            } catch (error) { return null; }
+        }
 
-        window.login = async () => {
-            const identifier = document.getElementById('loginIdentifier').value;
-            const password = document.getElementById('loginPassword').value;
-            if (!identifier || !password) { showMessageUI('Заполните все поля', true); return; }
-            try {
-                let email = identifier;
-                if (!identifier.includes('@')) {
-                    const usersQuery = query(collection(db, "users"), where("globalId", "==", identifier));
-                    const usersSnap = await getDocs(usersQuery);
-                    if (usersSnap.empty) { showMessageUI('Global ID не найден', true); return; }
-                    email = usersSnap.docs[0].data().email;
-                }
-                await signInWithEmailAndPassword(auth, email, password);
-                await updatePresence();
-            } catch (error) { showMessageUI('Неверный email/Global ID или пароль', true); }
-        };
+        function extractUrls(text) {
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            return text.match(urlRegex) || [];
+        }
 
-        window.logout = async () => {
-            if (messagesUnsubscribe) messagesUnsubscribe();
-            if (currentUser) {
-                await updateDoc(doc(db, "users", currentUser.uid), { online: false, lastSeen: new Date() }).catch(() => {});
-            }
-            await signOut(auth);
-        };
+        function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
 
+        // Загрузка чатов
         async function loadChats() {
             const userDoc = await getDoc(doc(db, "users", currentUser.uid));
             const userData = userDoc.data();
@@ -1429,7 +1499,7 @@
                 const isContact = chat.type !== 'group' && chat.isContact;
                 
                 chatDiv.innerHTML = `
-                    <div class="chat-avatar-small">${avatarText}</div>
+                    <div class="chat-avatar-small" style="width: 48px; height: 48px; font-size: 20px;">${avatarText}</div>
                     <div class="chat-info-small">
                         <div class="chat-name">${displayName} ${chat.type === 'group' ? '<span style="background:#9C27B0; padding:2px 6px; border-radius:10px; font-size:10px;">Группа</span>' : (isContact ? '' : '<span style="background:var(--danger); padding:2px 6px; border-radius:10px; font-size:10px;">Не в контактах</span>')}</div>
                         <div class="chat-last-message">${chat.type === 'group' ? 'Групповой чат' : (chat.globalId?.substring(0, 12) || '...')}</div>
@@ -1527,10 +1597,9 @@
                     
                     const messageDiv = document.createElement('div');
                     messageDiv.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
-                    messageDiv.innerHTML = `${!isSent ? `<div style="font-size: 10px; color: var(--accent); margin-bottom: 4px;">${senderName}</div>` : ''}${content}<div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div>`;
+                    messageDiv.innerHTML = `${!isSent ? `<div style="font-size: 10px; color: var(--accent); margin-bottom: 4px;">${escapeHtml(senderName)}</div>` : ''}${content}<div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div>`;
                     messagesArea.appendChild(messageDiv);
                     
-                    // Уведомление для новых сообщений
                     if (!isSent && !document.hasFocus()) {
                         const sender = senderName || 'Пользователь';
                         const text = msg.isImage ? '📷 Отправил(а) фото' : decryptedText;
@@ -1554,17 +1623,24 @@
             currentChatType = 'private';
             currentGroupId = null;
             currentChatId = [currentUser.uid, currentContact.uid].sort().join('_');
-            const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-            const userData = userDoc.data();
-            const isContact = (userData.contacts || []).some(c => c.uid === currentContact.uid);
-            const isOnline = false;
+            
+            // Проверяем онлайн статус
+            const contactDoc = await getDoc(doc(db, "users", currentContact.uid));
+            const isOnline = contactDoc.exists() ? (contactDoc.data().online || false) : false;
+            
             document.getElementById('chatName').innerHTML = currentContact.nickname || currentContact.globalId?.substring(0, 8);
             document.getElementById('chatStatus').innerHTML = `<span class="online-status ${isOnline ? 'online' : 'offline'}"></span> ${isOnline ? 'онлайн' : 'офлайн'} | 21 слой шифрования`;
             document.getElementById('chatAvatar').innerHTML = currentContact.nickname?.charAt(0).toUpperCase() || '🧊';
             document.getElementById('chatInputArea').style.display = 'flex';
+            
+            const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+            const userData = userDoc.data();
+            const isContact = (userData.contacts || []).some(c => c.uid === currentContact.uid);
+            
             if (!isContact) document.getElementById('addContactBtn').style.display = 'block';
             else document.getElementById('addContactBtn').style.display = 'none';
             document.getElementById('deleteChatBtn').style.display = 'block';
+            
             if (window.innerWidth <= 768) {
                 document.getElementById('contactsScreen').classList.add('hide-on-mobile');
                 document.getElementById('chatScreen').classList.add('show-on-mobile');
@@ -1614,7 +1690,6 @@
                     messageDiv.innerHTML = `${content}<div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div>`;
                     messagesArea.appendChild(messageDiv);
                     
-                    // Уведомление для новых сообщений
                     if (!isSent && !document.hasFocus()) {
                         const sender = currentContact.nickname || currentContact.globalId?.substring(0, 8) || 'Пользователь';
                         const text = msg.isImage ? '📷 Отправил(а) фото' : decryptedText;
@@ -1624,8 +1699,6 @@
                 messagesArea.scrollTop = messagesArea.scrollHeight;
             });
         }
-
-        function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
 
         window.sendMessage = async () => {
             const messageInput = document.getElementById('messageInput');
@@ -1640,6 +1713,48 @@
             await addDoc(collection(db, "chats", chatId, "messages"), messageData);
             await updateDoc(doc(db, "chats", chatId), { lastMessageTime: new Date() });
             messageInput.value = '';
+        };
+
+        window.register = async () => {
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            if (!email || !password) { showMessageUI('Заполните все поля', true); return; }
+            if (password.length < 6) { showMessageUI('Пароль должен быть минимум 6 символов', true); return; }
+            try {
+                const userCred = await createUserWithEmailAndPassword(auth, email, password);
+                const globalId = generateGlobalId();
+                await setDoc(doc(db, "users", userCred.user.uid), {
+                    email: email, globalId: globalId, nickname: email.split('@')[0],
+                    createdAt: new Date(), contacts: [], groups: [], online: true, lastSeen: new Date()
+                });
+                showMessageUI('Регистрация успешна!', false);
+                setTimeout(() => window.showLogin(), 1500);
+            } catch (error) { showMessageUI(error.message, true); }
+        };
+
+        window.login = async () => {
+            const identifier = document.getElementById('loginIdentifier').value;
+            const password = document.getElementById('loginPassword').value;
+            if (!identifier || !password) { showMessageUI('Заполните все поля', true); return; }
+            try {
+                let email = identifier;
+                if (!identifier.includes('@')) {
+                    const usersQuery = query(collection(db, "users"), where("globalId", "==", identifier));
+                    const usersSnap = await getDocs(usersQuery);
+                    if (usersSnap.empty) { showMessageUI('Global ID не найден', true); return; }
+                    email = usersSnap.docs[0].data().email;
+                }
+                await signInWithEmailAndPassword(auth, email, password);
+                await updatePresence();
+            } catch (error) { showMessageUI('Неверный email/Global ID или пароль', true); }
+        };
+
+        window.logout = async () => {
+            if (messagesUnsubscribe) messagesUnsubscribe();
+            if (currentUser) {
+                await updateDoc(doc(db, "users", currentUser.uid), { online: false, lastSeen: new Date() }).catch(() => {});
+            }
+            await signOut(auth);
         };
 
         window.showRegister = () => {
@@ -1680,8 +1795,10 @@
                 document.getElementById('messengerApp').style.display = 'none';
                 document.getElementById('loginIdentifier').value = '';
                 document.getElementById('loginPassword').value = '';
-                document.getElementById('contactsScreen').classList.remove('hide-on-mobile');
-                document.getElementById('chatScreen').classList.remove('show-on-mobile');
+                if (window.innerWidth <= 768) {
+                    document.getElementById('contactsScreen').classList.remove('hide-on-mobile');
+                    document.getElementById('chatScreen').classList.remove('show-on-mobile');
+                }
             }
         });
     </script>
