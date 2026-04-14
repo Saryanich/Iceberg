@@ -595,6 +595,16 @@
         .theme-preview-rose { background: #FFF5F7; width: 33%; }
         .theme-preview-blue { background: #F0F9FF; width: 33%; }
         .theme-check { color: var(--accent); margin-left: 8px; }
+        
+        /* Стиль для цифровой клавиатуры на мобильных */
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
     </style>
 </head>
 <body class="theme-dark">
@@ -611,11 +621,11 @@
                 <div id="loginMode">
                     <div class="form-group">
                         <label class="form-label">Global ID или Email</label>
-                        <input type="text" id="loginIdentifier" placeholder="Global ID или your@email.com">
+                        <input type="text" id="loginIdentifier" placeholder="Global ID или your@email.com" autocomplete="username">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Пароль</label>
-                        <input type="password" id="loginPassword" placeholder="Введите пароль">
+                        <input type="password" id="loginPassword" placeholder="Введите пароль" autocomplete="current-password">
                     </div>
                     <button class="btn btn-primary" onclick="login()">Войти в Айсберг</button>
                     <div class="divider">
@@ -651,10 +661,10 @@
                     </div>
                     
                     <div class="code-input-container">
-                        <input type="text" class="code-input" maxlength="1" id="code1" oninput="moveToNext(this, 0)">
-                        <input type="text" class="code-input" maxlength="1" id="code2" oninput="moveToNext(this, 1)">
-                        <input type="text" class="code-input" maxlength="1" id="code3" oninput="moveToNext(this, 2)">
-                        <input type="text" class="code-input" maxlength="1" id="code4" oninput="moveToNext(this, 3)">
+                        <input type="text" class="code-input" maxlength="1" id="code1" oninput="moveToNext(this, 0)" inputmode="numeric" pattern="\d*">
+                        <input type="text" class="code-input" maxlength="1" id="code2" oninput="moveToNext(this, 1)" inputmode="numeric" pattern="\d*">
+                        <input type="text" class="code-input" maxlength="1" id="code3" oninput="moveToNext(this, 2)" inputmode="numeric" pattern="\d*">
+                        <input type="text" class="code-input" maxlength="1" id="code4" oninput="moveToNext(this, 3)" inputmode="numeric" pattern="\d*">
                     </div>
                     
                     <div class="warning-box">
@@ -841,7 +851,6 @@
             authDomain: "glob-data.firebaseapp.com",
             projectId: "glob-data",
             storageBucket: "glob-data.firebasestorage.app",
-            messagingSDK: "https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging.js",
             messagingSenderId: "122757049174",
             appId: "1:122757049174:web:ebb425edd0e1a8ea9a44f7"
         };
@@ -849,25 +858,25 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging.js";
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth();
         const db = getFirestore();
-        const messaging = getMessaging(app);
         
         auth.setPersistence({ type: 'NONE' });
 
         let currentUser = null;
         let currentUserData = null;
         let pendingUser = null;
+        let pendingLoginResolve = null;
         let currentIP = null;
         let deviceFingerprint = null;
         let currentContact = null;
         let currentChatId = null;
         let chatsListener = null;
         let messagesListener = null;
-        let currentFCMToken = null;
+        let blockCheckInterval = null;
+        let userStatusListener = null;
 
         async function getDeviceInfo() {
             try {
@@ -911,31 +920,12 @@
                 addedAt: new Date(),
                 lastUsed: new Date(),
                 platform: navigator.platform,
-                language: navigator.language,
-                fcmToken: currentFCMToken
+                language: navigator.language
             };
             
             await updateDoc(doc(db, "users", uid), {
                 knownDevices: arrayUnion(deviceInfo)
             });
-        }
-
-        async function registerFCM() {
-            if (!currentUser) return;
-            try {
-                const permission = await Notification.requestPermission();
-                if (permission === 'granted') {
-                    const token = await getToken(messaging, {
-                        vapidKey: 'BCwQwqZfXvJ0Qx5qVH2L8MpR3nY6kA7bC9dE1fG2hI3jK4lM5nO6pP7qR8sT9uV0wX1yZ2'
-                    });
-                    currentFCMToken = token;
-                    await updateDoc(doc(db, "users", currentUser.uid), {
-                        fcmToken: token
-                    });
-                }
-            } catch(e) {
-                console.log('FCM не поддерживается:', e);
-            }
         }
 
         function generateGlobalId() {
@@ -984,13 +974,19 @@
                 const next = document.getElementById(`code${index + 2}`);
                 if (next) next.focus();
             }
+            // Ограничиваем только цифры
+            input.value = input.value.replace(/[^0-9]/g, '');
         };
 
         window.cancel2FA = () => {
             document.getElementById('loginMode').style.display = 'block';
             document.getElementById('twoFactorMode').style.display = 'none';
-            ['code1','code2','code3','code4'].forEach(id => document.getElementById(id).value = '');
+            ['code1','code2','code3','code4'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
             pendingUser = null;
+            if (pendingLoginResolve) pendingLoginResolve(false);
         };
 
         window.cancelBlocked = () => {
@@ -1034,14 +1030,65 @@
                 document.getElementById('authForm').style.display = 'none';
                 document.getElementById('messengerApp').style.display = 'flex';
                 
-                ['code1','code2','code3','code4'].forEach(id => document.getElementById(id).value = '');
+                ['code1','code2','code3','code4'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = '';
+                });
                 
                 await loadUserData(pendingUser);
-                await registerFCM();
+                startBlockCheck(pendingUser.uid);
+                startUserStatusListener(pendingUser.uid);
+                
+                if (pendingLoginResolve) pendingLoginResolve(true);
             } else {
                 showMessage(msgDiv, '❌ Неверный код', true);
             }
         };
+        
+        // Периодическая проверка блокировки (каждые 5 секунд)
+        function startBlockCheck(uid) {
+            if (blockCheckInterval) clearInterval(blockCheckInterval);
+            
+            blockCheckInterval = setInterval(async () => {
+                if (!currentUser || currentUser.uid !== uid) return;
+                
+                const locked = await isAccountLocked(uid);
+                if (locked) {
+                    console.log('🔒 Аккаунт заблокирован, выход...');
+                    clearInterval(blockCheckInterval);
+                    blockCheckInterval = null;
+                    
+                    // Показываем уведомление о блокировке
+                    alert('⚠️ Ваш аккаунт был заблокирован в Global ID! Доступ к Айсбергу закрыт.');
+                    
+                    // Выходим из системы
+                    await updateDoc(doc(db, "users", uid), {
+                        online: false,
+                        lastSeen: serverTimestamp()
+                    }).catch(() => {});
+                    
+                    await signOut(auth);
+                }
+            }, 5000);
+        }
+        
+        // Слушатель изменения статуса пользователя
+        function startUserStatusListener(uid) {
+            if (userStatusListener) userStatusListener();
+            
+            const userRef = doc(db, "users", uid);
+            userStatusListener = onSnapshot(userRef, (docSnap) => {
+                if (docSnap.exists() && currentUser) {
+                    const data = docSnap.data();
+                    if (data.accountLocked === true) {
+                        // Если заблокирован - выходим
+                        if (blockCheckInterval) clearInterval(blockCheckInterval);
+                        blockCheckInterval = null;
+                        signOut(auth);
+                    }
+                }
+            });
+        }
 
         window.login = async () => {
             const identifier = document.getElementById('loginIdentifier').value;
@@ -1070,6 +1117,7 @@
                 const userCred = await signInWithEmailAndPassword(auth, email, password);
                 const user = userCred.user;
                 
+                // Проверяем блокировку ДО входа
                 if (await isAccountLocked(user.uid)) {
                     await signOut(auth);
                     document.getElementById('loginMode').style.display = 'none';
@@ -1077,6 +1125,7 @@
                     return;
                 }
                 
+                // Проверяем доступ к Айсбергу
                 if (!await hasIcebergAccess(user.uid)) {
                     await updateDoc(doc(db, "users", user.uid), {
                         icebergAccess: true,
@@ -1084,9 +1133,11 @@
                     });
                 }
                 
+                // Проверяем, известно ли устройство
                 const deviceKnown = await isDeviceKnown(user.uid);
                 
                 if (deviceKnown) {
+                    // Известное устройство - вход сразу
                     await updateDoc(doc(db, "users", user.uid), {
                         online: true,
                         lastSeen: serverTimestamp(),
@@ -1097,10 +1148,13 @@
                     document.getElementById('authForm').style.display = 'none';
                     document.getElementById('messengerApp').style.display = 'flex';
                     await loadUserData(user);
-                    await registerFCM();
+                    startBlockCheck(user.uid);
+                    startUserStatusListener(user.uid);
                 } else {
+                    // НОВОЕ УСТРОЙСТВО - запрашиваем 2FA СРАЗУ после входа
                     pendingUser = user;
                     
+                    // Генерируем 2FA код и сохраняем в БД
                     const code = Math.floor(1000 + Math.random() * 9000).toString();
                     await updateDoc(doc(db, "users", user.uid), {
                         twoFactorCode: code,
@@ -1174,14 +1228,28 @@
         };
 
         window.logout = async () => {
+            // Останавливаем все проверки
+            if (blockCheckInterval) {
+                clearInterval(blockCheckInterval);
+                blockCheckInterval = null;
+            }
+            if (userStatusListener) {
+                userStatusListener();
+                userStatusListener = null;
+            }
             if (chatsListener) chatsListener();
             if (messagesListener) messagesListener();
+            
             if (currentUser) {
                 await updateDoc(doc(db, "users", currentUser.uid), {
                     online: false,
                     lastSeen: serverTimestamp()
-                });
+                }).catch(() => {});
             }
+            
+            // Очищаем pending данные, чтобы при следующем входе не было конфликтов
+            pendingUser = null;
+            
             await signOut(auth);
         };
 
@@ -1373,20 +1441,7 @@
                     messagesArea.appendChild(div);
                 });
                 messagesArea.scrollTop = messagesArea.scrollHeight;
-                
-                if (snapshot.docs.length > 0 && !currentUserData?.chats?.find(c => c.uid === currentContact?.uid)?.unread) {
-                    const lastMsg = snapshot.docs[snapshot.docs.length - 1].data();
-                    if (lastMsg.senderId !== currentUser.uid) {
-                        showNotification(currentContact?.nickname || 'Новое сообщение', lastMsg.text);
-                    }
-                }
             });
-        }
-
-        function showNotification(title, body) {
-            if (Notification.permission === 'granted') {
-                new Notification(title, { body, icon: 'https://i.ibb.co/8JY0bXs/IMG-0335.jpg' });
-            }
         }
 
         function escapeHtml(text) {
@@ -1611,10 +1666,6 @@
             document.getElementById('plusMenu').style.display = 'none';
         });
 
-        if ('Notification' in window) {
-            Notification.requestPermission();
-        }
-
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 const userDoc = await getDoc(doc(db, "users", user.uid));
@@ -1622,19 +1673,43 @@
                 
                 if (userData?.icebergAccess && !userData?.accountLocked) {
                     currentUser = user;
-                    document.getElementById('authForm').style.display = 'none';
-                    document.getElementById('messengerApp').style.display = 'flex';
-                    await loadUserData(user);
-                    await registerFCM();
+                    // Проверяем, не в процессе ли 2FA
+                    const isIn2FA = document.getElementById('twoFactorMode').style.display === 'block';
+                    if (!isIn2FA) {
+                        document.getElementById('authForm').style.display = 'none';
+                        document.getElementById('messengerApp').style.display = 'flex';
+                        await loadUserData(user);
+                        startBlockCheck(user.uid);
+                        startUserStatusListener(user.uid);
+                    }
+                } else if (userData?.accountLocked) {
+                    await signOut(auth);
+                    document.getElementById('loginMode').style.display = 'none';
+                    document.getElementById('blockedMode').style.display = 'block';
                 } else {
                     await signOut(auth);
                 }
             } else {
+                if (blockCheckInterval) {
+                    clearInterval(blockCheckInterval);
+                    blockCheckInterval = null;
+                }
+                if (userStatusListener) {
+                    userStatusListener();
+                    userStatusListener = null;
+                }
                 if (chatsListener) chatsListener();
                 if (messagesListener) messagesListener();
+                
                 currentUser = null;
+                currentUserData = null;
+                pendingUser = null;
+                
                 document.getElementById('authForm').style.display = 'flex';
                 document.getElementById('messengerApp').style.display = 'none';
+                document.getElementById('loginMode').style.display = 'block';
+                document.getElementById('twoFactorMode').style.display = 'none';
+                document.getElementById('blockedMode').style.display = 'none';
                 document.getElementById('loginIdentifier').value = '';
                 document.getElementById('loginPassword').value = '';
             }
