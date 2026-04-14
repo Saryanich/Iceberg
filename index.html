@@ -142,6 +142,11 @@
             border: 1px solid #2A3A4A;
         }
 
+        .btn-danger {
+            background: #E53935;
+            color: white;
+        }
+
         .btn-success {
             background: #4CAF50;
             color: white;
@@ -313,6 +318,17 @@
             transition: all 0.2s;
         }
 
+        .delete-chat-btn {
+            background: #E53935;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
         .online-status {
             display: inline-block;
             width: 8px;
@@ -408,7 +424,6 @@
             justify-content: center;
         }
 
-        /* Меню плюсика */
         .plus-menu {
             display: none;
             position: absolute;
@@ -454,10 +469,30 @@
             cursor: pointer;
             transition: all 0.2s;
             border-bottom: 1px solid #1A2A3A;
+            position: relative;
         }
 
         .chat-item:hover {
             background: #1A2A3A;
+        }
+
+        .chat-item .delete-chat-icon {
+            opacity: 0;
+            transition: opacity 0.2s;
+            background: #E53935;
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chat-item:hover .delete-chat-icon {
+            opacity: 1;
         }
 
         .chat-avatar-small {
@@ -734,6 +769,7 @@
                         <p id="chatStatus">🔒 Защищённое соединение</p>
                     </div>
                     <button id="addContactBtn" class="add-contact-btn" style="display: none;" onclick="addToContacts()">➕ Добавить в контакты</button>
+                    <button id="deleteChatBtn" class="delete-chat-btn" style="display: none;" onclick="deleteCurrentChat()">🗑 Удалить чат</button>
                 </div>
                 <div class="messages-area" id="messagesArea"></div>
                 <div class="chat-input-area" id="chatInputArea" style="display: none;">
@@ -744,7 +780,6 @@
         </div>
     </div>
 
-    <!-- Меню плюсика -->
     <div id="plusMenu" class="plus-menu">
         <div class="plus-menu-item" onclick="showCreateGroupModal()">
             <span>👥</span> Создать группу
@@ -757,7 +792,6 @@
         </div>
     </div>
 
-    <!-- Модальное окно поиска по Global ID -->
     <div id="searchModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -769,7 +803,6 @@
         </div>
     </div>
 
-    <!-- Модальное окно сканера QR-кода -->
     <div id="scannerModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -782,7 +815,6 @@
         </div>
     </div>
 
-    <!-- Модальное окно создания группы -->
     <div id="createGroupModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -818,7 +850,7 @@
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, orderBy, onSnapshot, updateDoc, arrayUnion, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, orderBy, onSnapshot, updateDoc, arrayUnion, arrayRemove, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth();
@@ -830,12 +862,56 @@
         let currentContact = null;
         let currentChatType = 'private';
         let currentGroupId = null;
+        let currentChatId = null;
         let messagesUnsubscribe = null;
         let destructTimeouts = {};
         let html5QrCode = null;
 
         const SELF_DESTRUCT_DELAY = 5000;
         const ENCRYPTION_LAYERS = 21;
+
+        // Удаление контакта
+        window.deleteContact = async (contactId) => {
+            if (!confirm('Удалить этот контакт?')) return;
+            const currentUserRef = doc(db, "users", currentUser.uid);
+            const userDoc = await getDoc(currentUserRef);
+            const contacts = userDoc.data().contacts || [];
+            const updatedContacts = contacts.filter(c => c.uid !== contactId);
+            await updateDoc(currentUserRef, { contacts: updatedContacts });
+            if (currentContact && currentContact.uid === contactId) {
+                closeChat();
+            }
+            loadChats();
+        };
+
+        // Удаление чата
+        window.deleteCurrentChat = async () => {
+            if (!currentChatId) return;
+            if (!confirm('Удалить этот чат? Все сообщения будут удалены безвозвратно.')) return;
+            
+            // Удаляем все сообщения в чате
+            const messagesRef = collection(db, "chats", currentChatId, "messages");
+            const messagesSnap = await getDocs(messagesRef);
+            for (const docSnap of messagesSnap.docs) {
+                await deleteDoc(doc(db, "chats", currentChatId, "messages", docSnap.id));
+            }
+            
+            // Если это приватный чат, удаляем его из контактов
+            if (currentChatType === 'private' && currentContact) {
+                const currentUserRef = doc(db, "users", currentUser.uid);
+                const userDoc = await getDoc(currentUserRef);
+                const contacts = userDoc.data().contacts || [];
+                const updatedContacts = contacts.filter(c => c.uid !== currentContact.uid);
+                await updateDoc(currentUserRef, { contacts: updatedContacts });
+            }
+            
+            // Удаляем сам чат
+            await deleteDoc(doc(db, "chats", currentChatId));
+            
+            closeChat();
+            loadChats();
+            alert('✅ Чат удалён');
+        };
 
         // Меню плюсика
         document.getElementById('plusBtn').addEventListener('click', (e) => {
@@ -847,7 +923,6 @@
             document.getElementById('plusMenu').style.display = 'none';
         });
 
-        // Поиск по Global ID
         window.showSearchModal = () => {
             document.getElementById('searchModal').style.display = 'flex';
             document.getElementById('plusMenu').style.display = 'none';
@@ -856,6 +931,7 @@
             document.getElementById('searchModal').style.display = 'none';
             document.getElementById('searchGlobalIdInput').value = '';
         };
+        
         window.searchByGlobalId = async () => {
             const globalId = document.getElementById('searchGlobalIdInput').value.trim();
             if (!globalId) { alert('Введите Global ID'); return; }
@@ -866,16 +942,28 @@
             const userDoc = usersSnap.docs[0];
             const userData = userDoc.data();
             if (userDoc.id === currentUser.uid) { alert('Это вы сами'); return; }
-            const contact = {
-                uid: userDoc.id,
-                globalId: userData.globalId,
-                nickname: userData.nickname,
-                email: userData.email
-            };
-            await selectContact(contact);
+            
+            const currentUserRef = doc(db, "users", currentUser.uid);
+            const currentUserSnap = await getDoc(currentUserRef);
+            const currentContacts = currentUserSnap.data().contacts || [];
+            
+            if (!currentContacts.some(c => c.uid === userDoc.id)) {
+                await updateDoc(currentUserRef, {
+                    contacts: arrayUnion({
+                        uid: userDoc.id,
+                        globalId: userData.globalId,
+                        nickname: userData.nickname,
+                        email: userData.email,
+                        addedAt: new Date()
+                    })
+                });
+                alert(`✅ ${userData.nickname || userData.globalId} добавлен в контакты!`);
+                loadChats();
+            } else {
+                alert(`👤 ${userData.nickname || userData.globalId} уже есть в контактах`);
+            }
         };
 
-        // Сканер QR
         window.openScanner = () => {
             document.getElementById('scannerModal').style.display = 'flex';
             document.getElementById('plusMenu').style.display = 'none';
@@ -885,6 +973,7 @@
             document.getElementById('scannerModal').style.display = 'none';
             stopScanner();
         };
+        
         function startScanner() {
             if (html5QrCode) { html5QrCode.stop().catch(() => {}); }
             html5QrCode = new Html5Qrcode("qr-reader");
@@ -899,9 +988,11 @@
                 searchAndAddByGlobalId(globalId);
             }, (error) => { console.log("Ошибка сканирования:", error); });
         }
+        
         function stopScanner() {
             if (html5QrCode) { html5QrCode.stop().catch(() => {}); html5QrCode = null; }
         }
+        
         async function searchAndAddByGlobalId(globalId) {
             const usersQuery = query(collection(db, "users"), where("globalId", "==", globalId));
             const usersSnap = await getDocs(usersQuery);
@@ -929,7 +1020,6 @@
             }
         }
 
-        // Создание группы
         window.showCreateGroupModal = async () => {
             document.getElementById('plusMenu').style.display = 'none';
             const userDoc = await getDoc(doc(db, "users", currentUser.uid));
@@ -949,10 +1039,12 @@
             }
             document.getElementById('createGroupModal').style.display = 'flex';
         };
+        
         window.closeCreateGroupModal = () => {
             document.getElementById('createGroupModal').style.display = 'none';
             document.getElementById('groupName').value = '';
         };
+        
         window.createGroup = async () => {
             const groupName = document.getElementById('groupName').value.trim();
             if (!groupName) { alert('Введите название группы'); return; }
@@ -1069,9 +1161,11 @@
             currentContact = null;
             currentChatType = 'private';
             currentGroupId = null;
+            currentChatId = null;
             document.getElementById('chatInputArea').style.display = 'none';
             document.getElementById('chatName').innerText = 'Выберите собеседника';
             document.getElementById('addContactBtn').style.display = 'none';
+            document.getElementById('deleteChatBtn').style.display = 'none';
         };
 
         window.addToContacts = async () => {
@@ -1126,7 +1220,7 @@
                 const globalId = generateGlobalId();
                 await setDoc(doc(db, "users", userCred.user.uid), {
                     email: email, globalId: globalId, nickname: email.split('@')[0],
-                    createdAt: new Date(), contacts: [], online: true, lastSeen: new Date()
+                    createdAt: new Date(), contacts: [], groups: [], online: true, lastSeen: new Date()
                 });
                 showMessageUI('Регистрация успешна!', false);
                 setTimeout(() => window.showLogin(), 1500);
@@ -1165,6 +1259,7 @@
             const contacts = userData.contacts || [];
             const userGroups = userData.groups || [];
             const chatsSet = new Map();
+            
             for (const contact of contacts) {
                 chatsSet.set(contact.uid, {
                     uid: contact.uid, globalId: contact.globalId, nickname: contact.nickname,
@@ -1182,6 +1277,7 @@
             const chatsSnap = await getDocs(chatsQuery);
             for (const chatDoc of chatsSnap.docs) {
                 const chatData = chatDoc.data();
+                if (chatData.type === 'group') continue;
                 const participants = chatData.participants || [];
                 if (participants.includes(currentUser.uid)) {
                     const otherId = participants.find(p => p !== currentUser.uid);
@@ -1197,38 +1293,76 @@
                     }
                 }
             }
+            
             const chatsList = document.getElementById('chatsList');
             chatsList.innerHTML = '';
             if (chatsSet.size === 0) {
                 chatsList.innerHTML = '<div style="padding: 20px; text-align: center; color: #88A9C4;">Нет чатов<br><span style="font-size: 11px;">Нажмите ➕ для поиска</span></div>';
                 return;
             }
+            
             for (const [uid, chat] of chatsSet) {
                 const chatDiv = document.createElement('div');
                 chatDiv.className = 'chat-item';
-                chatDiv.onclick = () => {
-                    if (chat.type === 'group') { selectGroup(uid, chat); }
-                    else { selectContact(chat); }
-                };
                 const displayName = chat.type === 'group' ? chat.name : (chat.nickname || chat.globalId?.substring(0, 8));
                 const avatarText = chat.type === 'group' ? '👥' : (chat.nickname?.charAt(0).toUpperCase() || '👤');
-                const avatarClass = chat.type === 'group' ? 'group-avatar' : '';
-                chatDiv.innerHTML = `<div class="chat-avatar-small ${avatarClass}">${avatarText}</div>
-                    <div class="chat-info-small"><div class="chat-name">${displayName} ${chat.type === 'group' ? '<span style="background:#9C27B0; padding:2px 6px; border-radius:10px; font-size:10px;">Группа</span>' : ''}</div>
-                    <div class="chat-last-message">${chat.type === 'group' ? '👥 Групповой чат' : (chat.globalId?.substring(0, 12) || '...')}</div></div>`;
+                const isContact = chat.type !== 'group' && chat.isContact;
+                
+                chatDiv.innerHTML = `
+                    <div class="chat-avatar-small">${avatarText}</div>
+                    <div class="chat-info-small">
+                        <div class="chat-name">${displayName} ${chat.type === 'group' ? '<span style="background:#9C27B0; padding:2px 6px; border-radius:10px; font-size:10px;">Группа</span>' : (isContact ? '' : '<span style="background:#E53935; padding:2px 6px; border-radius:10px; font-size:10px;">Не в контактах</span>')}</div>
+                        <div class="chat-last-message">${chat.type === 'group' ? '👥 Групповой чат' : (chat.globalId?.substring(0, 12) || '...')}</div>
+                    </div>
+                    <button class="delete-chat-icon" onclick="event.stopPropagation(); deleteChat('${uid}', '${chat.type}')">🗑</button>
+                `;
+                chatDiv.addEventListener('click', () => {
+                    if (chat.type === 'group') { selectGroup(uid, chat); }
+                    else { selectContact(chat); }
+                });
                 chatsList.appendChild(chatDiv);
             }
         }
+        
+        window.deleteChat = async (uid, type) => {
+            if (!confirm('Удалить этот чат?')) return;
+            let chatId;
+            if (type === 'group') {
+                chatId = uid;
+                const userRef = doc(db, "users", currentUser.uid);
+                await updateDoc(userRef, { groups: arrayRemove(chatId) });
+            } else {
+                chatId = [currentUser.uid, uid].sort().join('_');
+                const userRef = doc(db, "users", currentUser.uid);
+                const userDoc = await getDoc(userRef);
+                const contacts = userDoc.data().contacts || [];
+                const updatedContacts = contacts.filter(c => c.uid !== uid);
+                await updateDoc(userRef, { contacts: updatedContacts });
+            }
+            
+            const messagesRef = collection(db, "chats", chatId, "messages");
+            const messagesSnap = await getDocs(messagesRef);
+            for (const docSnap of messagesSnap.docs) {
+                await deleteDoc(doc(db, "chats", chatId, "messages", docSnap.id));
+            }
+            await deleteDoc(doc(db, "chats", chatId));
+            
+            if (currentChatId === chatId) closeChat();
+            loadChats();
+            alert('✅ Чат удалён');
+        };
 
         async function selectGroup(groupId, groupData) {
             currentChatType = 'group';
             currentGroupId = groupId;
+            currentChatId = groupId;
             currentContact = null;
             document.getElementById('chatName').innerHTML = `${groupData.name} <span style="background:#9C27B0; padding:2px 6px; border-radius:10px; font-size:10px;">Группа</span>`;
             document.getElementById('chatStatus').innerHTML = `👥 ${groupData.participants?.length || 0} участников | 🔒 21 слой`;
             document.getElementById('chatAvatar').innerHTML = groupData.avatar || '👥';
             document.getElementById('chatInputArea').style.display = 'flex';
             document.getElementById('addContactBtn').style.display = 'none';
+            document.getElementById('deleteChatBtn').style.display = 'block';
             if (window.innerWidth <= 768) {
                 document.getElementById('contactsScreen').classList.add('hide-on-mobile');
                 document.getElementById('chatScreen').classList.add('show-on-mobile');
@@ -1279,6 +1413,7 @@
             currentContact = fullContact;
             currentChatType = 'private';
             currentGroupId = null;
+            currentChatId = [currentUser.uid, currentContact.uid].sort().join('_');
             const userDoc = await getDoc(doc(db, "users", currentUser.uid));
             const userData = userDoc.data();
             const isContact = (userData.contacts || []).some(c => c.uid === currentContact.uid);
@@ -1289,16 +1424,16 @@
             document.getElementById('chatInputArea').style.display = 'flex';
             if (!isContact) { document.getElementById('addContactBtn').style.display = 'block'; }
             else { document.getElementById('addContactBtn').style.display = 'none'; }
+            document.getElementById('deleteChatBtn').style.display = 'block';
             if (window.innerWidth <= 768) {
                 document.getElementById('contactsScreen').classList.add('hide-on-mobile');
                 document.getElementById('chatScreen').classList.add('show-on-mobile');
             }
             if (messagesUnsubscribe) messagesUnsubscribe();
-            const chatId = [currentUser.uid, currentContact.uid].sort().join('_');
-            const chatRef = doc(db, "chats", chatId);
+            const chatRef = doc(db, "chats", currentChatId);
             const chatDoc = await getDoc(chatRef);
             if (!chatDoc.exists()) { await setDoc(chatRef, { participants: [currentUser.uid, currentContact.uid], createdAt: new Date(), lastMessageTime: null, type: 'private' }); }
-            const messagesRef = collection(db, "chats", chatId, "messages");
+            const messagesRef = collection(db, "chats", currentChatId, "messages");
             const q = query(messagesRef, orderBy("timestamp", "asc"));
             messagesUnsubscribe = onSnapshot(q, async (snapshot) => {
                 const messagesArea = document.getElementById('messagesArea');
@@ -1316,7 +1451,7 @@
                     messagesArea.appendChild(messageDiv);
                     if (msg.messageId && !destructTimeouts[msg.messageId] && !isSent) {
                         destructTimeouts[msg.messageId] = setTimeout(async () => {
-                            await deleteDoc(doc(db, "chats", chatId, "messages", docSnap.id));
+                            await deleteDoc(doc(db, "chats", currentChatId, "messages", docSnap.id));
                             delete destructTimeouts[msg.messageId];
                         }, SELF_DESTRUCT_DELAY);
                         showDestructNotice();
