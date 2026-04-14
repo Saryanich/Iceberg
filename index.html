@@ -778,7 +778,6 @@
             color: white;
         }
 
-        /* Настройки */
         .settings-card {
             background: var(--bg-secondary);
             border-radius: 20px;
@@ -899,8 +898,8 @@
                 </div>
                 
                 <div class="search-area">
-                    <input type="text" class="search-input" placeholder="🔍 Поиск..." id="searchInput">
-                    <button class="plus-btn" id="plusBtn">➕</button>
+                    <input type="text" class="search-input" placeholder="Поиск..." id="searchInput">
+                    <button class="plus-btn" id="plusBtn">+</button>
                 </div>
                 
                 <div class="chats-list" id="chatsList"></div>
@@ -912,21 +911,20 @@
                     <div class="chat-avatar" id="chatAvatar">🧊</div>
                     <div class="chat-info">
                         <h3 id="chatName">Выберите собеседника</h3>
-                        <p id="chatStatus">🔒 Защищённое соединение</p>
+                        <p id="chatStatus">Защищённое соединение</p>
                     </div>
-                    <button id="addContactBtn" class="add-contact-btn" style="display: none;" onclick="addToContacts()">➕ Добавить в контакты</button>
-                    <button id="deleteChatBtn" class="delete-chat-btn" style="display: none;" onclick="deleteCurrentChat()">🗑 Удалить чат</button>
+                    <button id="addContactBtn" class="add-contact-btn" style="display: none;" onclick="addToContacts()">+ Добавить в контакты</button>
+                    <button id="deleteChatBtn" class="delete-chat-btn" style="display: none;" onclick="deleteCurrentChat()">Удалить чат</button>
                 </div>
                 <div class="messages-area" id="messagesArea"></div>
                 <div class="chat-input-area" id="chatInputArea" style="display: none;">
                     <input type="text" class="chat-input" id="messageInput" placeholder="Введите сообщение..." onkeypress="if(event.key==='Enter') sendMessage()">
-                    <button class="btn btn-primary send-btn" onclick="sendMessage()">🔒 Отправить</button>
+                    <button class="btn btn-primary send-btn" onclick="sendMessage()">Отправить</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Меню плюсика -->
     <div id="plusMenu" class="plus-menu">
         <div class="plus-menu-item" onclick="showCreateGroupModal()">
             <span>👥</span> Создать группу
@@ -939,17 +937,16 @@
         </div>
     </div>
 
-    <!-- Модальное окно настроек -->
     <div id="settingsModal" class="modal">
         <div class="modal-content" style="max-width: 400px;">
             <div class="modal-header">
-                <h3>⚙️ Настройки</h3>
+                <h3>Настройки</h3>
                 <span class="close-modal" onclick="closeSettings()">&times;</span>
             </div>
             <div class="settings-card">
-                <div class="settings-title">🎨 Тема оформления</div>
+                <div class="settings-title">Тема оформления</div>
                 <div class="theme-option" onclick="setTheme('dark')">
-                    <span class="theme-name">🌙 Тёмная</span>
+                    <span class="theme-name">Тёмная</span>
                     <div class="theme-preview">
                         <div class="theme-preview-dark"></div>
                         <div class="theme-preview-dark"></div>
@@ -958,7 +955,7 @@
                     <span id="theme-dark-check" class="theme-check">✓</span>
                 </div>
                 <div class="theme-option" onclick="setTheme('light')">
-                    <span class="theme-name">☀️ Светлая</span>
+                    <span class="theme-name">Светлая</span>
                     <div class="theme-preview">
                         <div class="theme-preview-light"></div>
                         <div class="theme-preview-light"></div>
@@ -967,7 +964,7 @@
                     <span id="theme-light-check" class="theme-check" style="display: none;">✓</span>
                 </div>
                 <div class="theme-option" onclick="setTheme('rose')">
-                    <span class="theme-name">🌸 Розовая</span>
+                    <span class="theme-name">Розовая</span>
                     <div class="theme-preview">
                         <div class="theme-preview-rose"></div>
                         <div class="theme-preview-rose"></div>
@@ -976,7 +973,7 @@
                     <span id="theme-rose-check" class="theme-check" style="display: none;">✓</span>
                 </div>
                 <div class="theme-option" onclick="setTheme('blue')">
-                    <span class="theme-name">💙 Голубая</span>
+                    <span class="theme-name">Голубая</span>
                     <div class="theme-preview">
                         <div class="theme-preview-blue"></div>
                         <div class="theme-preview-blue"></div>
@@ -992,7 +989,7 @@
     <div id="searchModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 style="color: var(--text-primary);">🔍 Поиск по Global ID</h3>
+                <h3>Поиск по Global ID</h3>
                 <span class="close-modal" onclick="closeSearchModal()">&times;</span>
             </div>
             <input type="text" id="searchGlobalIdInput" placeholder="Введите Global ID" style="width: 100%; margin: 10px 0;">
@@ -1003,7 +1000,7 @@
     <div id="scannerModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 style="color: var(--text-primary);">📷 Сканирование QR-кода</h3>
+                <h3>Сканирование QR-кода</h3>
                 <span class="close-modal" onclick="closeScanner()">&times;</span>
             </div>
             <div id="qr-reader" style="width: 100%;"></div>
@@ -1015,7 +1012,7 @@
     <div id="createGroupModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 style="color: var(--text-primary);">👥 Создать группу</h3>
+                <h3>Создать группу</h3>
                 <span class="close-modal" onclick="closeCreateGroupModal()">&times;</span>
             </div>
             <div class="form-group">
@@ -1068,7 +1065,7 @@
         const ENCRYPTION_LAYERS = 21;
 
         // Функции темы
-        function setTheme(theme) {
+        window.setTheme = function(theme) {
             document.body.className = `theme-${theme}`;
             localStorage.setItem('iceberg_theme', theme);
             document.querySelectorAll('[id^="theme-"]').forEach(el => {
@@ -1079,7 +1076,7 @@
             const checkId = `theme-${theme}-check`;
             const checkEl = document.getElementById(checkId);
             if (checkEl) checkEl.style.display = 'inline';
-        }
+        };
 
         function loadTheme() {
             const savedTheme = localStorage.getItem('iceberg_theme');
@@ -1099,20 +1096,6 @@
         };
 
         loadTheme();
-
-        // Удаление контакта
-        window.deleteContact = async (contactId) => {
-            if (!confirm('Удалить этот контакт?')) return;
-            const currentUserRef = doc(db, "users", currentUser.uid);
-            const userDoc = await getDoc(currentUserRef);
-            const contacts = userDoc.data().contacts || [];
-            const updatedContacts = contacts.filter(c => c.uid !== contactId);
-            await updateDoc(currentUserRef, { contacts: updatedContacts });
-            if (currentContact && currentContact.uid === contactId) {
-                closeChat();
-            }
-            loadChats();
-        };
 
         window.deleteCurrentChat = async () => {
             if (!currentChatId) return;
@@ -1136,7 +1119,7 @@
             
             closeChat();
             loadChats();
-            alert('✅ Чат удалён');
+            alert('Чат удалён');
         };
 
         document.getElementById('plusBtn').addEventListener('click', (e) => {
@@ -1221,10 +1204,10 @@
         async function searchAndAddByGlobalId(globalId) {
             const usersQuery = query(collection(db, "users"), where("globalId", "==", globalId));
             const usersSnap = await getDocs(usersQuery);
-            if (usersSnap.empty) { alert('❌ Пользователь не найден'); return; }
+            if (usersSnap.empty) { alert('Пользователь не найден'); return; }
             const userDoc = usersSnap.docs[0];
             const userData = userDoc.data();
-            if (userDoc.id === currentUser.uid) { alert('❌ Это вы сами'); return; }
+            if (userDoc.id === currentUser.uid) { alert('Это вы сами'); return; }
             const currentUserRef = doc(db, "users", currentUser.uid);
             const currentUserSnap = await getDoc(currentUserRef);
             const currentContacts = currentUserSnap.data().contacts || [];
@@ -1349,7 +1332,7 @@
         function showDestructNotice() {
             let notice = document.createElement('div');
             notice.className = 'destruct-notice';
-            notice.textContent = '💣 Сообщение самоуничтожится через 5 секунд!';
+            notice.textContent = 'Сообщение самоуничтожится через 5 секунд!';
             document.body.appendChild(notice);
             setTimeout(() => notice.remove(), SELF_DESTRUCT_DELAY);
         }
@@ -1521,7 +1504,7 @@
             const chatsList = document.getElementById('chatsList');
             chatsList.innerHTML = '';
             if (chatsSet.size === 0) {
-                chatsList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Нет чатов<br><span style="font-size: 11px;">Нажмите ➕ для поиска</span></div>';
+                chatsList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Нет чатов<br><span style="font-size: 11px;">Нажмите + для поиска</span></div>';
                 return;
             }
             
@@ -1536,7 +1519,7 @@
                     <div class="chat-avatar-small">${avatarText}</div>
                     <div class="chat-info-small">
                         <div class="chat-name">${displayName} ${chat.type === 'group' ? '<span style="background:#9C27B0; padding:2px 6px; border-radius:10px; font-size:10px;">Группа</span>' : (isContact ? '' : '<span style="background:var(--danger); padding:2px 6px; border-radius:10px; font-size:10px;">Не в контактах</span>')}</div>
-                        <div class="chat-last-message">${chat.type === 'group' ? '👥 Групповой чат' : (chat.globalId?.substring(0, 12) || '...')}</div>
+                        <div class="chat-last-message">${chat.type === 'group' ? 'Групповой чат' : (chat.globalId?.substring(0, 12) || '...')}</div>
                     </div>
                     <button class="delete-chat-icon" onclick="event.stopPropagation(); deleteChat('${uid}', '${chat.type}')">🗑</button>
                 `;
@@ -1573,7 +1556,7 @@
             
             if (currentChatId === chatId) closeChat();
             loadChats();
-            alert('✅ Чат удалён');
+            alert('Чат удалён');
         };
 
         async function selectGroup(groupId, groupData) {
@@ -1582,7 +1565,7 @@
             currentChatId = groupId;
             currentContact = null;
             document.getElementById('chatName').innerHTML = `${groupData.name} <span style="background:#9C27B0; padding:2px 6px; border-radius:10px; font-size:10px;">Группа</span>`;
-            document.getElementById('chatStatus').innerHTML = `👥 ${groupData.participants?.length || 0} участников | 🔒 21 слой`;
+            document.getElementById('chatStatus').innerHTML = `👥 ${groupData.participants?.length || 0} участников | 21 слой шифрования`;
             document.getElementById('chatAvatar').innerHTML = groupData.avatar || '👥';
             document.getElementById('chatInputArea').style.display = 'flex';
             document.getElementById('addContactBtn').style.display = 'none';
@@ -1607,11 +1590,11 @@
                         if (userDoc.exists()) { senderName = userDoc.data().nickname || 'Пользователь'; }
                     }
                     if (msg.encrypted) {
-                        try { decryptedText = await multiLayerDecrypt(msg.text); } catch(e) { decryptedText = '🔒 Зашифрованное сообщение'; }
+                        try { decryptedText = await multiLayerDecrypt(msg.text); } catch(e) { decryptedText = 'Зашифрованное сообщение'; }
                     }
                     const messageDiv = document.createElement('div');
                     messageDiv.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
-                    messageDiv.innerHTML = `${!isSent ? `<div style="font-size: 10px; color: var(--accent); margin-bottom: 4px;">${senderName}</div>` : ''}<div>${escapeHtml(decryptedText)}</div><div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div><div class="message-self-destruct">💣 Самоуничтожится через 5 секунд</div>`;
+                    messageDiv.innerHTML = `${!isSent ? `<div style="font-size: 10px; color: var(--accent); margin-bottom: 4px;">${senderName}</div>` : ''}<div>${escapeHtml(decryptedText)}</div><div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div><div class="message-self-destruct">Самоуничтожится через 5 секунд</div>`;
                     messagesArea.appendChild(messageDiv);
                     if (msg.messageId && !destructTimeouts[msg.messageId] && !isSent) {
                         destructTimeouts[msg.messageId] = setTimeout(async () => {
@@ -1643,7 +1626,7 @@
             const isContact = (userData.contacts || []).some(c => c.uid === currentContact.uid);
             const isOnline = false;
             document.getElementById('chatName').innerHTML = currentContact.nickname || currentContact.globalId?.substring(0, 8);
-            document.getElementById('chatStatus').innerHTML = `<span class="online-status ${isOnline ? 'online' : 'offline'}"></span> ${isOnline ? 'онлайн' : 'офлайн'} | 🔒 21 слой шифрования`;
+            document.getElementById('chatStatus').innerHTML = `<span class="online-status ${isOnline ? 'online' : 'offline'}"></span> ${isOnline ? 'онлайн' : 'офлайн'} | 21 слой шифрования`;
             document.getElementById('chatAvatar').innerHTML = currentContact.nickname?.charAt(0).toUpperCase() || '🧊';
             document.getElementById('chatInputArea').style.display = 'flex';
             if (!isContact) { document.getElementById('addContactBtn').style.display = 'block'; }
@@ -1667,11 +1650,11 @@
                     const isSent = msg.from === currentUser.uid;
                     let decryptedText = msg.text;
                     if (msg.encrypted) {
-                        try { decryptedText = await multiLayerDecrypt(msg.text); } catch(e) { decryptedText = '🔒 Зашифрованное сообщение'; }
+                        try { decryptedText = await multiLayerDecrypt(msg.text); } catch(e) { decryptedText = 'Зашифрованное сообщение'; }
                     }
                     const messageDiv = document.createElement('div');
                     messageDiv.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
-                    messageDiv.innerHTML = `<div>${escapeHtml(decryptedText)}</div><div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div><div class="message-self-destruct">💣 Самоуничтожится через 5 секунд</div>`;
+                    messageDiv.innerHTML = `<div>${escapeHtml(decryptedText)}</div><div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div><div class="message-self-destruct">Самоуничтожится через 5 секунд</div>`;
                     messagesArea.appendChild(messageDiv);
                     if (msg.messageId && !destructTimeouts[msg.messageId] && !isSent) {
                         destructTimeouts[msg.messageId] = setTimeout(async () => {
