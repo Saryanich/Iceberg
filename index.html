@@ -645,10 +645,43 @@
             margin-top: 4px;
         }
 
-        .message-self-destruct {
-            font-size: 9px;
-            color: var(--warning);
-            margin-top: 2px;
+        .message-image {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 12px;
+            margin: 5px 0;
+            cursor: pointer;
+        }
+
+        .link-preview {
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(0,0,0,0.05);
+            border-radius: 12px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .link-preview img {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+
+        .link-preview-content {
+            flex: 1;
+        }
+
+        .link-preview-title {
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        .link-preview-url {
+            font-size: 10px;
+            color: var(--text-muted);
         }
 
         .chat-input-area {
@@ -657,6 +690,13 @@
             display: flex;
             gap: 10px;
             background: var(--bg-secondary);
+            flex-wrap: wrap;
+        }
+
+        .chat-input-wrapper {
+            flex: 1;
+            display: flex;
+            gap: 8px;
         }
 
         .chat-input {
@@ -667,6 +707,17 @@
             font-size: 15px;
             border-radius: 24px;
             color: var(--text-primary);
+        }
+
+        .attach-btn {
+            background: var(--bg-surface);
+            border: none;
+            width: 44px;
+            height: 44px;
+            border-radius: 22px;
+            font-size: 20px;
+            cursor: pointer;
+            color: var(--text-secondary);
         }
 
         .send-btn {
@@ -686,26 +737,6 @@
         .footer a {
             color: var(--accent);
             text-decoration: none;
-        }
-
-        .destruct-notice {
-            position: fixed;
-            bottom: 70px;
-            right: 10px;
-            background: rgba(255, 152, 0, 0.9);
-            color: white;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 10px;
-            font-weight: bold;
-            z-index: 200;
-            animation: fadeOut 5s forwards;
-        }
-
-        @keyframes fadeOut {
-            0% { opacity: 1; }
-            70% { opacity: 1; }
-            100% { opacity: 0; visibility: hidden; }
         }
 
         .modal {
@@ -832,9 +863,59 @@
             margin-left: 8px;
         }
 
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .setting-row:last-child {
+            border-bottom: none;
+        }
+
+        .setting-label {
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .toggle-switch {
+            width: 44px;
+            height: 24px;
+            background: var(--border);
+            border-radius: 12px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .toggle-switch.active {
+            background: var(--accent);
+        }
+
+        .toggle-switch::after {
+            content: "";
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 10px;
+            top: 2px;
+            left: 2px;
+            transition: all 0.3s;
+        }
+
+        .toggle-switch.active::after {
+            left: 22px;
+        }
+
         @media (max-width: 480px) {
             .modal-content {
                 width: 95%;
+            }
+            .chat-input-wrapper {
+                flex-wrap: wrap;
             }
         }
     </style>
@@ -918,8 +999,12 @@
                 </div>
                 <div class="messages-area" id="messagesArea"></div>
                 <div class="chat-input-area" id="chatInputArea" style="display: none;">
-                    <input type="text" class="chat-input" id="messageInput" placeholder="Введите сообщение..." onkeypress="if(event.key==='Enter') sendMessage()">
-                    <button class="btn btn-primary send-btn" onclick="sendMessage()">Отправить</button>
+                    <div class="chat-input-wrapper">
+                        <input type="text" class="chat-input" id="messageInput" placeholder="Введите сообщение..." onkeypress="if(event.key==='Enter') sendMessage()">
+                        <button class="attach-btn" id="attachPhotoBtn" title="Прикрепить фото">📷</button>
+                        <button class="btn btn-primary send-btn" onclick="sendMessage()">Отправить</button>
+                    </div>
+                    <input type="file" id="photoInput" accept="image/jpeg,image/png,image/gif,image/webp" style="display: none;">
                 </div>
             </div>
         </div>
@@ -980,6 +1065,13 @@
                         <div class="theme-preview-blue"></div>
                     </div>
                     <span id="theme-blue-check" class="theme-check" style="display: none;">✓</span>
+                </div>
+            </div>
+            <div class="settings-card">
+                <div class="settings-title">Конфиденциальность</div>
+                <div class="setting-row">
+                    <span class="setting-label">Автоудаление сообщений</span>
+                    <div id="autoDeleteToggle" class="toggle-switch" onclick="toggleAutoDelete()"></div>
                 </div>
             </div>
             <button class="btn btn-secondary" onclick="closeSettings()" style="margin-top: 16px;">Закрыть</button>
@@ -1058,10 +1150,9 @@
         let currentGroupId = null;
         let currentChatId = null;
         let messagesUnsubscribe = null;
-        let destructTimeouts = {};
         let html5QrCode = null;
+        let autoDeleteEnabled = localStorage.getItem('autoDeleteEnabled') === 'true';
 
-        const SELF_DESTRUCT_DELAY = 5000;
         const ENCRYPTION_LAYERS = 21;
 
         // Функции темы
@@ -1089,13 +1180,223 @@
 
         window.showSettings = () => {
             document.getElementById('settingsModal').style.display = 'flex';
+            updateToggleUI();
         };
 
         window.closeSettings = () => {
             document.getElementById('settingsModal').style.display = 'none';
         };
 
+        function updateToggleUI() {
+            const toggle = document.getElementById('autoDeleteToggle');
+            if (autoDeleteEnabled) {
+                toggle.classList.add('active');
+            } else {
+                toggle.classList.remove('active');
+            }
+        }
+
+        window.toggleAutoDelete = () => {
+            autoDeleteEnabled = !autoDeleteEnabled;
+            localStorage.setItem('autoDeleteEnabled', autoDeleteEnabled);
+            updateToggleUI();
+        };
+
         loadTheme();
+        updateToggleUI();
+
+        // Отправка фото
+        document.getElementById('attachPhotoBtn').addEventListener('click', () => {
+            document.getElementById('photoInput').click();
+        });
+
+        document.getElementById('photoInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                const imageData = event.target.result;
+                await sendPhoto(imageData);
+            };
+            reader.readAsDataURL(file);
+            document.getElementById('photoInput').value = '';
+        });
+
+        async function sendPhoto(imageData) {
+            if (!currentContact && !currentGroupId) return;
+            
+            let chatId;
+            if (currentChatType === 'group' && currentGroupId) {
+                chatId = currentGroupId;
+            } else if (currentContact) {
+                chatId = [currentUser.uid, currentContact.uid].sort().join('_');
+            } else {
+                return;
+            }
+            
+            const messageId = Date.now().toString() + Math.random().toString(36);
+            const messageData = {
+                from: currentUser.uid,
+                text: imageData,
+                isImage: true,
+                encrypted: false,
+                timestamp: new Date(),
+                messageId: messageId
+            };
+            
+            if (currentChatType === 'group') {
+                messageData.fromNickname = currentUserData.nickname || 'Пользователь';
+            } else {
+                messageData.to = currentContact.uid;
+            }
+            
+            await addDoc(collection(db, "chats", chatId, "messages"), messageData);
+            
+            const chatRef = doc(db, "chats", chatId);
+            await updateDoc(chatRef, { lastMessageTime: new Date() });
+        }
+
+        // Предпросмотр ссылок
+        async function fetchLinkPreview(url) {
+            try {
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                const response = await fetch(proxyUrl);
+                const data = await response.json();
+                const html = data.contents;
+                
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                const title = doc.querySelector('title')?.innerText || url;
+                let description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || '';
+                let image = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || '';
+                
+                return { title, description, image, url };
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function extractUrls(text) {
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            return text.match(urlRegex) || [];
+        }
+
+        // Шифрование
+        function base64Encrypt(text) { return btoa(unescape(encodeURIComponent(text))); }
+        function base64Decrypt(text) { try { return decodeURIComponent(escape(atob(text))); } catch(e) { return text; } }
+        function reverseEncrypt(text) { return text.split('').reverse().join(''); }
+        function reverseDecrypt(text) { return text.split('').reverse().join(''); }
+        function caesarEncrypt(text, shift = 3) { let result = ''; for (let i = 0; i < text.length; i++) { result += String.fromCharCode(text.charCodeAt(i) + shift); } return result; }
+        function caesarDecrypt(text, shift = 3) { let result = ''; for (let i = 0; i < text.length; i++) { result += String.fromCharCode(text.charCodeAt(i) - shift); } return result; }
+        function xorEncrypt(text, key = 42) { let result = ''; for (let i = 0; i < text.length; i++) { result += String.fromCharCode(text.charCodeAt(i) ^ key); } return result; }
+        function xorDecrypt(text, key = 42) { return xorEncrypt(text, key); }
+        
+        async function multiLayerEncrypt(text) {
+            let encrypted = text;
+            for (let i = 0; i < ENCRYPTION_LAYERS; i++) {
+                let method = i % 4;
+                if (method === 0) encrypted = base64Encrypt(encrypted);
+                else if (method === 1) encrypted = reverseEncrypt(encrypted);
+                else if (method === 2) encrypted = caesarEncrypt(encrypted, (i % 5) + 1);
+                else encrypted = xorEncrypt(encrypted, (i % 10) + 1);
+            }
+            return encrypted;
+        }
+        
+        async function multiLayerDecrypt(encrypted) {
+            let decrypted = encrypted;
+            for (let i = ENCRYPTION_LAYERS - 1; i >= 0; i--) {
+                let method = i % 4;
+                if (method === 0) decrypted = base64Decrypt(decrypted);
+                else if (method === 1) decrypted = reverseDecrypt(decrypted);
+                else if (method === 2) decrypted = caesarDecrypt(decrypted, (i % 5) + 1);
+                else decrypted = xorDecrypt(decrypted, (i % 10) + 1);
+            }
+            return decrypted;
+        }
+
+        function showMessageUI(text, isError = true) {
+            let msgDiv = document.getElementById('authMessage');
+            if (msgDiv) {
+                msgDiv.textContent = text;
+                msgDiv.className = `message ${isError ? 'message-error' : 'message-success'}`;
+                msgDiv.style.display = 'block';
+                setTimeout(() => { if(msgDiv) msgDiv.style.display = 'none'; }, 3000);
+            }
+        }
+
+        async function updatePresence() {
+            if (!currentUser) return;
+            const userRef = doc(db, "users", currentUser.uid);
+            await updateDoc(userRef, { lastSeen: new Date(), online: true }).catch(() => {});
+        }
+
+        window.addEventListener('beforeunload', async () => {
+            if (currentUser) {
+                const userRef = doc(db, "users", currentUser.uid);
+                await updateDoc(userRef, { online: false, lastSeen: new Date() }).catch(() => {});
+            }
+        });
+
+        setInterval(updatePresence, 30000);
+
+        window.closeChat = function() {
+            document.getElementById('contactsScreen').classList.remove('hide-on-mobile');
+            document.getElementById('chatScreen').classList.remove('show-on-mobile');
+            if (messagesUnsubscribe) messagesUnsubscribe();
+            currentContact = null;
+            currentChatType = 'private';
+            currentGroupId = null;
+            currentChatId = null;
+            document.getElementById('chatInputArea').style.display = 'none';
+            document.getElementById('chatName').innerText = 'Выберите собеседника';
+            document.getElementById('addContactBtn').style.display = 'none';
+            document.getElementById('deleteChatBtn').style.display = 'none';
+        };
+
+        window.addToContacts = async () => {
+            if (!currentContact) return;
+            try {
+                const currentUserRef = doc(db, "users", currentUser.uid);
+                const currentUserSnap = await getDoc(currentUserRef);
+                const currentContacts = currentUserSnap.data().contacts || [];
+                if (currentContacts.some(c => c.uid === currentContact.uid)) {
+                    alert('Этот пользователь уже в контактах');
+                    document.getElementById('addContactBtn').style.display = 'none';
+                    return;
+                }
+                let contactData = currentContact;
+                if (!contactData.globalId || !contactData.nickname) {
+                    const contactDoc = await getDoc(doc(db, "users", currentContact.uid));
+                    if (contactDoc.exists()) {
+                        const data = contactDoc.data();
+                        contactData = {
+                            uid: currentContact.uid,
+                            globalId: data.globalId,
+                            nickname: data.nickname,
+                            email: data.email
+                        };
+                        currentContact = contactData;
+                    }
+                }
+                await updateDoc(currentUserRef, {
+                    contacts: arrayUnion({
+                        uid: contactData.uid,
+                        globalId: contactData.globalId,
+                        nickname: contactData.nickname,
+                        email: contactData.email,
+                        addedAt: new Date()
+                    })
+                });
+                document.getElementById('addContactBtn').style.display = 'none';
+                alert(`✅ ${contactData.nickname || contactData.globalId} добавлен в контакты`);
+                loadChats();
+            } catch (error) {
+                alert('Ошибка при добавлении в контакты');
+            }
+        };
 
         window.deleteCurrentChat = async () => {
             if (!currentChatId) return;
@@ -1296,128 +1597,6 @@
             return result.join('');
         }
 
-        function base64Encrypt(text) { return btoa(unescape(encodeURIComponent(text))); }
-        function base64Decrypt(text) { try { return decodeURIComponent(escape(atob(text))); } catch(e) { return text; } }
-        function reverseEncrypt(text) { return text.split('').reverse().join(''); }
-        function reverseDecrypt(text) { return text.split('').reverse().join(''); }
-        function caesarEncrypt(text, shift = 3) { let result = ''; for (let i = 0; i < text.length; i++) { result += String.fromCharCode(text.charCodeAt(i) + shift); } return result; }
-        function caesarDecrypt(text, shift = 3) { let result = ''; for (let i = 0; i < text.length; i++) { result += String.fromCharCode(text.charCodeAt(i) - shift); } return result; }
-        function xorEncrypt(text, key = 42) { let result = ''; for (let i = 0; i < text.length; i++) { result += String.fromCharCode(text.charCodeAt(i) ^ key); } return result; }
-        function xorDecrypt(text, key = 42) { return xorEncrypt(text, key); }
-        
-        async function multiLayerEncrypt(text) {
-            let encrypted = text;
-            for (let i = 0; i < ENCRYPTION_LAYERS; i++) {
-                let method = i % 4;
-                if (method === 0) encrypted = base64Encrypt(encrypted);
-                else if (method === 1) encrypted = reverseEncrypt(encrypted);
-                else if (method === 2) encrypted = caesarEncrypt(encrypted, (i % 5) + 1);
-                else encrypted = xorEncrypt(encrypted, (i % 10) + 1);
-            }
-            return encrypted;
-        }
-        
-        async function multiLayerDecrypt(encrypted) {
-            let decrypted = encrypted;
-            for (let i = ENCRYPTION_LAYERS - 1; i >= 0; i--) {
-                let method = i % 4;
-                if (method === 0) decrypted = base64Decrypt(decrypted);
-                else if (method === 1) decrypted = reverseDecrypt(decrypted);
-                else if (method === 2) decrypted = caesarDecrypt(decrypted, (i % 5) + 1);
-                else decrypted = xorDecrypt(decrypted, (i % 10) + 1);
-            }
-            return decrypted;
-        }
-
-        function showDestructNotice() {
-            let notice = document.createElement('div');
-            notice.className = 'destruct-notice';
-            notice.textContent = 'Сообщение самоуничтожится через 5 секунд!';
-            document.body.appendChild(notice);
-            setTimeout(() => notice.remove(), SELF_DESTRUCT_DELAY);
-        }
-
-        function showMessageUI(text, isError = true) {
-            let msgDiv = document.getElementById('authMessage');
-            if (msgDiv) {
-                msgDiv.textContent = text;
-                msgDiv.className = `message ${isError ? 'message-error' : 'message-success'}`;
-                msgDiv.style.display = 'block';
-                setTimeout(() => { if(msgDiv) msgDiv.style.display = 'none'; }, 3000);
-            }
-        }
-
-        async function updatePresence() {
-            if (!currentUser) return;
-            const userRef = doc(db, "users", currentUser.uid);
-            await updateDoc(userRef, { lastSeen: new Date(), online: true }).catch(() => {});
-        }
-
-        window.addEventListener('beforeunload', async () => {
-            if (currentUser) {
-                const userRef = doc(db, "users", currentUser.uid);
-                await updateDoc(userRef, { online: false, lastSeen: new Date() }).catch(() => {});
-            }
-        });
-
-        setInterval(updatePresence, 30000);
-
-        window.closeChat = function() {
-            document.getElementById('contactsScreen').classList.remove('hide-on-mobile');
-            document.getElementById('chatScreen').classList.remove('show-on-mobile');
-            if (messagesUnsubscribe) messagesUnsubscribe();
-            currentContact = null;
-            currentChatType = 'private';
-            currentGroupId = null;
-            currentChatId = null;
-            document.getElementById('chatInputArea').style.display = 'none';
-            document.getElementById('chatName').innerText = 'Выберите собеседника';
-            document.getElementById('addContactBtn').style.display = 'none';
-            document.getElementById('deleteChatBtn').style.display = 'none';
-        };
-
-        window.addToContacts = async () => {
-            if (!currentContact) return;
-            try {
-                const currentUserRef = doc(db, "users", currentUser.uid);
-                const currentUserSnap = await getDoc(currentUserRef);
-                const currentContacts = currentUserSnap.data().contacts || [];
-                if (currentContacts.some(c => c.uid === currentContact.uid)) {
-                    alert('Этот пользователь уже в контактах');
-                    document.getElementById('addContactBtn').style.display = 'none';
-                    return;
-                }
-                let contactData = currentContact;
-                if (!contactData.globalId || !contactData.nickname) {
-                    const contactDoc = await getDoc(doc(db, "users", currentContact.uid));
-                    if (contactDoc.exists()) {
-                        const data = contactDoc.data();
-                        contactData = {
-                            uid: currentContact.uid,
-                            globalId: data.globalId,
-                            nickname: data.nickname,
-                            email: data.email
-                        };
-                        currentContact = contactData;
-                    }
-                }
-                await updateDoc(currentUserRef, {
-                    contacts: arrayUnion({
-                        uid: contactData.uid,
-                        globalId: contactData.globalId,
-                        nickname: contactData.nickname,
-                        email: contactData.email,
-                        addedAt: new Date()
-                    })
-                });
-                document.getElementById('addContactBtn').style.display = 'none';
-                alert(`✅ ${contactData.nickname || contactData.globalId} добавлен в контакты`);
-                loadChats();
-            } catch (error) {
-                alert('Ошибка при добавлении в контакты');
-            }
-        };
-
         window.register = async () => {
             const email = document.getElementById('regEmail').value;
             const password = document.getElementById('regPassword').value;
@@ -1589,19 +1768,43 @@
                         const userDoc = await getDoc(doc(db, "users", msg.from));
                         if (userDoc.exists()) { senderName = userDoc.data().nickname || 'Пользователь'; }
                     }
-                    if (msg.encrypted) {
-                        try { decryptedText = await multiLayerDecrypt(msg.text); } catch(e) { decryptedText = 'Зашифрованное сообщение'; }
+                    
+                    let content = '';
+                    if (msg.isImage) {
+                        content = `<img src="${msg.text}" class="message-image" onclick="window.open('${msg.text}', '_blank')">`;
+                    } else {
+                        if (msg.encrypted) {
+                            try { decryptedText = await multiLayerDecrypt(msg.text); } catch(e) { decryptedText = 'Зашифрованное сообщение'; }
+                        }
+                        content = `<div>${escapeHtml(decryptedText)}</div>`;
+                        
+                        const urls = extractUrls(decryptedText);
+                        if (urls.length > 0) {
+                            const preview = await fetchLinkPreview(urls[0]);
+                            if (preview) {
+                                content += `
+                                    <div class="link-preview" onclick="window.open('${preview.url}', '_blank')">
+                                        ${preview.image ? `<img src="${preview.image}" onerror="this.style.display='none'">` : ''}
+                                        <div class="link-preview-content">
+                                            <div class="link-preview-title">${escapeHtml(preview.title)}</div>
+                                            <div class="link-preview-url">${escapeHtml(preview.url)}</div>
+                                            ${preview.description ? `<div style="font-size: 11px;">${escapeHtml(preview.description.substring(0, 80))}${preview.description.length > 80 ? '...' : ''}</div>` : ''}
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        }
                     }
+                    
                     const messageDiv = document.createElement('div');
                     messageDiv.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
-                    messageDiv.innerHTML = `${!isSent ? `<div style="font-size: 10px; color: var(--accent); margin-bottom: 4px;">${senderName}</div>` : ''}<div>${escapeHtml(decryptedText)}</div><div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div><div class="message-self-destruct">Самоуничтожится через 5 секунд</div>`;
+                    messageDiv.innerHTML = `${!isSent ? `<div style="font-size: 10px; color: var(--accent); margin-bottom: 4px;">${senderName}</div>` : ''}${content}<div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div>`;
                     messagesArea.appendChild(messageDiv);
-                    if (msg.messageId && !destructTimeouts[msg.messageId] && !isSent) {
-                        destructTimeouts[msg.messageId] = setTimeout(async () => {
+                    
+                    if (autoDeleteEnabled && !isSent) {
+                        setTimeout(async () => {
                             await deleteDoc(doc(db, "chats", groupId, "messages", docSnap.id));
-                            delete destructTimeouts[msg.messageId];
-                        }, SELF_DESTRUCT_DELAY);
-                        showDestructNotice();
+                        }, 10000);
                     }
                 }
                 messagesArea.scrollTop = messagesArea.scrollHeight;
@@ -1649,19 +1852,43 @@
                     const msg = docSnap.data();
                     const isSent = msg.from === currentUser.uid;
                     let decryptedText = msg.text;
-                    if (msg.encrypted) {
-                        try { decryptedText = await multiLayerDecrypt(msg.text); } catch(e) { decryptedText = 'Зашифрованное сообщение'; }
+                    
+                    let content = '';
+                    if (msg.isImage) {
+                        content = `<img src="${msg.text}" class="message-image" onclick="window.open('${msg.text}', '_blank')">`;
+                    } else {
+                        if (msg.encrypted) {
+                            try { decryptedText = await multiLayerDecrypt(msg.text); } catch(e) { decryptedText = 'Зашифрованное сообщение'; }
+                        }
+                        content = `<div>${escapeHtml(decryptedText)}</div>`;
+                        
+                        const urls = extractUrls(decryptedText);
+                        if (urls.length > 0) {
+                            const preview = await fetchLinkPreview(urls[0]);
+                            if (preview) {
+                                content += `
+                                    <div class="link-preview" onclick="window.open('${preview.url}', '_blank')">
+                                        ${preview.image ? `<img src="${preview.image}" onerror="this.style.display='none'">` : ''}
+                                        <div class="link-preview-content">
+                                            <div class="link-preview-title">${escapeHtml(preview.title)}</div>
+                                            <div class="link-preview-url">${escapeHtml(preview.url)}</div>
+                                            ${preview.description ? `<div style="font-size: 11px;">${escapeHtml(preview.description.substring(0, 80))}${preview.description.length > 80 ? '...' : ''}</div>` : ''}
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        }
                     }
+                    
                     const messageDiv = document.createElement('div');
                     messageDiv.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
-                    messageDiv.innerHTML = `<div>${escapeHtml(decryptedText)}</div><div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div><div class="message-self-destruct">Самоуничтожится через 5 секунд</div>`;
+                    messageDiv.innerHTML = `${content}<div class="message-time">${msg.timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || ''}</div>`;
                     messagesArea.appendChild(messageDiv);
-                    if (msg.messageId && !destructTimeouts[msg.messageId] && !isSent) {
-                        destructTimeouts[msg.messageId] = setTimeout(async () => {
+                    
+                    if (autoDeleteEnabled && !isSent) {
+                        setTimeout(async () => {
                             await deleteDoc(doc(db, "chats", currentChatId, "messages", docSnap.id));
-                            delete destructTimeouts[msg.messageId];
-                        }, SELF_DESTRUCT_DELAY);
-                        showDestructNotice();
+                        }, 10000);
                     }
                 }
                 messagesArea.scrollTop = messagesArea.scrollHeight;
