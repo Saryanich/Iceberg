@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>Айсберг - Защищённый мессенджер | 20 слоёв шифрования</title>
     
     <link rel="icon" type="image/jpeg" href="https://i.ibb.co/8JY0bXs/IMG-0335.jpg">
@@ -173,6 +173,7 @@
         .btn-secondary { background: transparent; color: var(--accent); border: 1px solid var(--border); }
         .btn-danger { background: var(--danger); color: white; }
         .btn-success { background: var(--success); color: white; }
+        .btn-warning { background: var(--warning); color: white; }
 
         .divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
         .divider-line { flex: 1; height: 1px; background: var(--border); }
@@ -251,29 +252,65 @@
             position: relative;
         }
 
+        /* ГОРИЗОНТАЛЬНАЯ ОРИЕНТАЦИЯ - чат виден сбоку */
+        @media (orientation: landscape) {
+            .sidebar {
+                width: 320px;
+                position: relative;
+                transform: translateX(0) !important;
+                flex-shrink: 0;
+            }
+            .chat-screen {
+                flex: 1;
+                position: relative;
+                display: flex !important;
+                transform: none !important;
+            }
+            .back-btn {
+                display: none !important;
+            }
+        }
+
+        /* ВЕРТИКАЛЬНАЯ ОРИЕНТАЦИЯ - только контакты */
+        @media (orientation: portrait) {
+            .sidebar {
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                transform: translateX(0);
+                transition: transform 0.3s ease;
+                z-index: 10;
+                background: var(--bg-secondary);
+            }
+            .sidebar.hide-on-mobile {
+                transform: translateX(-100%);
+            }
+            .chat-screen {
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                z-index: 20;
+                transform: translateX(100%);
+                transition: transform 0.3s ease;
+                background: var(--bg-primary);
+                display: flex;
+                flex-direction: column;
+            }
+            .chat-screen.show-on-mobile {
+                transform: translateX(0);
+            }
+            .back-btn {
+                display: block !important;
+            }
+        }
+
         .sidebar {
-            width: 380px;
-            height: 100vh;
-            background: var(--bg-secondary);
-            border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
+            border-right: 1px solid var(--border);
+            background: var(--bg-secondary);
             backdrop-filter: blur(4px);
             z-index: 10;
-        }
-
-        @media (max-width: 768px) {
-            .sidebar { position: absolute; width: 100%; transform: translateX(0); transition: transform 0.3s ease; }
-            .sidebar.hide-on-mobile { transform: translateX(-100%); }
-            .chat-screen { position: absolute; width: 100%; z-index: 20; transform: translateX(100%); transition: transform 0.3s ease; }
-            .chat-screen.show-on-mobile { transform: translateX(0); }
-            .back-btn { display: block !important; }
-        }
-
-        @media (min-width: 769px) {
-            .sidebar { position: relative; transform: none !important; }
-            .chat-screen { flex: 1; position: relative; transform: none !important; display: flex !important; }
-            .back-btn { display: none !important; }
         }
 
         .chat-screen {
@@ -321,6 +358,7 @@
             font-size: 24px;
             cursor: pointer;
             padding: 8px;
+            display: none;
         }
 
         .chat-avatar {
@@ -343,6 +381,7 @@
         .add-contact-btn { background: var(--success); color: white; border: none; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; }
         .delete-chat-btn { background: var(--danger); color: white; border: none; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; }
         .group-info-btn { background: var(--accent); color: white; border: none; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; }
+        .clear-chat-btn { background: var(--warning); color: white; border: none; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; }
 
         .user-profile {
             padding: 16px;
@@ -576,6 +615,18 @@
         }
         .contact-checkbox:hover { background: var(--hover); }
         .contact-checkbox input { width: 20px; height: 20px; cursor: pointer; }
+
+        .button-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        .button-group button {
+            flex: 1;
+            padding: 10px;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body class="theme-dark">
@@ -616,6 +667,10 @@
                     <div class="form-group">
                         <label class="form-label">Пароль (минимум 6 символов)</label>
                         <input type="password" id="regPassword" placeholder="Введите пароль">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Подтверждение пароля</label>
+                        <input type="password" id="regConfirmPassword" placeholder="Повторите пароль">
                     </div>
                     <button class="btn btn-primary" onclick="register()">Зарегистрироваться</button>
                     <div class="switch-link" onclick="showLogin()">Уже есть аккаунт? Войти</div>
@@ -727,6 +782,7 @@
                         <p id="chatStatus">🔒 20 слоёв шифрования</p>
                     </div>
                     <button id="groupInfoBtn" class="group-info-btn" style="display: none;" onclick="showGroupInfo()">ℹ️ Инфо</button>
+                    <button id="clearChatBtn" class="clear-chat-btn" style="display: none;" onclick="clearChat()">🗑 Очистить</button>
                     <button id="addContactBtn" class="add-contact-btn" style="display: none;" onclick="addToContacts()">+ Добавить</button>
                     <button id="deleteChatBtn" class="delete-chat-btn" style="display: none;" onclick="deleteCurrentChat()">Удалить</button>
                 </div>
@@ -819,8 +875,14 @@
                 <span class="close-modal" onclick="closeGroupInfo()">&times;</span>
             </div>
             <div id="groupInfoContent"></div>
-            <button class="btn btn-primary" onclick="showAddMembersModal()" style="margin-top: 15px;">➕ Добавить участников</button>
-            <button class="btn btn-danger" onclick="leaveGroup()" style="margin-top: 10px;">🚪 Выйти из группы</button>
+            <div class="button-group">
+                <button class="btn btn-primary" onclick="showAddMembersModal()">➕ Добавить участников</button>
+                <button class="btn btn-warning" onclick="clearGroupChat()">🗑 Очистить чат</button>
+            </div>
+            <div class="button-group">
+                <button class="btn btn-danger" onclick="leaveGroup()">🚪 Выйти из группы</button>
+                <button class="btn btn-secondary" onclick="deleteGroupFromList()">❌ Удалить из списка</button>
+            </div>
         </div>
     </div>
 
@@ -858,7 +920,7 @@
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, orderBy, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, orderBy, addDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth();
@@ -1055,8 +1117,10 @@
         window.register = async () => {
             const email = document.getElementById('regEmail').value;
             const password = document.getElementById('regPassword').value;
-            if (!email || !password) return showMessage('authMessage', 'Заполните все поля', true);
+            const confirm = document.getElementById('regConfirmPassword').value;
+            if (!email || !password || !confirm) return showMessage('authMessage', 'Заполните все поля', true);
             if (password.length < 6) return showMessage('authMessage', 'Пароль минимум 6 символов', true);
+            if (password !== confirm) return showMessage('authMessage', 'Пароли не совпадают', true);
             await getDeviceInfo();
             try {
                 const userCred = await createUserWithEmailAndPassword(auth, email, password);
@@ -1149,10 +1213,14 @@
             document.getElementById('chatStatus').innerHTML = chat.isGroup ? `👥 Групповой чат | 🔒 20 слоёв` : `🔒 20 слоёв шифрования`;
             document.getElementById('chatInputArea').style.display = 'flex';
             document.getElementById('groupInfoBtn').style.display = chat.isGroup ? 'block' : 'none';
+            document.getElementById('clearChatBtn').style.display = 'block';
             document.getElementById('addContactBtn').style.display = 'none';
             document.getElementById('deleteChatBtn').style.display = 'block';
             
-            if (window.innerWidth <= 768) { document.getElementById('sidebar').classList.add('hide-on-mobile'); document.getElementById('chatScreen').classList.add('show-on-mobile'); }
+            if (window.innerWidth <= 768 && window.matchMedia('(orientation: portrait)').matches) { 
+                document.getElementById('sidebar').classList.add('hide-on-mobile'); 
+                document.getElementById('chatScreen').classList.add('show-on-mobile'); 
+            }
             if (!chat.isGroup) await markChatRead(chat);
             loadMessages();
         }
@@ -1166,9 +1234,13 @@
             document.getElementById('chatStatus').innerHTML = `👥 Групповой чат | ${group.memberCount || 0} участников | 🔒 20 слоёв`;
             document.getElementById('chatInputArea').style.display = 'flex';
             document.getElementById('groupInfoBtn').style.display = 'block';
+            document.getElementById('clearChatBtn').style.display = 'block';
             document.getElementById('addContactBtn').style.display = 'none';
             document.getElementById('deleteChatBtn').style.display = 'block';
-            if (window.innerWidth <= 768) { document.getElementById('sidebar').classList.add('hide-on-mobile'); document.getElementById('chatScreen').classList.add('show-on-mobile'); }
+            if (window.innerWidth <= 768 && window.matchMedia('(orientation: portrait)').matches) { 
+                document.getElementById('sidebar').classList.add('hide-on-mobile'); 
+                document.getElementById('chatScreen').classList.add('show-on-mobile'); 
+            }
             loadMessages();
         }
 
@@ -1185,9 +1257,13 @@
             document.getElementById('chatStatus').innerHTML = `🔒 20 слоёв шифрования`;
             document.getElementById('chatInputArea').style.display = 'flex';
             document.getElementById('groupInfoBtn').style.display = 'none';
+            document.getElementById('clearChatBtn').style.display = 'block';
             document.getElementById('addContactBtn').style.display = 'none';
             document.getElementById('deleteChatBtn').style.display = 'block';
-            if (window.innerWidth <= 768) { document.getElementById('sidebar').classList.add('hide-on-mobile'); document.getElementById('chatScreen').classList.add('show-on-mobile'); }
+            if (window.innerWidth <= 768 && window.matchMedia('(orientation: portrait)').matches) { 
+                document.getElementById('sidebar').classList.add('hide-on-mobile'); 
+                document.getElementById('chatScreen').classList.add('show-on-mobile'); 
+            }
             loadMessages();
             loadChats();
         }
@@ -1322,19 +1398,158 @@
             loadGroups();
         };
 
+        // ==================== ИНФОРМАЦИЯ О ГРУППЕ (ИСПРАВЛЕНО) ====================
         window.showGroupInfo = async () => {
-            if (!currentGroup) return;
-            const groupDoc = await getDoc(doc(db, "groups", currentGroup.id));
-            const groupData = groupDoc.data();
-            document.getElementById('groupInfoTitle').innerText = groupData.name;
-            let membersHtml = '<div class="member-list">';
-            groupData.members.forEach(member => { membersHtml += `<div class="member-item"><span class="member-name">${member.nickname || member.globalId} ${member.role === 'admin' ? '👑' : ''}</span>${member.uid === currentUser.uid ? '<span style="font-size:11px; color:var(--accent);">Вы</span>' : ''}</div>`; });
-            membersHtml += '</div>';
-            document.getElementById('groupInfoContent').innerHTML = `<div style="text-align:center; margin-bottom:15px;"><div style="font-size:48px;">👥</div><div style="font-weight:bold; margin-top:5px;">${escapeHtml(groupData.name)}</div><div style="font-size:12px; color:var(--text-muted);">${groupData.memberCount} участников</div><div style="font-size:10px; color:var(--accent); margin-top:5px;">🔒 20 слоёв шифрования</div></div><div class="section-title">Участники</div>${membersHtml}`;
-            document.getElementById('groupInfoModal').style.display = 'flex';
+            if (!currentGroup) {
+                alert('Группа не выбрана');
+                return;
+            }
+            
+            try {
+                const groupRef = doc(db, "groups", currentGroup.id);
+                const groupDoc = await getDoc(groupRef);
+                
+                if (!groupDoc.exists()) {
+                    alert('Группа не найдена в базе данных');
+                    return;
+                }
+                
+                const groupData = groupDoc.data();
+                
+                // Заголовок
+                document.getElementById('groupInfoTitle').innerText = groupData.name || 'Без названия';
+                
+                // Список участников
+                let membersHtml = '<div class="member-list" style="max-height: 300px; overflow-y: auto;">';
+                
+                if (groupData.members && groupData.members.length > 0) {
+                    groupData.members.forEach(member => {
+                        const isCurrentUser = member.uid === currentUser.uid;
+                        membersHtml += `
+                            <div class="member-item" style="display: flex; align-items: center; gap: 12px; padding: 10px; border-bottom: 1px solid var(--border);">
+                                <div class="avatar-small" style="width: 36px; height: 36px; font-size: 16px; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; border-radius: 50%;">
+                                    ${(member.nickname || 'U').charAt(0).toUpperCase()}
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 500; color: var(--text-primary);">${escapeHtml(member.nickname || member.globalId || 'Пользователь')}</div>
+                                    <div style="font-size: 11px; color: var(--text-muted);">${member.role === 'admin' ? '👑 Администратор' : '👤 Участник'}</div>
+                                    ${member.globalId ? `<div style="font-size: 10px; color: var(--text-muted);">${member.globalId.substring(0, 12)}...</div>` : ''}
+                                </div>
+                                ${isCurrentUser ? '<span style="font-size: 11px; color: var(--accent); background: rgba(100, 181, 246, 0.2); padding: 2px 8px; border-radius: 12px;">Вы</span>' : ''}
+                            </div>
+                        `;
+                    });
+                } else {
+                    membersHtml += '<div class="empty-state" style="padding: 20px;">Нет участников</div>';
+                }
+                membersHtml += '</div>';
+                
+                // Основной контент
+                const contentHtml = `
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <div style="font-size: 64px; margin-bottom: 10px;">👥</div>
+                        <div style="font-weight: bold; font-size: 20px; color: var(--text-primary); margin-bottom: 5px;">${escapeHtml(groupData.name || 'Без названия')}</div>
+                        <div style="font-size: 13px; color: var(--text-secondary);">${groupData.memberCount || groupData.members?.length || 0} участников</div>
+                        <div style="font-size: 11px; color: var(--accent); margin-top: 8px;">🔐 20 слоёв шифрования</div>
+                        <div style="font-size: 10px; color: var(--text-muted); margin-top: 5px;">Создана: ${groupData.createdAt ? new Date(groupData.createdAt.toDate()).toLocaleDateString() : 'недавно'}</div>
+                    </div>
+                    <div class="settings-title" style="margin-top: 10px;">📋 Участники</div>
+                    ${membersHtml}
+                `;
+                
+                document.getElementById('groupInfoContent').innerHTML = contentHtml;
+                document.getElementById('groupInfoModal').style.display = 'flex';
+                
+            } catch (error) {
+                console.error('Ошибка при загрузке информации о группе:', error);
+                alert('Ошибка при загрузке информации о группе: ' + error.message);
+            }
+        };
+
+        // ==================== ОЧИСТКА ЧАТА ГРУППЫ ====================
+        window.clearGroupChat = async () => {
+            if (!currentGroup) {
+                alert('Группа не выбрана');
+                return;
+            }
+            
+            if (!confirm(`Очистить всю историю сообщений в группе "${currentGroup.name || 'без названия'}"? Это действие нельзя отменить.`)) {
+                return;
+            }
+            
+            try {
+                const messagesRef = collection(db, "messages", `group_${currentGroup.id}`, "msgs");
+                const snapshot = await getDocs(messagesRef);
+                
+                if (snapshot.empty) {
+                    alert('История сообщений уже пуста');
+                    return;
+                }
+                
+                const batch = writeBatch(db);
+                snapshot.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+                await batch.commit();
+                
+                alert('✅ История сообщений в группе полностью очищена');
+                closeGroupInfo();
+                
+                // Обновляем отображение
+                if (messagesListener) {
+                    messagesListener();
+                    loadMessages();
+                }
+                
+            } catch (error) {
+                console.error('Ошибка при очистке чата группы:', error);
+                alert('Ошибка при очистке: ' + error.message);
+            }
+        };
+
+        // ==================== УДАЛЕНИЕ ГРУППЫ ИЗ СПИСКА ====================
+        window.deleteGroupFromList = async () => {
+            if (!currentGroup) {
+                alert('Группа не выбрана');
+                return;
+            }
+            
+            if (!confirm(`Удалить группу "${currentGroup.name || 'без названия'}" из вашего списка? Вы сможете снова вступить по приглашению.`)) {
+                return;
+            }
+            
+            try {
+                const groups = currentUserData?.groups || [];
+                const updatedGroups = groups.filter(g => g.id !== currentGroup.id);
+                
+                await updateDoc(doc(db, "users", currentUser.uid), { groups: updatedGroups });
+                
+                currentUserData.groups = updatedGroups;
+                
+                closeGroupInfo();
+                closeChat();
+                loadGroups();
+                
+                alert('✅ Группа удалена из вашего списка');
+                
+            } catch (error) {
+                console.error('Ошибка при удалении группы из списка:', error);
+                alert('Ошибка: ' + error.message);
+            }
         };
 
         window.closeGroupInfo = () => { document.getElementById('groupInfoModal').style.display = 'none'; };
+        
+        window.clearChat = async () => {
+            if (!currentChatId) return;
+            if (!confirm('Очистить всю историю сообщений?')) return;
+            const messagesRef = collection(db, "messages", currentChatId, "msgs");
+            const snapshot = await getDocs(messagesRef);
+            const batch = writeBatch(db);
+            snapshot.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+            alert('✅ История сообщений очищена');
+        };
 
         window.leaveGroup = async () => {
             if (!currentGroup || !confirm(`Выйти из группы "${currentGroup.name}"?`)) return;
@@ -1361,10 +1576,13 @@
         };
 
         window.closeChat = () => {
-            if (window.innerWidth <= 768) { document.getElementById('sidebar').classList.remove('hide-on-mobile'); document.getElementById('chatScreen').classList.remove('show-on-mobile'); }
+            if (window.innerWidth <= 768 && window.matchMedia('(orientation: portrait)').matches) { 
+                document.getElementById('sidebar').classList.remove('hide-on-mobile'); 
+                document.getElementById('chatScreen').classList.remove('show-on-mobile'); 
+            }
             document.getElementById('chatInputArea').style.display = 'none';
-            currentChat = null; currentGroup = null; currentChatId = null;
             if (messagesListener) messagesListener();
+            currentChat = null; currentGroup = null; currentChatId = null;
         };
 
         window.showSettings = () => { document.getElementById('settingsModal').style.display = 'flex'; };
@@ -1395,10 +1613,22 @@
         };
         window.closeScanner = () => { document.getElementById('scannerModal').style.display = 'none'; };
         window.addToContacts = async () => { if (!currentChat || currentChat.isGroup) return; if (!(currentUserData?.contacts || []).some(c => c.uid === currentChat.uid)) { await updateDoc(doc(db, "users", currentUser.uid), { contacts: arrayUnion({ uid: currentChat.uid, globalId: currentChat.globalId, nickname: currentChat.nickname, email: currentChat.email }) }); loadContacts(); alert('✅ Контакт добавлен'); } };
+        
         window.deleteCurrentChat = async () => {
             if (!currentChat && !currentGroup) return;
-            if (currentChat && !currentChat.isGroup) { if (!confirm('Удалить чат?')) return; const chats = currentUserData?.chats || []; const updatedChats = chats.filter(c => c.uid !== currentChat.uid); await updateDoc(doc(db, "users", currentUser.uid), { chats: updatedChats }); }
-            else if (currentGroup) { if (!confirm('Удалить группу из списка?')) return; const groups = currentUserData?.groups || []; const updatedGroups = groups.filter(g => g.id !== currentGroup.id); await updateDoc(doc(db, "users", currentUser.uid), { groups: updatedGroups }); }
+            if (currentChat && !currentChat.isGroup) { 
+                if (!confirm('Удалить чат?')) return; 
+                const chats = currentUserData?.chats || []; 
+                const updatedChats = chats.filter(c => c.uid !== currentChat.uid); 
+                await updateDoc(doc(db, "users", currentUser.uid), { chats: updatedChats }); 
+                alert('Чат удалён');
+            } else if (currentGroup) { 
+                if (!confirm('Удалить группу из списка?')) return; 
+                const groups = currentUserData?.groups || []; 
+                const updatedGroups = groups.filter(g => g.id !== currentGroup.id); 
+                await updateDoc(doc(db, "users", currentUser.uid), { groups: updatedGroups }); 
+                alert('Группа удалена из списка');
+            }
             closeChat();
             loadChats();
             loadGroups();
@@ -1406,6 +1636,18 @@
 
         document.getElementById('plusBtn')?.addEventListener('click', (e) => { e.stopPropagation(); const menu = document.getElementById('plusMenu'); menu.style.display = menu.style.display === 'block' ? 'none' : 'block'; });
         document.addEventListener('click', () => { document.getElementById('plusMenu').style.display = 'none'; });
+
+        window.addEventListener('resize', () => {
+            if (window.matchMedia('(orientation: landscape)').matches) {
+                document.getElementById('sidebar').classList.remove('hide-on-mobile');
+                document.getElementById('chatScreen').classList.remove('show-on-mobile');
+            } else {
+                if (!currentChat && !currentGroup) {
+                    document.getElementById('sidebar').classList.remove('hide-on-mobile');
+                    document.getElementById('chatScreen').classList.remove('show-on-mobile');
+                }
+            }
+        });
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
