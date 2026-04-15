@@ -24,11 +24,10 @@
             -webkit-tap-highlight-color: transparent;
             user-select: none;
             -webkit-user-select: none;
-            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
@@ -64,7 +63,6 @@
             --message-sent: #1E88E5;
             --message-received: #1A2A3A;
             --hover: #1A2A3A;
-            --chat-bg: #0F1A2A;
         }
         
         body.theme-light {
@@ -77,14 +75,9 @@
             --text-muted: #8E9AAB;
             --border: #D1D9E6;
             --accent: #3B82F6;
-            --accent-dark: #2563EB;
-            --success: #10B981;
-            --danger: #EF4444;
-            --warning: #F59E0B;
             --message-sent: #3B82F6;
             --message-received: #E8ECF0;
             --hover: #F0F4F9;
-            --chat-bg: #F5F7FA;
         }
         
         body.theme-rose {
@@ -97,14 +90,9 @@
             --text-muted: #C4A5B5;
             --border: #F0D0D8;
             --accent: #EC4899;
-            --accent-dark: #DB2777;
-            --success: #10B981;
-            --danger: #EF4444;
-            --warning: #F59E0B;
             --message-sent: #EC4899;
             --message-received: #FCE4EC;
             --hover: #FDF2F5;
-            --chat-bg: #FFF5F7;
         }
         
         body.theme-blue {
@@ -117,14 +105,9 @@
             --text-muted: #9BBED4;
             --border: #CCE4F0;
             --accent: #0EA5E9;
-            --accent-dark: #0284C7;
-            --success: #10B981;
-            --danger: #EF4444;
-            --warning: #F59E0B;
             --message-sent: #0EA5E9;
             --message-received: #E0F2FE;
             --hover: #F0F9FF;
-            --chat-bg: #F0F9FF;
         }
 
         body { background: var(--bg-primary); }
@@ -189,6 +172,7 @@
         .btn-primary { background: var(--accent); color: white; }
         .btn-secondary { background: transparent; color: var(--accent); border: 1px solid var(--border); }
         .btn-danger { background: var(--danger); color: white; }
+        .btn-success { background: var(--success); color: white; }
 
         .divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
         .divider-line { flex: 1; height: 1px; background: var(--border); }
@@ -278,25 +262,18 @@
             z-index: 10;
         }
 
-        @media (max-aspect-ratio: 9/16) {
-            .sidebar { position: absolute; width: 100%; max-width: 100%; }
+        @media (max-width: 768px) {
+            .sidebar { position: absolute; width: 100%; transform: translateX(0); transition: transform 0.3s ease; }
             .sidebar.hide-on-mobile { transform: translateX(-100%); }
-            .chat-screen {
-                position: absolute;
-                width: 100%;
-                z-index: 20;
-                transform: translateX(100%);
-                transition: transform 0.3s ease;
-            }
+            .chat-screen { position: absolute; width: 100%; z-index: 20; transform: translateX(100%); transition: transform 0.3s ease; }
             .chat-screen.show-on-mobile { transform: translateX(0); }
             .back-btn { display: block !important; }
         }
 
-        @media (min-aspect-ratio: 9/16) {
+        @media (min-width: 769px) {
             .sidebar { position: relative; transform: none !important; }
             .chat-screen { flex: 1; position: relative; transform: none !important; display: flex !important; }
             .back-btn { display: none !important; }
-            .messenger-container { flex-direction: row; }
         }
 
         .chat-screen {
@@ -321,7 +298,6 @@
             color: var(--text-secondary);
             cursor: pointer;
             border-bottom: 2px solid transparent;
-            position: relative;
         }
         .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
@@ -367,10 +343,6 @@
         .add-contact-btn { background: var(--success); color: white; border: none; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; }
         .delete-chat-btn { background: var(--danger); color: white; border: none; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; }
         .group-info-btn { background: var(--accent); color: white; border: none; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; }
-
-        .online-status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-        .online { background-color: var(--success); }
-        .offline { background-color: var(--text-muted); }
 
         .user-profile {
             padding: 16px;
@@ -450,7 +422,6 @@
         .name-row { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
         .item-name { font-size: 15px; font-weight: 500; color: var(--text-primary); }
         .item-subtitle { font-size: 11px; color: var(--text-secondary); }
-        .member-count { font-size: 10px; color: var(--text-muted); }
 
         .messages-area {
             flex: 1;
@@ -480,7 +451,7 @@
             align-self: flex-start;
             border-bottom-left-radius: 4px;
         }
-        .message-time { font-size: 9px; color: var(--text-muted); margin-top: 4px; display: flex; gap: 4px; justify-content: flex-end; }
+        .message-time { font-size: 9px; color: var(--text-muted); margin-top: 4px; }
 
         .chat-input-area {
             padding: 12px 16px;
@@ -497,16 +468,6 @@
             padding: 12px 16px;
             border-radius: 24px;
             color: var(--text-primary);
-        }
-        .attach-btn {
-            background: var(--bg-surface);
-            border: none;
-            width: 44px;
-            height: 44px;
-            border-radius: 22px;
-            font-size: 20px;
-            cursor: pointer;
-            color: var(--text-secondary);
         }
         .send-btn { width: auto; padding: 12px 24px; }
 
@@ -538,7 +499,7 @@
             border-radius: 24px;
             padding: 20px;
             max-width: 90%;
-            width: 450px;
+            width: 400px;
             border: 1px solid var(--border);
             max-height: 80vh;
             overflow-y: auto;
@@ -600,30 +561,21 @@
         .theme-preview-blue { background: #F0F9FF; width: 33%; }
         .theme-check { color: var(--accent); margin-left: 8px; }
         
-        .member-list {
-            max-height: 300px;
-            overflow-y: auto;
-            margin: 10px 0;
-        }
-        .member-item {
+        .member-list { max-height: 300px; overflow-y: auto; margin: 10px 0; }
+        .member-item { display: flex; align-items: center; gap: 12px; padding: 10px; border-bottom: 1px solid var(--border); }
+        .member-name { flex: 1; color: var(--text-primary); }
+        .remove-member-btn { background: var(--danger); color: white; border: none; padding: 4px 12px; border-radius: 12px; cursor: pointer; font-size: 11px; }
+        
+        .contact-checkbox {
             display: flex;
             align-items: center;
             gap: 12px;
             padding: 10px;
+            cursor: pointer;
             border-bottom: 1px solid var(--border);
         }
-        .member-name { flex: 1; color: var(--text-primary); }
-        .remove-member-btn { background: var(--danger); color: white; border: none; padding: 4px 12px; border-radius: 12px; cursor: pointer; font-size: 11px; }
-        
-        .encryption-badge {
-            display: inline-block;
-            background: rgba(0,255,0,0.15);
-            color: #00ff88;
-            font-size: 9px;
-            padding: 2px 6px;
-            border-radius: 10px;
-            margin-left: 8px;
-        }
+        .contact-checkbox:hover { background: var(--hover); }
+        .contact-checkbox input { width: 20px; height: 20px; cursor: pointer; }
     </style>
 </head>
 <body class="theme-dark">
@@ -762,7 +714,7 @@
                 </div>
                 
                 <div class="footer">
-                    <p>© 2026 IT Global. 🔐 20 слоёв шифрования | Все права защищены.</p>
+                    <p>© 2026 IT Global. 🔐 20 слоёв шифрования</p>
                 </div>
             </div>
 
@@ -772,7 +724,7 @@
                     <div class="chat-avatar" id="chatAvatar">🧊</div>
                     <div class="chat-info">
                         <h3 id="chatName">Выберите чат</h3>
-                        <p id="chatStatus">🔒 20 слоёв шифрования | Защищённое соединение</p>
+                        <p id="chatStatus">🔒 20 слоёв шифрования</p>
                     </div>
                     <button id="groupInfoBtn" class="group-info-btn" style="display: none;" onclick="showGroupInfo()">ℹ️ Инфо</button>
                     <button id="addContactBtn" class="add-contact-btn" style="display: none;" onclick="addToContacts()">+ Добавить</button>
@@ -784,10 +736,8 @@
                 <div class="chat-input-area" id="chatInputArea" style="display: none;">
                     <div class="chat-input-wrapper">
                         <input type="text" class="chat-input" id="messageInput" placeholder="Введите сообщение...">
-                        <button class="attach-btn" id="attachPhotoBtn">📷</button>
                         <button class="btn btn-primary send-btn" onclick="sendMessage()">Отправить</button>
                     </div>
-                    <input type="file" id="photoInput" accept="image/*" style="display: none;">
                 </div>
             </div>
         </div>
@@ -809,56 +759,23 @@
                 <div class="settings-title">Тема оформления</div>
                 <div class="theme-option" onclick="setTheme('dark')">
                     <span class="theme-name">Тёмная</span>
-                    <div class="theme-preview">
-                        <div class="theme-preview-dark"></div>
-                        <div class="theme-preview-dark"></div>
-                        <div class="theme-preview-dark"></div>
-                    </div>
+                    <div class="theme-preview"><div class="theme-preview-dark"></div><div class="theme-preview-dark"></div><div class="theme-preview-dark"></div></div>
                     <span id="theme-dark-check" class="theme-check">✓</span>
                 </div>
                 <div class="theme-option" onclick="setTheme('light')">
                     <span class="theme-name">Светлая</span>
-                    <div class="theme-preview">
-                        <div class="theme-preview-light"></div>
-                        <div class="theme-preview-light"></div>
-                        <div class="theme-preview-light"></div>
-                    </div>
+                    <div class="theme-preview"><div class="theme-preview-light"></div><div class="theme-preview-light"></div><div class="theme-preview-light"></div></div>
                     <span id="theme-light-check" class="theme-check" style="display: none;">✓</span>
                 </div>
                 <div class="theme-option" onclick="setTheme('rose')">
                     <span class="theme-name">Розовая</span>
-                    <div class="theme-preview">
-                        <div class="theme-preview-rose"></div>
-                        <div class="theme-preview-rose"></div>
-                        <div class="theme-preview-rose"></div>
-                    </div>
+                    <div class="theme-preview"><div class="theme-preview-rose"></div><div class="theme-preview-rose"></div><div class="theme-preview-rose"></div></div>
                     <span id="theme-rose-check" class="theme-check" style="display: none;">✓</span>
                 </div>
                 <div class="theme-option" onclick="setTheme('blue')">
                     <span class="theme-name">Голубая</span>
-                    <div class="theme-preview">
-                        <div class="theme-preview-blue"></div>
-                        <div class="theme-preview-blue"></div>
-                        <div class="theme-preview-blue"></div>
-                    </div>
+                    <div class="theme-preview"><div class="theme-preview-blue"></div><div class="theme-preview-blue"></div><div class="theme-preview-blue"></div></div>
                     <span id="theme-blue-check" class="theme-check" style="display: none;">✓</span>
-                </div>
-            </div>
-            <div class="settings-card">
-                <div class="settings-title">🔐 Безопасность</div>
-                <div style="padding: 10px 0;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span>Слоёв шифрования:</span>
-                        <span style="color: var(--accent); font-weight: bold;">20</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span>Алгоритм:</span>
-                        <span style="color: var(--accent);">AES-256 + XOR + Base64 (многослойный)</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between;">
-                        <span>End-to-End Encryption:</span>
-                        <span style="color: var(--success);">✅ Включено</span>
-                    </div>
                 </div>
             </div>
             <button class="btn btn-secondary" onclick="closeSettings()">Закрыть</button>
@@ -890,26 +807,8 @@
                 <label class="form-label">Выбрать участников из контактов</label>
                 <div id="contactsForGroup" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; padding: 5px;"></div>
             </div>
-            <div class="form-group">
-                <label class="form-label">Или добавить по Global ID</label>
-                <div style="display: flex; gap: 8px;">
-                    <input type="text" id="inviteGlobalId" placeholder="Global ID" style="flex: 1;">
-                    <button class="btn btn-secondary" onclick="addInviteByGlobalId()" style="width: auto;">+</button>
-                </div>
-            </div>
             <div id="inviteMembersList" style="margin: 10px 0; max-height: 150px; overflow-y: auto;"></div>
             <button class="btn btn-primary" onclick="createGroup()">Создать группу</button>
-        </div>
-    </div>
-
-    <div id="addMembersModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Добавить участников</h3>
-                <span class="close-modal" onclick="closeAddMembersModal()">&times;</span>
-            </div>
-            <div id="contactsForAddMembers" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; padding: 5px;"></div>
-            <button class="btn btn-primary" onclick="addSelectedMembers()" style="margin-top: 15px;">➕ Добавить выбранных</button>
         </div>
     </div>
 
@@ -922,6 +821,17 @@
             <div id="groupInfoContent"></div>
             <button class="btn btn-primary" onclick="showAddMembersModal()" style="margin-top: 15px;">➕ Добавить участников</button>
             <button class="btn btn-danger" onclick="leaveGroup()" style="margin-top: 10px;">🚪 Выйти из группы</button>
+        </div>
+    </div>
+
+    <div id="addMembersModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Добавить участников</h3>
+                <span class="close-modal" onclick="closeAddMembersModal()">&times;</span>
+            </div>
+            <div id="contactsForAddMembers" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; padding: 5px;"></div>
+            <button class="btn btn-primary" onclick="addSelectedMembers()" style="margin-top: 15px;">➕ Добавить выбранных</button>
         </div>
     </div>
 
@@ -953,165 +863,34 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth();
         const db = getFirestore();
-        
         auth.setPersistence({ type: 'NONE' });
 
         // ==================== 20 СЛОЁВ ШИФРОВАНИЯ ====================
-        
-        // Слой 1-5: Многослойный Base64
-        function encryptBase64Layers(text, layers = 5) {
-            let result = text;
-            for (let i = 0; i < layers; i++) {
-                result = btoa(unescape(encodeURIComponent(result)));
-            }
-            return result;
-        }
-        
-        function decryptBase64Layers(text, layers = 5) {
-            let result = text;
-            for (let i = 0; i < layers; i++) {
-                result = decodeURIComponent(escape(atob(result)));
-            }
-            return result;
-        }
-        
-        // Слой 6-10: ROT13 с разными сдвигами
-        function rot13WithShift(text, shift) {
-            return text.replace(/[a-zA-Zа-яА-Я]/g, function(c) {
-                const code = c.charCodeAt(0);
-                const isUpper = code >= 65 && code <= 90;
-                const isLower = code >= 97 && code <= 122;
-                const isCyrillic = code >= 1040 && code <= 1103;
-                
-                if (isUpper) {
-                    return String.fromCharCode(((code - 65 + shift) % 26) + 65);
-                } else if (isLower) {
-                    return String.fromCharCode(((code - 97 + shift) % 26) + 97);
-                } else if (isCyrillic) {
-                    const base = code >= 1040 && code <= 1071 ? 1040 : 1072;
-                    const shiftAmount = shift % 32;
-                    return String.fromCharCode(((code - base + shiftAmount) % 32) + base);
-                }
-                return c;
-            });
-        }
-        
-        function encryptRot13Layers(text) {
-            let result = text;
-            const shifts = [13, 5, 8, 3, 11];
-            for (let i = 0; i < 5; i++) {
-                result = rot13WithShift(result, shifts[i]);
-            }
-            return result;
-        }
-        
-        function decryptRot13Layers(text) {
-            let result = text;
-            const shifts = [13, 5, 8, 3, 11];
-            for (let i = 4; i >= 0; i--) {
-                result = rot13WithShift(result, 26 - shifts[i]);
-            }
-            return result;
-        }
-        
-        // Слой 11-15: XOR шифрование с ключом
-        const XOR_KEYS = [0x42, 0xA5, 0x7E, 0xC3, 0x91];
-        
-        function xorEncrypt(text, keyIndex) {
-            const key = XOR_KEYS[keyIndex % XOR_KEYS.length];
-            let result = '';
-            for (let i = 0; i < text.length; i++) {
-                result += String.fromCharCode(text.charCodeAt(i) ^ key);
-            }
-            return result;
-        }
-        
-        function encryptXorLayers(text) {
-            let result = text;
-            for (let i = 0; i < 5; i++) {
-                result = xorEncrypt(result, i);
-            }
-            return result;
-        }
-        
-        function decryptXorLayers(text) {
-            let result = text;
-            for (let i = 4; i >= 0; i--) {
-                result = xorEncrypt(result, i);
-            }
-            return result;
-        }
-        
-        // Слой 16-20: Комплексное преобразование
-        function complexEncrypt(text) {
-            let result = text;
-            for (let i = 0; i < 5; i++) {
-                // Переворачиваем строку
-                result = result.split('').reverse().join('');
-                // Добавляем соль
-                const salt = String.fromCharCode(65 + (i * 7) % 26);
-                result = result.split('').map(ch => String.fromCharCode(ch.charCodeAt(0) ^ salt.charCodeAt(0))).join('');
-                // Ещё один слой Base64
-                result = btoa(unescape(encodeURIComponent(result)));
-            }
-            return result;
-        }
-        
-        function complexDecrypt(text) {
-            let result = text;
-            for (let i = 4; i >= 0; i--) {
-                result = decodeURIComponent(escape(atob(result)));
-                const salt = String.fromCharCode(65 + (i * 7) % 26);
-                result = result.split('').map(ch => String.fromCharCode(ch.charCodeAt(0) ^ salt.charCodeAt(0))).join('');
-                result = result.split('').reverse().join('');
-            }
-            return result;
-        }
-        
-        // ПОЛНОЕ 20-СЛОЙНОЕ ШИФРОВАНИЕ
         function encryptMessage(text) {
             if (!text) return text;
             try {
-                let encrypted = text;
-                // Слои 1-5: Base64
-                encrypted = encryptBase64Layers(encrypted, 5);
-                // Слои 6-10: ROT13
-                encrypted = encryptRot13Layers(encrypted);
-                // Слои 11-15: XOR
-                encrypted = encryptXorLayers(encrypted);
-                // Слои 16-20: Комплексное
-                encrypted = complexEncrypt(encrypted);
-                return encrypted;
-            } catch(e) {
-                console.error('Ошибка шифрования:', e);
-                return text;
-            }
+                let result = text;
+                for (let i = 0; i < 5; i++) result = btoa(unescape(encodeURIComponent(result)));
+                for (let i = 0; i < 5; i++) result = result.replace(/[a-zA-Z]/g, c => String.fromCharCode(((c.charCodeAt(0) - 65 + 13) % 26) + 65));
+                for (let i = 0; i < 5; i++) result = result.split('').map(ch => String.fromCharCode(ch.charCodeAt(0) ^ 0x42)).join('');
+                for (let i = 0; i < 5; i++) result = btoa(unescape(encodeURIComponent(result.split('').reverse().join(''))));
+                return result;
+            } catch(e) { return text; }
         }
         
-        function decryptMessage(encryptedText) {
-            if (!encryptedText) return encryptedText;
+        function decryptMessage(text) {
+            if (!text) return text;
             try {
-                let decrypted = encryptedText;
-                // Слои 16-20: Комплексное (обратный порядок)
-                decrypted = complexDecrypt(decrypted);
-                // Слои 11-15: XOR
-                decrypted = decryptXorLayers(decrypted);
-                // Слои 6-10: ROT13
-                decrypted = decryptRot13Layers(decrypted);
-                // Слои 1-5: Base64
-                decrypted = decryptBase64Layers(decrypted, 5);
-                return decrypted;
-            } catch(e) {
-                console.error('Ошибка дешифрования:', e);
-                return encryptedText;
-            }
+                let result = text;
+                for (let i = 0; i < 5; i++) result = decodeURIComponent(escape(atob(result))).split('').reverse().join('');
+                for (let i = 0; i < 5; i++) result = result.split('').map(ch => String.fromCharCode(ch.charCodeAt(0) ^ 0x42)).join('');
+                for (let i = 0; i < 5; i++) result = result.replace(/[a-zA-Z]/g, c => String.fromCharCode(((c.charCodeAt(0) - 65 + 13) % 26) + 65));
+                for (let i = 0; i < 5; i++) result = decodeURIComponent(escape(atob(result)));
+                return result;
+            } catch(e) { return text; }
         }
-        
-        // Демонстрация шифрования (для отладки)
-        console.log('🔐 20 слоёв шифрования активированы!');
-        
-        // ==================== ОСТАЛЬНАЯ ЛОГИКА МЕССЕНДЖЕРА ====================
-        
+
+        // ==================== ПЕРЕМЕННЫЕ ====================
         let currentUser = null;
         let currentUserData = null;
         let pendingUser = null;
@@ -1126,14 +905,13 @@
         let selectedContactsForGroup = new Set();
         let selectedNewMembers = new Set();
 
+        // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
         async function getDeviceInfo() {
             try {
                 const ipResponse = await fetch('https://api.ipify.org?format=json');
                 const ipData = await ipResponse.json();
                 currentIP = ipData.ip;
-            } catch(e) {
-                currentIP = 'unknown';
-            }
+            } catch(e) { currentIP = 'unknown'; }
             const nav = window.navigator;
             deviceFingerprint = btoa(`${nav.userAgent}-${nav.language}-${screen.width}x${screen.height}-${nav.platform}-${new Date().getTimezoneOffset()}`);
             return { ip: currentIP, fingerprint: deviceFingerprint };
@@ -1159,15 +937,11 @@
         }
 
         async function addKnownDevice(uid) {
-            const deviceInfo = {
-                fingerprint: deviceFingerprint,
-                ip: currentIP,
-                userAgent: navigator.userAgent,
-                addedAt: new Date(),
-                lastUsed: new Date()
-            };
             await updateDoc(doc(db, "users", uid), {
-                knownDevices: arrayUnion(deviceInfo)
+                knownDevices: arrayUnion({
+                    fingerprint: deviceFingerprint, ip: currentIP,
+                    userAgent: navigator.userAgent, addedAt: new Date(), lastUsed: new Date()
+                })
             });
         }
 
@@ -1177,25 +951,16 @@
         }
 
         function showMessage(element, text, isError = true) {
-            if (typeof element === 'string') element = document.getElementById(element);
-            if (!element) return;
-            element.textContent = text;
-            element.className = `message ${isError ? 'message-error' : 'message-success'}`;
-            setTimeout(() => { if(element) element.style.display = 'none'; }, 4000);
+            const el = typeof element === 'string' ? document.getElementById(element) : element;
+            if (!el) return;
+            el.textContent = text;
+            el.className = `message ${isError ? 'message-error' : 'message-success'}`;
+            setTimeout(() => { if(el) el.style.display = 'none'; }, 4000);
         }
 
         function initParticles() {
             if (typeof particlesJS !== 'undefined') {
-                particlesJS('particles-js', {
-                    particles: {
-                        number: { value: 80 },
-                        color: { value: '#64B5F6' },
-                        opacity: { value: 0.5 },
-                        size: { value: 3 },
-                        line_linked: { enable: true, color: '#64B5F6' },
-                        move: { enable: true, speed: 1 }
-                    }
-                });
+                particlesJS('particles-js', { particles: { number: { value: 80 }, color: { value: '#64B5F6' }, opacity: { value: 0.5 }, size: { value: 3 }, line_linked: { enable: true, color: '#64B5F6' }, move: { enable: true, speed: 1 } } });
             }
         }
 
@@ -1204,19 +969,12 @@
             localStorage.setItem('iceberg_theme', theme);
             document.querySelectorAll('[id^="theme-"]').forEach(el => el.style.display = 'none');
             document.getElementById(`theme-${theme}-check`).style.display = 'inline';
-            setTimeout(initParticles, 50);
         };
 
-        function loadTheme() {
-            const saved = localStorage.getItem('iceberg_theme');
-            setTheme(saved || 'dark');
-        }
+        function loadTheme() { setTheme(localStorage.getItem('iceberg_theme') || 'dark'); }
 
         window.moveToNext = (input, index) => {
-            if (input.value.length === 1) {
-                const next = document.getElementById(`code${index + 2}`);
-                if (next) next.focus();
-            }
+            if (input.value.length === 1) document.getElementById(`code${index + 2}`)?.focus();
             input.value = input.value.replace(/[^0-9]/g, '');
         };
 
@@ -1234,223 +992,103 @@
 
         window.verify2FA = async () => {
             const code = ['code1','code2','code3','code4'].map(id => document.getElementById(id).value).join('');
-            const msgDiv = document.getElementById('twoFactorMessage');
-            
-            if (code.length !== 4) {
-                showMessage(msgDiv, 'Введите 4 цифры', true);
-                return;
-            }
-            
-            if (!pendingUser) {
-                showMessage(msgDiv, 'Ошибка сессии', true);
-                return;
-            }
+            if (code.length !== 4) return showMessage('twoFactorMessage', 'Введите 4 цифры', true);
+            if (!pendingUser) return showMessage('twoFactorMessage', 'Ошибка сессии', true);
             
             const userDoc = await getDoc(doc(db, "users", pendingUser.uid));
-            const userData = userDoc.data();
-            
-            if (code === userData?.twoFactorCode) {
-                if (document.getElementById('trustDevice').checked) {
-                    await addKnownDevice(pendingUser.uid);
-                }
-                
-                await updateDoc(doc(db, "users", pendingUser.uid), {
-                    twoFactorCode: null,
-                    twoFactorCodeExpires: null,
-                    online: true,
-                    lastSeen: serverTimestamp(),
-                    currentIP: currentIP,
-                    currentDevice: deviceFingerprint
-                });
-                
+            if (code === userDoc.data()?.twoFactorCode) {
+                if (document.getElementById('trustDevice').checked) await addKnownDevice(pendingUser.uid);
+                await updateDoc(doc(db, "users", pendingUser.uid), { twoFactorCode: null, twoFactorCodeExpires: null, online: true, lastSeen: serverTimestamp(), currentIP, currentDevice: deviceFingerprint });
                 document.getElementById('loginMode').style.display = 'none';
                 document.getElementById('twoFactorMode').style.display = 'none';
                 document.getElementById('authForm').style.display = 'none';
                 document.getElementById('messengerApp').style.display = 'flex';
-                
                 ['code1','code2','code3','code4'].forEach(id => document.getElementById(id).value = '');
-                
                 await loadUserData(pendingUser);
                 startBlockCheck(pendingUser.uid);
-            } else {
-                showMessage(msgDiv, '❌ Неверный код', true);
-            }
+            } else showMessage('twoFactorMessage', '❌ Неверный код', true);
         };
 
         function startBlockCheck(uid) {
             if (blockCheckInterval) clearInterval(blockCheckInterval);
             blockCheckInterval = setInterval(async () => {
                 if (!currentUser || currentUser.uid !== uid) return;
-                const locked = await isAccountLocked(uid);
-                if (locked) {
-                    clearInterval(blockCheckInterval);
-                    blockCheckInterval = null;
-                    alert('⚠️ Ваш аккаунт был заблокирован в Global ID!');
-                    await signOut(auth);
-                }
+                if (await isAccountLocked(uid)) { clearInterval(blockCheckInterval); alert('⚠️ Аккаунт заблокирован!'); await signOut(auth); }
             }, 5000);
         }
 
         window.login = async () => {
             const identifier = document.getElementById('loginIdentifier').value;
             const password = document.getElementById('loginPassword').value;
-            const msgDiv = document.getElementById('authMessage');
-            
-            if (!identifier || !password) {
-                showMessage(msgDiv, 'Заполните все поля', true);
-                return;
-            }
-            
+            if (!identifier || !password) return showMessage('authMessage', 'Заполните все поля', true);
             await getDeviceInfo();
-            
             try {
                 let email = identifier;
                 if (!identifier.includes('@')) {
                     const q = query(collection(db, "users"), where("globalId", "==", identifier));
                     const snap = await getDocs(q);
-                    if (snap.empty) {
-                        showMessage(msgDiv, 'Global ID не найден', true);
-                        return;
-                    }
+                    if (snap.empty) return showMessage('authMessage', 'Global ID не найден', true);
                     email = snap.docs[0].data().email;
                 }
-                
                 const userCred = await signInWithEmailAndPassword(auth, email, password);
-                const user = userCred.user;
+                if (await isAccountLocked(userCred.user.uid)) { await signOut(auth); document.getElementById('loginMode').style.display = 'none'; document.getElementById('blockedMode').style.display = 'block'; return; }
+                if (!await hasIcebergAccess(userCred.user.uid)) await updateDoc(doc(db, "users", userCred.user.uid), { icebergAccess: true, icebergLastLogin: serverTimestamp() });
                 
-                if (await isAccountLocked(user.uid)) {
-                    await signOut(auth);
-                    document.getElementById('loginMode').style.display = 'none';
-                    document.getElementById('blockedMode').style.display = 'block';
-                    return;
-                }
-                
-                if (!await hasIcebergAccess(user.uid)) {
-                    await updateDoc(doc(db, "users", user.uid), {
-                        icebergAccess: true,
-                        icebergLastLogin: serverTimestamp()
-                    });
-                }
-                
-                const deviceKnown = await isDeviceKnown(user.uid);
-                
-                if (deviceKnown) {
-                    await updateDoc(doc(db, "users", user.uid), {
-                        online: true,
-                        lastSeen: serverTimestamp(),
-                        currentIP: currentIP,
-                        currentDevice: deviceFingerprint
-                    });
-                    
+                if (await isDeviceKnown(userCred.user.uid)) {
+                    await updateDoc(doc(db, "users", userCred.user.uid), { online: true, lastSeen: serverTimestamp(), currentIP, currentDevice: deviceFingerprint });
                     document.getElementById('authForm').style.display = 'none';
                     document.getElementById('messengerApp').style.display = 'flex';
-                    await loadUserData(user);
-                    startBlockCheck(user.uid);
+                    await loadUserData(userCred.user);
+                    startBlockCheck(userCred.user.uid);
                 } else {
-                    pendingUser = user;
+                    pendingUser = userCred.user;
                     const code = Math.floor(1000 + Math.random() * 9000).toString();
-                    await updateDoc(doc(db, "users", user.uid), {
-                        twoFactorCode: code,
-                        twoFactorCodeExpires: new Date(Date.now() + 5 * 60000)
-                    });
-                    
-                    document.getElementById('newDeviceInfo').innerHTML = `
-                        <strong>🆕 Новое устройство</strong><br>
-                        <strong>IP:</strong> ${currentIP}<br>
-                        <strong>Браузер:</strong> ${navigator.userAgent.substring(0, 50)}...<br>
-                        <strong>Для входа требуется код подтверждения из Global ID</strong>
-                    `;
-                    
+                    await updateDoc(doc(db, "users", userCred.user.uid), { twoFactorCode: code, twoFactorCodeExpires: new Date(Date.now() + 5 * 60000) });
+                    document.getElementById('newDeviceInfo').innerHTML = `<strong>🆕 Новое устройство</strong><br><strong>IP:</strong> ${currentIP}<br><strong>Браузер:</strong> ${navigator.userAgent.substring(0, 50)}...<br><strong>Для входа требуется код подтверждения</strong>`;
                     document.getElementById('loginMode').style.display = 'none';
                     document.getElementById('twoFactorMode').style.display = 'block';
                     document.getElementById('code1').focus();
                 }
-            } catch (error) {
-                console.error('Ошибка входа:', error);
-                showMessage(msgDiv, 'Неверные данные или доступ запрещён', true);
-            }
+            } catch (error) { showMessage('authMessage', 'Неверные данные', true); }
         };
 
         window.register = async () => {
             const email = document.getElementById('regEmail').value;
             const password = document.getElementById('regPassword').value;
-            const msgDiv = document.getElementById('authMessage');
-            
-            if (!email || !password) {
-                showMessage(msgDiv, 'Заполните все поля', true);
-                return;
-            }
-            if (password.length < 6) {
-                showMessage(msgDiv, 'Пароль минимум 6 символов', true);
-                return;
-            }
-            
+            if (!email || !password) return showMessage('authMessage', 'Заполните все поля', true);
+            if (password.length < 6) return showMessage('authMessage', 'Пароль минимум 6 символов', true);
             await getDeviceInfo();
-            
             try {
                 const userCred = await createUserWithEmailAndPassword(auth, email, password);
-                const globalId = generateGlobalId();
-                
                 await setDoc(doc(db, "users", userCred.user.uid), {
-                    email, globalId,
-                    nickname: email.split('@')[0],
-                    createdAt: serverTimestamp(),
-                    contacts: [],
-                    groups: [],
-                    online: true,
-                    lastSeen: serverTimestamp(),
-                    globalIdAccess: true,
-                    icebergAccess: true,
-                    accountLocked: false,
-                    knownDevices: [{
-                        fingerprint: deviceFingerprint,
-                        ip: currentIP,
-                        userAgent: navigator.userAgent,
-                        addedAt: new Date(),
-                        lastUsed: new Date()
-                    }],
-                    currentIP: currentIP,
-                    chats: []
+                    email, globalId: generateGlobalId(), nickname: email.split('@')[0],
+                    createdAt: serverTimestamp(), contacts: [], groups: [], chats: [],
+                    online: true, lastSeen: serverTimestamp(), globalIdAccess: true, icebergAccess: true, accountLocked: false,
+                    knownDevices: [{ fingerprint: deviceFingerprint, ip: currentIP, userAgent: navigator.userAgent, addedAt: new Date(), lastUsed: new Date() }],
+                    currentIP
                 });
-                
-                showMessage(msgDiv, '✅ Аккаунт создан!', false);
+                showMessage('authMessage', '✅ Аккаунт создан!', false);
                 setTimeout(() => showLogin(), 1500);
-            } catch (error) {
-                showMessage(msgDiv, error.message, true);
-            }
+            } catch (error) { showMessage('authMessage', error.message, true); }
         };
 
         window.logout = async () => {
             if (blockCheckInterval) clearInterval(blockCheckInterval);
             if (messagesListener) messagesListener();
-            if (currentUser) {
-                await updateDoc(doc(db, "users", currentUser.uid), {
-                    online: false,
-                    lastSeen: serverTimestamp()
-                }).catch(() => {});
-            }
+            if (currentUser) await updateDoc(doc(db, "users", currentUser.uid), { online: false, lastSeen: serverTimestamp() }).catch(() => {});
             await signOut(auth);
         };
 
-        window.showRegister = () => {
-            document.getElementById('loginMode').style.display = 'none';
-            document.getElementById('registerMode').style.display = 'block';
-        };
-        
-        window.showLogin = () => {
-            document.getElementById('loginMode').style.display = 'block';
-            document.getElementById('registerMode').style.display = 'none';
-        };
+        window.showRegister = () => { document.getElementById('loginMode').style.display = 'none'; document.getElementById('registerMode').style.display = 'block'; };
+        window.showLogin = () => { document.getElementById('loginMode').style.display = 'block'; document.getElementById('registerMode').style.display = 'none'; };
 
         async function loadUserData(user) {
             currentUser = user;
             const userDoc = await getDoc(doc(db, "users", user.uid));
             currentUserData = userDoc.data();
-            
             document.getElementById('userAvatar').innerText = currentUserData.nickname?.charAt(0).toUpperCase() || 'U';
             document.getElementById('userName').innerText = currentUserData.nickname || user.email.split('@')[0];
             document.getElementById('userGlobalId').innerHTML = currentUserData.globalId?.substring(0, 12) + '...' || '—';
-            
             loadChats();
             loadGroups();
             loadContacts();
@@ -1460,26 +1098,14 @@
         function loadChats() {
             const chats = currentUserData?.chats || [];
             const container = document.getElementById('chatsList');
-            
-            if (chats.length === 0) {
-                container.innerHTML = '<div class="empty-state">Нет активных чатов</div>';
-                return;
-            }
-            
+            if (chats.length === 0) { container.innerHTML = '<div class="empty-state">Нет активных чатов</div>'; return; }
             container.innerHTML = '';
             chats.forEach(chat => {
                 const div = document.createElement('div');
                 div.className = `chat-item ${chat.unread ? 'unread' : ''}`;
-                div.innerHTML = `
-                    <div class="avatar-small">${chat.isGroup ? '👥' : (chat.nickname?.charAt(0).toUpperCase() || '👤')}</div>
-                    <div class="info-small">
-                        <div class="name-row">
-                            <span class="item-name">${chat.isGroup ? chat.groupName : (chat.nickname || chat.globalId?.substring(0, 8))}</span>
-                            ${chat.unread ? '<span style="background:var(--accent); color:white; border-radius:10px; padding:2px 8px; font-size:10px;">Новое</span>' : ''}
-                        </div>
-                        <div class="item-subtitle">${chat.lastMessage?.substring(0, 30) || 'Нет сообщений'}</div>
-                    </div>
-                `;
+                div.innerHTML = `<div class="avatar-small">${chat.isGroup ? '👥' : (chat.nickname?.charAt(0).toUpperCase() || '👤')}</div>
+                    <div class="info-small"><div class="name-row"><span class="item-name">${chat.isGroup ? chat.groupName : (chat.nickname || chat.globalId?.substring(0, 8))}</span>${chat.unread ? '<span style="background:var(--accent); color:white; border-radius:10px; padding:2px 8px; font-size:10px;">Новое</span>' : ''}</div>
+                    <div class="item-subtitle">${chat.lastMessage?.substring(0, 30) || 'Нет сообщений'}</div></div>`;
                 div.onclick = () => selectChat(chat);
                 container.appendChild(div);
             });
@@ -1488,26 +1114,12 @@
         function loadGroups() {
             const groups = currentUserData?.groups || [];
             const container = document.getElementById('groupsList');
-            
-            if (groups.length === 0) {
-                container.innerHTML = '<div class="empty-state">Вы не состоите в группах</div>';
-                return;
-            }
-            
+            if (groups.length === 0) { container.innerHTML = '<div class="empty-state">Вы не состоите в группах</div>'; return; }
             container.innerHTML = '';
             groups.forEach(group => {
                 const div = document.createElement('div');
                 div.className = 'group-item';
-                div.innerHTML = `
-                    <div class="avatar-small">👥</div>
-                    <div class="info-small">
-                        <div class="name-row">
-                            <span class="item-name">${group.name}</span>
-                            <span class="member-count">${group.memberCount || 0} участников</span>
-                        </div>
-                        <div class="item-subtitle">${group.lastMessage?.substring(0, 30) || 'Нажмите для входа'}</div>
-                    </div>
-                `;
+                div.innerHTML = `<div class="avatar-small">👥</div><div class="info-small"><div class="name-row"><span class="item-name">${group.name}</span><span class="member-count">${group.memberCount || 0} участников</span></div><div class="item-subtitle">${group.lastMessage?.substring(0, 30) || 'Нажмите для входа'}</div></div>`;
                 div.onclick = () => selectGroup(group);
                 container.appendChild(div);
             });
@@ -1516,25 +1128,12 @@
         function loadContacts() {
             const contacts = currentUserData?.contacts || [];
             const container = document.getElementById('contactsList');
-            
-            if (contacts.length === 0) {
-                container.innerHTML = '<div class="empty-state">Нет контактов</div>';
-                return;
-            }
-            
+            if (contacts.length === 0) { container.innerHTML = '<div class="empty-state">Нет контактов</div>'; return; }
             container.innerHTML = '';
             contacts.forEach(contact => {
                 const div = document.createElement('div');
                 div.className = 'contact-item';
-                div.innerHTML = `
-                    <div class="avatar-small">${contact.nickname?.charAt(0).toUpperCase() || '👤'}</div>
-                    <div class="info-small">
-                        <div class="name-row">
-                            <span class="item-name">${contact.nickname || contact.globalId?.substring(0, 8)}</span>
-                        </div>
-                        <div class="item-subtitle">${contact.globalId?.substring(0, 12)}...</div>
-                    </div>
-                `;
+                div.innerHTML = `<div class="avatar-small">${contact.nickname?.charAt(0).toUpperCase() || '👤'}</div><div class="info-small"><div class="name-row"><span class="item-name">${contact.nickname || contact.globalId?.substring(0, 8)}</span></div><div class="item-subtitle">${contact.globalId?.substring(0, 12)}...</div></div>`;
                 div.onclick = () => selectContact(contact);
                 container.appendChild(div);
             });
@@ -1547,17 +1146,13 @@
             
             document.getElementById('chatName').innerText = chat.isGroup ? chat.groupName : (chat.nickname || chat.globalId?.substring(0, 8));
             document.getElementById('chatAvatar').innerText = chat.isGroup ? '👥' : (chat.nickname?.charAt(0).toUpperCase() || '🧊');
-            document.getElementById('chatStatus').innerHTML = chat.isGroup ? `👥 Групповой чат | ${chat.memberCount || 0} участников | 🔒 20 слоёв` : `🔒 20 слоёв шифрования | Защищённое соединение`;
+            document.getElementById('chatStatus').innerHTML = chat.isGroup ? `👥 Групповой чат | 🔒 20 слоёв` : `🔒 20 слоёв шифрования`;
             document.getElementById('chatInputArea').style.display = 'flex';
             document.getElementById('groupInfoBtn').style.display = chat.isGroup ? 'block' : 'none';
             document.getElementById('addContactBtn').style.display = 'none';
             document.getElementById('deleteChatBtn').style.display = 'block';
             
-            if (window.innerWidth <= 768) {
-                document.getElementById('sidebar').classList.add('hide-on-mobile');
-                document.getElementById('chatScreen').classList.add('show-on-mobile');
-            }
-            
+            if (window.innerWidth <= 768) { document.getElementById('sidebar').classList.add('hide-on-mobile'); document.getElementById('chatScreen').classList.add('show-on-mobile'); }
             if (!chat.isGroup) await markChatRead(chat);
             loadMessages();
         }
@@ -1566,65 +1161,33 @@
             currentGroup = group;
             currentChat = null;
             currentChatId = `group_${group.id}`;
-            
             document.getElementById('chatName').innerText = group.name;
             document.getElementById('chatAvatar').innerText = '👥';
-            document.getElementById('chatStatus').innerHTML = `👥 Групповой чат | ${group.memberCount || 0} участников | 🔒 20 слоёв шифрования`;
+            document.getElementById('chatStatus').innerHTML = `👥 Групповой чат | ${group.memberCount || 0} участников | 🔒 20 слоёв`;
             document.getElementById('chatInputArea').style.display = 'flex';
             document.getElementById('groupInfoBtn').style.display = 'block';
             document.getElementById('addContactBtn').style.display = 'none';
             document.getElementById('deleteChatBtn').style.display = 'block';
-            
-            if (window.innerWidth <= 768) {
-                document.getElementById('sidebar').classList.add('hide-on-mobile');
-                document.getElementById('chatScreen').classList.add('show-on-mobile');
-            }
-            
+            if (window.innerWidth <= 768) { document.getElementById('sidebar').classList.add('hide-on-mobile'); document.getElementById('chatScreen').classList.add('show-on-mobile'); }
             loadMessages();
         }
 
         async function selectContact(contact) {
             const existingChat = currentUserData?.chats?.find(c => c.uid === contact.uid && !c.isGroup);
-            if (existingChat) {
-                selectChat(existingChat);
-                return;
-            }
+            if (existingChat) { selectChat(existingChat); return; }
             
-            currentChat = {
-                uid: contact.uid,
-                globalId: contact.globalId,
-                nickname: contact.nickname,
-                email: contact.email,
-                isGroup: false
-            };
+            currentChat = { uid: contact.uid, globalId: contact.globalId, nickname: contact.nickname, email: contact.email, isGroup: false };
             currentChatId = [currentUser.uid, contact.uid].sort().join('_');
-            
-            await updateDoc(doc(db, "users", currentUser.uid), {
-                chats: arrayUnion({
-                    uid: contact.uid,
-                    globalId: contact.globalId,
-                    nickname: contact.nickname,
-                    email: contact.email,
-                    isGroup: false,
-                    lastMessage: null,
-                    lastMessageTime: null,
-                    unread: false
-                })
-            });
+            await updateDoc(doc(db, "users", currentUser.uid), { chats: arrayUnion({ ...currentChat, lastMessage: null, lastMessageTime: null, unread: false }) });
             
             document.getElementById('chatName').innerText = contact.nickname || contact.globalId?.substring(0, 8);
             document.getElementById('chatAvatar').innerText = contact.nickname?.charAt(0).toUpperCase() || '🧊';
-            document.getElementById('chatStatus').innerHTML = `🔒 20 слоёв шифрования | Защищённое соединение`;
+            document.getElementById('chatStatus').innerHTML = `🔒 20 слоёв шифрования`;
             document.getElementById('chatInputArea').style.display = 'flex';
             document.getElementById('groupInfoBtn').style.display = 'none';
             document.getElementById('addContactBtn').style.display = 'none';
             document.getElementById('deleteChatBtn').style.display = 'block';
-            
-            if (window.innerWidth <= 768) {
-                document.getElementById('sidebar').classList.add('hide-on-mobile');
-                document.getElementById('chatScreen').classList.add('show-on-mobile');
-            }
-            
+            if (window.innerWidth <= 768) { document.getElementById('sidebar').classList.add('hide-on-mobile'); document.getElementById('chatScreen').classList.add('show-on-mobile'); }
             loadMessages();
             loadChats();
         }
@@ -1632,479 +1195,157 @@
         async function markChatRead(chat) {
             if (chat.isGroup) return;
             const chats = currentUserData?.chats || [];
-            const updatedChats = chats.map(c => {
-                if (c.uid === chat.uid && !c.isGroup) {
-                    return { ...c, unread: false };
-                }
-                return c;
-            });
-            
-            await updateDoc(doc(db, "users", currentUser.uid), {
-                chats: updatedChats
-            });
+            const updatedChats = chats.map(c => c.uid === chat.uid && !c.isGroup ? { ...c, unread: false } : c);
+            await updateDoc(doc(db, "users", currentUser.uid), { chats: updatedChats });
             currentUserData.chats = updatedChats;
             loadChats();
         }
 
         function loadMessages() {
             if (messagesListener) messagesListener();
-            
+            if (!currentChatId) return;
             const messagesRef = collection(db, "messages", currentChatId, "msgs");
             messagesListener = onSnapshot(query(messagesRef, orderBy("timestamp", "asc")), (snapshot) => {
                 const messagesArea = document.getElementById('messagesArea');
-                
-                if (snapshot.empty) {
-                    messagesArea.innerHTML = '<div class="empty-state">Нет сообщений. Напишите первое!</div>';
-                    return;
-                }
-                
+                if (snapshot.empty) { messagesArea.innerHTML = '<div class="empty-state">Нет сообщений. Напишите первое!</div>'; return; }
                 messagesArea.innerHTML = '';
                 snapshot.forEach(doc => {
                     const msg = doc.data();
                     const isSent = msg.senderId === currentUser.uid;
-                    // ДЕШИФРУЕМ сообщение (20 слоёв)
                     const decryptedText = decryptMessage(msg.text);
                     const div = document.createElement('div');
                     div.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
-                    div.innerHTML = `
-                        ${!isSent && msg.senderName ? `<div style="font-size:10px; opacity:0.7; margin-bottom:4px;">${msg.senderName}</div>` : ''}
-                        <div>${escapeHtml(decryptedText)}</div>
-                        <div class="message-time">${formatTime(msg.timestamp?.toDate())}</div>
-                    `;
+                    div.innerHTML = `${!isSent && msg.senderName ? `<div style="font-size:10px; opacity:0.7; margin-bottom:4px;">${msg.senderName}</div>` : ''}<div>${escapeHtml(decryptedText)}</div><div class="message-time">${formatTime(msg.timestamp?.toDate())}</div>`;
                     messagesArea.appendChild(div);
                 });
                 messagesArea.scrollTop = messagesArea.scrollHeight;
             });
         }
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        function formatTime(date) {
-            if (!date) return '';
-            return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        }
+        function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+        function formatTime(date) { return date ? new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''; }
 
         window.sendMessage = async () => {
             const input = document.getElementById('messageInput');
             const text = input.value.trim();
             if (!text || !currentChatId) return;
             
-            // ШИФРУЕМ сообщение (20 слоёв)
             const encryptedText = encryptMessage(text);
-            
-            const message = {
-                text: encryptedText,
-                senderId: currentUser.uid,
-                senderName: currentUserData.nickname,
-                timestamp: serverTimestamp(),
-                read: false,
-                encryptionLayers: 20
-            };
-            
-            const messagesRef = collection(db, "messages", currentChatId, "msgs");
-            await addDoc(messagesRef, message);
+            const message = { text: encryptedText, senderId: currentUser.uid, senderName: currentUserData.nickname, timestamp: serverTimestamp(), read: false };
+            await addDoc(collection(db, "messages", currentChatId, "msgs"), message);
             
             if (currentChat && !currentChat.isGroup) {
                 const chats = currentUserData?.chats || [];
                 const chatIndex = chats.findIndex(c => c.uid === currentChat.uid && !c.isGroup);
-                if (chatIndex !== -1) {
-                    await updateDoc(doc(db, "users", currentUser.uid), {
-                        [`chats.${chatIndex}.lastMessage`]: text.substring(0, 30),
-                        [`chats.${chatIndex}.lastMessageTime`]: serverTimestamp()
-                    });
-                }
+                if (chatIndex !== -1) await updateDoc(doc(db, "users", currentUser.uid), { [`chats.${chatIndex}.lastMessage`]: text.substring(0, 30), [`chats.${chatIndex}.lastMessageTime`]: serverTimestamp() });
                 
                 const contactChats = await getDoc(doc(db, "users", currentChat.uid));
                 const contactData = contactChats.data();
                 const contactChatIndex = contactData?.chats?.findIndex(c => c.uid === currentUser.uid) ?? -1;
-                
-                if (contactChatIndex !== -1) {
-                    await updateDoc(doc(db, "users", currentChat.uid), {
-                        [`chats.${contactChatIndex}.lastMessage`]: text.substring(0, 30),
-                        [`chats.${contactChatIndex}.lastMessageTime`]: serverTimestamp(),
-                        [`chats.${contactChatIndex}.unread`]: true
-                    });
-                } else {
-                    await updateDoc(doc(db, "users", currentChat.uid), {
-                        chats: arrayUnion({
-                            uid: currentUser.uid,
-                            globalId: currentUserData.globalId,
-                            nickname: currentUserData.nickname,
-                            email: currentUser.email,
-                            isGroup: false,
-                            lastMessage: text.substring(0, 30),
-                            lastMessageTime: serverTimestamp(),
-                            unread: true
-                        })
-                    });
-                }
-            } else if (currentGroup) {
-                const groupRef = doc(db, "groups", currentGroup.id);
-                await updateDoc(groupRef, {
-                    lastMessage: text.substring(0, 30),
-                    lastMessageTime: serverTimestamp()
-                });
-            }
-            
+                if (contactChatIndex !== -1) await updateDoc(doc(db, "users", currentChat.uid), { [`chats.${contactChatIndex}.lastMessage`]: text.substring(0, 30), [`chats.${contactChatIndex}.lastMessageTime`]: serverTimestamp(), [`chats.${contactChatIndex}.unread`]: true });
+                else await updateDoc(doc(db, "users", currentChat.uid), { chats: arrayUnion({ uid: currentUser.uid, globalId: currentUserData.globalId, nickname: currentUserData.nickname, email: currentUser.email, isGroup: false, lastMessage: text.substring(0, 30), lastMessageTime: serverTimestamp(), unread: true }) });
+            } else if (currentGroup) await updateDoc(doc(db, "groups", currentGroup.id), { lastMessage: text.substring(0, 30), lastMessageTime: serverTimestamp() });
             input.value = '';
         };
 
         function listenForUpdates() {
             if (!currentUser) return;
-            
-            const userRef = doc(db, "users", currentUser.uid);
-            onSnapshot(userRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    currentUserData = docSnap.data();
-                    loadChats();
-                    loadGroups();
-                }
-            });
+            onSnapshot(doc(db, "users", currentUser.uid), (docSnap) => { if (docSnap.exists()) { currentUserData = docSnap.data(); loadChats(); loadGroups(); } });
         }
 
         // ==================== ГРУППЫ ====================
-        
-        function renderContactsForGroup(containerId, selectedSet, onClickCallback) {
+        function renderContactsForGroup(containerId, selectedSet) {
             const contacts = currentUserData?.contacts || [];
             const container = document.getElementById(containerId);
             if (!container) return;
-            
-            if (contacts.length === 0) {
-                container.innerHTML = '<div class="empty-state" style="padding:20px;">Нет контактов</div>';
-                return;
-            }
-            
+            if (contacts.length === 0) { container.innerHTML = '<div class="empty-state" style="padding:20px;">Нет контактов</div>'; return; }
             container.innerHTML = '';
             contacts.forEach(contact => {
                 const isChecked = selectedSet.has(contact.uid);
                 const div = document.createElement('div');
                 div.className = 'contact-checkbox';
-                div.innerHTML = `
-                    <input type="checkbox" ${isChecked ? 'checked' : ''} data-uid="${contact.uid}" data-name="${escapeHtml(contact.nickname || contact.globalId)}" data-globalid="${contact.globalId}">
-                    <div class="avatar-small" style="width:36px; height:36px; font-size:16px;">${(contact.nickname?.charAt(0) || '👤').toUpperCase()}</div>
-                    <div class="info-small">
-                        <div class="item-name">${contact.nickname || contact.globalId?.substring(0, 12)}</div>
-                        <div class="item-subtitle">${contact.globalId}</div>
-                    </div>
-                `;
+                div.innerHTML = `<input type="checkbox" ${isChecked ? 'checked' : ''} data-uid="${contact.uid}"><div class="avatar-small" style="width:36px; height:36px; font-size:16px;">${(contact.nickname?.charAt(0) || '👤').toUpperCase()}</div><div class="info-small"><div class="item-name">${contact.nickname || contact.globalId?.substring(0, 12)}</div><div class="item-subtitle">${contact.globalId}</div></div>`;
                 const checkbox = div.querySelector('input');
-                checkbox.addEventListener('change', (e) => {
-                    if (e.target.checked) {
-                        selectedSet.add(contact.uid);
-                    } else {
-                        selectedSet.delete(contact.uid);
-                    }
-                    if (onClickCallback) onClickCallback(selectedSet);
-                });
+                checkbox.addEventListener('change', (e) => { if (e.target.checked) selectedSet.add(contact.uid); else selectedSet.delete(contact.uid); updateInviteList(); });
                 container.appendChild(div);
             });
         }
-        
-        function updateInviteListFromSelected() {
+
+        function updateInviteList() {
             const container = document.getElementById('inviteMembersList');
             if (!container) return;
-            
-            const selectedContacts = Array.from(selectedContactsForGroup).map(uid => {
-                const contact = currentUserData?.contacts?.find(c => c.uid === uid);
-                return contact ? {
-                    uid: contact.uid,
-                    globalId: contact.globalId,
-                    nickname: contact.nickname,
-                    role: 'member'
-                } : null;
-            }).filter(c => c);
-            
-            pendingInvites = [...selectedContacts];
-            renderInviteList();
-        }
-        
-        window.showCreateGroupModal = () => {
-            pendingInvites = [];
-            selectedContactsForGroup.clear();
-            document.getElementById('groupName').value = '';
-            document.getElementById('inviteGlobalId').value = '';
-            
-            renderContactsForGroup('contactsForGroup', selectedContactsForGroup, () => {
-                updateInviteListFromSelected();
-            });
-            renderInviteList();
-            document.getElementById('createGroupModal').style.display = 'flex';
-        };
-
-        window.closeCreateGroupModal = () => {
-            document.getElementById('createGroupModal').style.display = 'none';
-        };
-
-        window.addInviteByGlobalId = async () => {
-            const globalId = document.getElementById('inviteGlobalId').value.trim();
-            if (!globalId) return;
-            
-            if (globalId === currentUserData.globalId) {
-                alert('Нельзя пригласить самого себя');
-                return;
-            }
-            
-            if (pendingInvites.some(i => i.globalId === globalId)) {
-                alert('Уже добавлен');
-                return;
-            }
-            
-            const q = query(collection(db, "users"), where("globalId", "==", globalId));
-            const snap = await getDocs(q);
-            
-            if (snap.empty) {
-                alert('Пользователь с таким Global ID не найден');
-                return;
-            }
-            
-            const userData = snap.docs[0].data();
-            pendingInvites.push({
-                uid: snap.docs[0].id,
-                globalId: globalId,
-                nickname: userData.nickname,
-                role: 'member'
-            });
-            
-            renderInviteList();
-            document.getElementById('inviteGlobalId').value = '';
-        };
-
-        function renderInviteList() {
-            const container = document.getElementById('inviteMembersList');
-            if (!container) return;
-            container.innerHTML = '';
-            
-            if (pendingInvites.length === 0) {
-                container.innerHTML = '<div class="info-text" style="padding:10px;">Нет приглашённых участников</div>';
-                return;
-            }
-            
+            pendingInvites = Array.from(selectedContactsForGroup).map(uid => currentUserData?.contacts?.find(c => c.uid === uid)).filter(c => c);
+            container.innerHTML = pendingInvites.length === 0 ? '<div class="info-text" style="padding:10px;">Нет приглашённых участников</div>' : '';
             pendingInvites.forEach((invite, index) => {
                 const div = document.createElement('div');
                 div.className = 'member-item';
-                div.innerHTML = `
-                    <span class="member-name">${invite.nickname || invite.globalId}</span>
-                    <button class="remove-member-btn" onclick="removeInvite(${index})">Удалить</button>
-                `;
+                div.innerHTML = `<span class="member-name">${invite.nickname || invite.globalId}</span><button class="remove-member-btn" onclick="removeInvite(${index})">Удалить</button>`;
                 container.appendChild(div);
             });
         }
 
-        window.removeInvite = (index) => {
-            pendingInvites.splice(index, 1);
-            renderInviteList();
-        };
+        window.removeInvite = (index) => { pendingInvites.splice(index, 1); selectedContactsForGroup.delete(pendingInvites[index]?.uid); updateInviteList(); };
+        window.showCreateGroupModal = () => { pendingInvites = []; selectedContactsForGroup.clear(); document.getElementById('groupName').value = ''; renderContactsForGroup('contactsForGroup', selectedContactsForGroup); updateInviteList(); document.getElementById('createGroupModal').style.display = 'flex'; };
+        window.closeCreateGroupModal = () => { document.getElementById('createGroupModal').style.display = 'none'; };
 
         window.createGroup = async () => {
             const groupName = document.getElementById('groupName').value.trim();
-            if (!groupName) {
-                alert('Введите название группы');
-                return;
-            }
-            
-            const members = [
-                { uid: currentUser.uid, globalId: currentUserData.globalId, nickname: currentUserData.nickname, role: 'admin' },
-                ...pendingInvites.map(invite => ({ ...invite, role: 'member' }))
-            ];
-            
-            const groupData = {
-                name: groupName,
-                createdAt: serverTimestamp(),
-                createdBy: currentUser.uid,
-                members: members,
-                memberCount: members.length,
-                lastMessage: null,
-                lastMessageTime: null
-            };
-            
-            const groupRef = await addDoc(collection(db, "groups"), groupData);
-            
-            for (const member of members) {
-                const userRef = doc(db, "users", member.uid);
-                const userDoc = await getDoc(userRef);
-                const userGroups = userDoc.data()?.groups || [];
-                
-                if (!userGroups.some(g => g.id === groupRef.id)) {
-                    await updateDoc(userRef, {
-                        groups: arrayUnion({
-                            id: groupRef.id,
-                            name: groupName,
-                            memberCount: members.length,
-                            role: member.role,
-                            lastMessage: null
-                        })
-                    });
-                }
-            }
-            
+            if (!groupName) { alert('Введите название группы'); return; }
+            const members = [{ uid: currentUser.uid, globalId: currentUserData.globalId, nickname: currentUserData.nickname, role: 'admin' }, ...pendingInvites.map(invite => ({ uid: invite.uid, globalId: invite.globalId, nickname: invite.nickname, role: 'member' }))];
+            const groupRef = await addDoc(collection(db, "groups"), { name: groupName, createdAt: serverTimestamp(), createdBy: currentUser.uid, members, memberCount: members.length, lastMessage: null, lastMessageTime: null });
+            for (const member of members) { const userRef = doc(db, "users", member.uid); const userDoc = await getDoc(userRef); const userGroups = userDoc.data()?.groups || []; if (!userGroups.some(g => g.id === groupRef.id)) await updateDoc(userRef, { groups: arrayUnion({ id: groupRef.id, name: groupName, memberCount: members.length, role: member.role, lastMessage: null }) }); }
             closeCreateGroupModal();
             alert(`✅ Группа "${groupName}" создана!`);
             loadGroups();
         };
 
-        // Добавление участников в существующую группу
-        window.showAddMembersModal = () => {
-            if (!currentGroup) return;
-            selectedNewMembers.clear();
-            
-            renderContactsForGroup('contactsForAddMembers', selectedNewMembers, null);
-            document.getElementById('addMembersModal').style.display = 'flex';
-        };
-        
-        window.closeAddMembersModal = () => {
-            document.getElementById('addMembersModal').style.display = 'none';
-            selectedNewMembers.clear();
-        };
-        
+        window.showAddMembersModal = () => { if (!currentGroup) return; selectedNewMembers.clear(); renderContactsForGroup('contactsForAddMembers', selectedNewMembers); document.getElementById('addMembersModal').style.display = 'flex'; };
+        window.closeAddMembersModal = () => { document.getElementById('addMembersModal').style.display = 'none'; selectedNewMembers.clear(); };
+
         window.addSelectedMembers = async () => {
-            if (!currentGroup || selectedNewMembers.size === 0) {
-                alert('Выберите хотя бы одного участника');
-                return;
-            }
-            
+            if (!currentGroup || selectedNewMembers.size === 0) { alert('Выберите хотя бы одного участника'); return; }
             const groupRef = doc(db, "groups", currentGroup.id);
             const groupDoc = await getDoc(groupRef);
             const groupData = groupDoc.data();
-            
-            const existingMembers = groupData.members.map(m => m.uid);
             const newMembersList = [];
-            
             for (const uid of selectedNewMembers) {
-                if (existingMembers.includes(uid)) continue;
-                
+                if (groupData.members.some(m => m.uid === uid)) continue;
                 const contact = currentUserData?.contacts?.find(c => c.uid === uid);
-                if (contact) {
-                    newMembersList.push({
-                        uid: contact.uid,
-                        globalId: contact.globalId,
-                        nickname: contact.nickname,
-                        role: 'member'
-                    });
-                } else {
-                    const userDoc = await getDoc(doc(db, "users", uid));
-                    const userData = userDoc.data();
-                    if (userData) {
-                        newMembersList.push({
-                            uid: uid,
-                            globalId: userData.globalId,
-                            nickname: userData.nickname,
-                            role: 'member'
-                        });
-                    }
-                }
+                if (contact) newMembersList.push({ uid: contact.uid, globalId: contact.globalId, nickname: contact.nickname, role: 'member' });
             }
-            
-            if (newMembersList.length === 0) {
-                alert('Все выбранные пользователи уже в группе');
-                closeAddMembersModal();
-                return;
-            }
-            
+            if (newMembersList.length === 0) { alert('Все выбранные пользователи уже в группе'); closeAddMembersModal(); return; }
             const updatedMembers = [...groupData.members, ...newMembersList];
-            await updateDoc(groupRef, {
-                members: updatedMembers,
-                memberCount: updatedMembers.length
-            });
-            
-            for (const member of newMembersList) {
-                const userRef = doc(db, "users", member.uid);
-                const userDoc = await getDoc(userRef);
-                const userGroups = userDoc.data()?.groups || [];
-                
-                if (!userGroups.some(g => g.id === currentGroup.id)) {
-                    await updateDoc(userRef, {
-                        groups: arrayUnion({
-                            id: currentGroup.id,
-                            name: groupData.name,
-                            memberCount: updatedMembers.length,
-                            role: 'member',
-                            lastMessage: null
-                        })
-                    });
-                }
-            }
-            
-            if (currentUserData.groups) {
-                const groupIndex = currentUserData.groups.findIndex(g => g.id === currentGroup.id);
-                if (groupIndex !== -1) {
-                    currentUserData.groups[groupIndex].memberCount = updatedMembers.length;
-                }
-            }
-            
+            await updateDoc(groupRef, { members: updatedMembers, memberCount: updatedMembers.length });
+            for (const member of newMembersList) { const userRef = doc(db, "users", member.uid); const userDoc = await getDoc(userRef); const userGroups = userDoc.data()?.groups || []; if (!userGroups.some(g => g.id === currentGroup.id)) await updateDoc(userRef, { groups: arrayUnion({ id: currentGroup.id, name: groupData.name, memberCount: updatedMembers.length, role: 'member', lastMessage: null }) }); }
             closeAddMembersModal();
             alert(`✅ Добавлено ${newMembersList.length} участников!`);
             loadGroups();
-            
-            if (document.getElementById('groupInfoModal').style.display === 'flex') {
-                await showGroupInfo();
-            }
         };
 
         window.showGroupInfo = async () => {
             if (!currentGroup) return;
-            
-            const groupRef = doc(db, "groups", currentGroup.id);
-            const groupDoc = await getDoc(groupRef);
+            const groupDoc = await getDoc(doc(db, "groups", currentGroup.id));
             const groupData = groupDoc.data();
-            
             document.getElementById('groupInfoTitle').innerText = groupData.name;
-            
             let membersHtml = '<div class="member-list">';
-            groupData.members.forEach(member => {
-                membersHtml += `
-                    <div class="member-item">
-                        <span class="member-name">${member.nickname || member.globalId} ${member.role === 'admin' ? '👑' : ''}</span>
-                        ${member.uid === currentUser.uid ? '<span style="font-size:11px; color:var(--accent);">Вы</span>' : ''}
-                    </div>
-                `;
-            });
+            groupData.members.forEach(member => { membersHtml += `<div class="member-item"><span class="member-name">${member.nickname || member.globalId} ${member.role === 'admin' ? '👑' : ''}</span>${member.uid === currentUser.uid ? '<span style="font-size:11px; color:var(--accent);">Вы</span>' : ''}</div>`; });
             membersHtml += '</div>';
-            
-            document.getElementById('groupInfoContent').innerHTML = `
-                <div style="text-align:center; margin-bottom:15px;">
-                    <div style="font-size:48px;">👥</div>
-                    <div style="font-weight:bold; margin-top:5px;">${escapeHtml(groupData.name)}</div>
-                    <div style="font-size:12px; color:var(--text-muted);">${groupData.memberCount} участников</div>
-                    <div style="font-size:10px; color:var(--accent); margin-top:5px;">🔒 20 слоёв шифрования</div>
-                </div>
-                <div class="section-title">Участники</div>
-                ${membersHtml}
-            `;
-            
+            document.getElementById('groupInfoContent').innerHTML = `<div style="text-align:center; margin-bottom:15px;"><div style="font-size:48px;">👥</div><div style="font-weight:bold; margin-top:5px;">${escapeHtml(groupData.name)}</div><div style="font-size:12px; color:var(--text-muted);">${groupData.memberCount} участников</div><div style="font-size:10px; color:var(--accent); margin-top:5px;">🔒 20 слоёв шифрования</div></div><div class="section-title">Участники</div>${membersHtml}`;
             document.getElementById('groupInfoModal').style.display = 'flex';
         };
 
-        window.closeGroupInfo = () => {
-            document.getElementById('groupInfoModal').style.display = 'none';
-        };
+        window.closeGroupInfo = () => { document.getElementById('groupInfoModal').style.display = 'none'; };
 
         window.leaveGroup = async () => {
             if (!currentGroup || !confirm(`Выйти из группы "${currentGroup.name}"?`)) return;
-            
             const groupRef = doc(db, "groups", currentGroup.id);
             const groupDoc = await getDoc(groupRef);
             const groupData = groupDoc.data();
-            
             const updatedMembers = groupData.members.filter(m => m.uid !== currentUser.uid);
-            
-            if (updatedMembers.length === 0) {
-                await deleteDoc(groupRef);
-            } else {
-                await updateDoc(groupRef, {
-                    members: updatedMembers,
-                    memberCount: updatedMembers.length
-                });
-            }
-            
+            if (updatedMembers.length === 0) await deleteDoc(groupRef);
+            else await updateDoc(groupRef, { members: updatedMembers, memberCount: updatedMembers.length });
             const userGroups = currentUserData.groups.filter(g => g.id !== currentGroup.id);
-            await updateDoc(doc(db, "users", currentUser.uid), {
-                groups: userGroups
-            });
-            
+            await updateDoc(doc(db, "users", currentUser.uid), { groups: userGroups });
             closeGroupInfo();
             closeChat();
             loadGroups();
@@ -2114,88 +1355,34 @@
         window.switchTab = (tab) => {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-            
-            if (tab === 'chats') {
-                document.querySelector('.tab:first-child').classList.add('active');
-                document.getElementById('chatsPane').classList.add('active');
-                loadChats();
-            } else if (tab === 'groups') {
-                document.querySelectorAll('.tab')[1].classList.add('active');
-                document.getElementById('groupsPane').classList.add('active');
-                loadGroups();
-            } else {
-                document.querySelectorAll('.tab')[2].classList.add('active');
-                document.getElementById('contactsPane').classList.add('active');
-                loadContacts();
-            }
+            if (tab === 'chats') { document.querySelector('.tab:first-child').classList.add('active'); document.getElementById('chatsPane').classList.add('active'); loadChats(); }
+            else if (tab === 'groups') { document.querySelectorAll('.tab')[1].classList.add('active'); document.getElementById('groupsPane').classList.add('active'); loadGroups(); }
+            else { document.querySelectorAll('.tab')[2].classList.add('active'); document.getElementById('contactsPane').classList.add('active'); loadContacts(); }
         };
 
         window.closeChat = () => {
-            if (window.innerWidth <= 768) {
-                document.getElementById('sidebar').classList.remove('hide-on-mobile');
-                document.getElementById('chatScreen').classList.remove('show-on-mobile');
-            }
+            if (window.innerWidth <= 768) { document.getElementById('sidebar').classList.remove('hide-on-mobile'); document.getElementById('chatScreen').classList.remove('show-on-mobile'); }
             document.getElementById('chatInputArea').style.display = 'none';
-            currentChat = null;
-            currentGroup = null;
-            currentChatId = null;
+            currentChat = null; currentGroup = null; currentChatId = null;
             if (messagesListener) messagesListener();
         };
 
-        window.showSettings = () => {
-            document.getElementById('settingsModal').style.display = 'flex';
-        };
-
-        window.closeSettings = () => {
-            document.getElementById('settingsModal').style.display = 'none';
-        };
-
-        window.showSearchModal = () => {
-            document.getElementById('searchModal').style.display = 'flex';
-        };
-
-        window.closeSearchModal = () => {
-            document.getElementById('searchModal').style.display = 'none';
-        };
+        window.showSettings = () => { document.getElementById('settingsModal').style.display = 'flex'; };
+        window.closeSettings = () => { document.getElementById('settingsModal').style.display = 'none'; };
+        window.showSearchModal = () => { document.getElementById('searchModal').style.display = 'flex'; };
+        window.closeSearchModal = () => { document.getElementById('searchModal').style.display = 'none'; };
 
         window.searchByGlobalId = async () => {
             const globalId = document.getElementById('searchGlobalIdInput').value.trim();
-            if (!globalId) {
-                alert('Введите Global ID');
-                return;
-            }
-            
+            if (!globalId) { alert('Введите Global ID'); return; }
             const q = query(collection(db, "users"), where("globalId", "==", globalId));
             const snap = await getDocs(q);
-            
-            if (snap.empty) {
-                alert('Пользователь не найден');
-                return;
-            }
-            
+            if (snap.empty) { alert('Пользователь не найден'); return; }
             const userDoc = snap.docs[0];
             const userData = userDoc.data();
-            
-            if (userDoc.id === currentUser.uid) {
-                alert('Это вы сами');
-                return;
-            }
-            
-            const contact = {
-                uid: userDoc.id,
-                globalId: userData.globalId,
-                nickname: userData.nickname,
-                email: userData.email
-            };
-            
-            const existingContacts = currentUserData?.contacts || [];
-            if (!existingContacts.some(c => c.uid === contact.uid)) {
-                await updateDoc(doc(db, "users", currentUser.uid), {
-                    contacts: arrayUnion(contact)
-                });
-                currentUserData.contacts = [...existingContacts, contact];
-            }
-            
+            if (userDoc.id === currentUser.uid) { alert('Это вы сами'); return; }
+            const contact = { uid: userDoc.id, globalId: userData.globalId, nickname: userData.nickname, email: userData.email };
+            if (!(currentUserData?.contacts || []).some(c => c.uid === contact.uid)) await updateDoc(doc(db, "users", currentUser.uid), { contacts: arrayUnion(contact) });
             closeSearchModal();
             loadContacts();
             alert(`✅ ${contact.nickname || contact.globalId} добавлен в контакты`);
@@ -2204,98 +1391,27 @@
         window.openScanner = () => {
             document.getElementById('scannerModal').style.display = 'flex';
             const html5QrCode = new Html5Qrcode("qr-reader");
-            html5QrCode.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: { width: 250, height: 250 } },
-                (decodedText) => {
-                    html5QrCode.stop();
-                    closeScanner();
-                    document.getElementById('searchGlobalIdInput').value = decodedText.replace('Global ID: ', '');
-                    searchByGlobalId();
-                },
-                (error) => {}
-            ).catch(err => console.log(err));
+            html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, (decodedText) => { html5QrCode.stop(); closeScanner(); document.getElementById('searchGlobalIdInput').value = decodedText.replace('Global ID: ', ''); searchByGlobalId(); }, (error) => {}).catch(err => console.log(err));
         };
-
-        window.closeScanner = () => {
-            document.getElementById('scannerModal').style.display = 'none';
-        };
-
-        window.addToContacts = async () => {
-            if (!currentChat || currentChat.isGroup) return;
-            
-            const existingContacts = currentUserData?.contacts || [];
-            if (!existingContacts.some(c => c.uid === currentChat.uid)) {
-                const contact = {
-                    uid: currentChat.uid,
-                    globalId: currentChat.globalId,
-                    nickname: currentChat.nickname,
-                    email: currentChat.email
-                };
-                await updateDoc(doc(db, "users", currentUser.uid), {
-                    contacts: arrayUnion(contact)
-                });
-                currentUserData.contacts = [...existingContacts, contact];
-                loadContacts();
-                alert('✅ Контакт добавлен');
-            }
-        };
-
+        window.closeScanner = () => { document.getElementById('scannerModal').style.display = 'none'; };
+        window.addToContacts = async () => { if (!currentChat || currentChat.isGroup) return; if (!(currentUserData?.contacts || []).some(c => c.uid === currentChat.uid)) { await updateDoc(doc(db, "users", currentUser.uid), { contacts: arrayUnion({ uid: currentChat.uid, globalId: currentChat.globalId, nickname: currentChat.nickname, email: currentChat.email }) }); loadContacts(); alert('✅ Контакт добавлен'); } };
         window.deleteCurrentChat = async () => {
             if (!currentChat && !currentGroup) return;
-            
-            if (currentChat && !currentChat.isGroup) {
-                if (!confirm('Удалить чат? История сообщений останется у собеседника.')) return;
-                
-                const chats = currentUserData?.chats || [];
-                const updatedChats = chats.filter(c => c.uid !== currentChat.uid);
-                
-                await updateDoc(doc(db, "users", currentUser.uid), {
-                    chats: updatedChats
-                });
-                
-                currentUserData.chats = updatedChats;
-            } else if (currentGroup) {
-                if (!confirm('Удалить группу из списка? Вы останетесь в группе.')) return;
-                
-                const groups = currentUserData?.groups || [];
-                const updatedGroups = groups.filter(g => g.id !== currentGroup.id);
-                
-                await updateDoc(doc(db, "users", currentUser.uid), {
-                    groups: updatedGroups
-                });
-                
-                currentUserData.groups = updatedGroups;
-            }
-            
+            if (currentChat && !currentChat.isGroup) { if (!confirm('Удалить чат?')) return; const chats = currentUserData?.chats || []; const updatedChats = chats.filter(c => c.uid !== currentChat.uid); await updateDoc(doc(db, "users", currentUser.uid), { chats: updatedChats }); }
+            else if (currentGroup) { if (!confirm('Удалить группу из списка?')) return; const groups = currentUserData?.groups || []; const updatedGroups = groups.filter(g => g.id !== currentGroup.id); await updateDoc(doc(db, "users", currentUser.uid), { groups: updatedGroups }); }
             closeChat();
             loadChats();
             loadGroups();
         };
 
-        document.getElementById('plusBtn')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const menu = document.getElementById('plusMenu');
-            menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
-        });
-        
-        document.addEventListener('click', () => {
-            document.getElementById('plusMenu').style.display = 'none';
-        });
+        document.getElementById('plusBtn')?.addEventListener('click', (e) => { e.stopPropagation(); const menu = document.getElementById('plusMenu'); menu.style.display = menu.style.display === 'block' ? 'none' : 'block'; });
+        document.addEventListener('click', () => { document.getElementById('plusMenu').style.display = 'none'; });
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 const userDoc = await getDoc(doc(db, "users", user.uid));
-                const userData = userDoc.data();
-                
-                if (userData?.icebergAccess && !userData?.accountLocked) {
-                    currentUser = user;
-                    document.getElementById('authForm').style.display = 'none';
-                    document.getElementById('messengerApp').style.display = 'flex';
-                    await loadUserData(user);
-                } else {
-                    await signOut(auth);
-                }
+                if (userDoc.data()?.icebergAccess && !userDoc.data()?.accountLocked) { currentUser = user; document.getElementById('authForm').style.display = 'none'; document.getElementById('messengerApp').style.display = 'flex'; await loadUserData(user); }
+                else await signOut(auth);
             } else {
                 if (blockCheckInterval) clearInterval(blockCheckInterval);
                 if (messagesListener) messagesListener();
