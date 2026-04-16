@@ -1377,8 +1377,7 @@
                         nickname: contact.nickname,
                         email: contact.email,
                         isGroup: false,
-                        lastMessage: null,
-                        lastMessageTime: null,
+                        // lastMessage и lastMessageTime больше не используются
                         unread: false
                     });
                     needsUpdate = true;
@@ -1443,7 +1442,11 @@
                 const userDoc = await getDoc(doc(db, "users", currentUser.uid));
                 if (userDoc.exists()) {
                     const newData = userDoc.data();
-                    if (JSON.stringify(newData.chats) !== JSON.stringify(currentUserData.chats)) {
+                    // Сравниваем без учета lastMessage и lastMessageTime
+                    const oldChatsSimple = (currentUserData.chats || []).map(c => ({ uid: c.uid, isGroup: c.isGroup, nickname: c.nickname, unread: c.unread }));
+                    const newChatsSimple = (newData.chats || []).map(c => ({ uid: c.uid, isGroup: c.isGroup, nickname: c.nickname, unread: c.unread }));
+                    
+                    if (JSON.stringify(newChatsSimple) !== JSON.stringify(oldChatsSimple)) {
                         currentUserData = newData;
                         loadChats();
                         loadGroups();
@@ -1464,10 +1467,11 @@
                 return; 
             }
             
+            // Сортировка только по имени, так как времени последнего сообщения больше нет
             const sortedChats = [...chats].sort((a, b) => {
-                const timeA = a.lastMessageTime?.toDate?.() || new Date(0);
-                const timeB = b.lastMessageTime?.toDate?.() || new Date(0);
-                return timeB - timeA;
+                const nameA = a.isGroup ? a.groupName : (a.nickname || a.globalId || '');
+                const nameB = b.isGroup ? b.groupName : (b.nickname || b.globalId || '');
+                return nameA.localeCompare(nameB);
             });
             
             container.innerHTML = '';
@@ -1476,8 +1480,6 @@
                 div.className = `chat-item ${chat.unread ? 'unread' : ''}`;
                 const avatar = chat.isGroup ? '👥' : (chat.nickname?.charAt(0).toUpperCase() || '👤');
                 const name = chat.isGroup ? chat.groupName : (chat.nickname || chat.globalId?.substring(0, 8) || 'Пользователь');
-                const lastMessage = chat.lastMessage || 'Нет сообщений';
-                const time = chat.lastMessageTime?.toDate?.() ? formatTime(chat.lastMessageTime.toDate()) : '';
                 
                 div.innerHTML = `
                     <div class="avatar-small">${avatar}</div>
@@ -1485,9 +1487,8 @@
                         <div class="name-row">
                             <span class="item-name">${escapeHtml(name)}</span>
                             ${chat.unread ? '<span style="background:var(--accent); color:white; border-radius:10px; padding:2px 8px; font-size:10px;">Новое</span>' : ''}
-                            ${time ? `<span style="margin-left:auto; font-size:10px; color:var(--text-muted);">${time}</span>` : ''}
                         </div>
-                        <div class="item-subtitle">${escapeHtml(lastMessage.substring(0, 30))}${lastMessage.length > 30 ? '...' : ''}</div>
+                        <div class="item-subtitle">🔒 Зашифрованный чат</div>
                     </div>
                 `;
                 div.onclick = () => selectChat(chat);
@@ -1513,7 +1514,7 @@
                             <span class="item-name">${escapeHtml(group.name)}</span>
                             <span class="member-count">${group.memberCount || 0} участников</span>
                         </div>
-                        <div class="item-subtitle">${escapeHtml(group.lastMessage?.substring(0, 30) || 'Нажмите для входа')}</div>
+                        <div class="item-subtitle">🔒 Групповой чат</div>
                     </div>
                 `;
                 div.onclick = () => selectGroup(group);
@@ -1565,8 +1566,6 @@
                     nickname: contact.nickname,
                     email: contact.email,
                     isGroup: false,
-                    lastMessage: null,
-                    lastMessageTime: null,
                     unread: false
                 };
                 
@@ -1700,27 +1699,20 @@
             
             await addDoc(collection(db, "messages", currentChatId, "msgs"), message);
             
+            // Обновляем статус непрочитанных для получателя (lastMessage и lastMessageTime больше не обновляются)
             if (currentChat && !currentChat.isGroup) {
-                const chats = currentUserData?.chats || [];
-                const chatIndex = chats.findIndex(c => c.uid === currentChat.uid && !c.isGroup);
-                if (chatIndex !== -1) {
-                    await updateDoc(doc(db, "users", currentUser.uid), {
-                        [`chats.${chatIndex}.lastMessage`]: text.substring(0, 30),
-                        [`chats.${chatIndex}.lastMessageTime`]: serverTimestamp()
-                    });
-                }
-                
+                // Помечаем чат как непрочитанный для получателя
                 const contactChats = await getDoc(doc(db, "users", currentChat.uid));
                 const contactData = contactChats.data();
                 const contactChatIndex = contactData?.chats?.findIndex(c => c.uid === currentUser.uid) ?? -1;
                 
                 if (contactChatIndex !== -1) {
+                    // Обновляем только флаг unread
                     await updateDoc(doc(db, "users", currentChat.uid), {
-                        [`chats.${contactChatIndex}.lastMessage`]: text.substring(0, 30),
-                        [`chats.${contactChatIndex}.lastMessageTime`]: serverTimestamp(),
                         [`chats.${contactChatIndex}.unread`]: true
                     });
                 } else {
+                    // Создаем чат для получателя
                     await updateDoc(doc(db, "users", currentChat.uid), {
                         chats: arrayUnion({
                             uid: currentUser.uid,
@@ -1728,17 +1720,10 @@
                             nickname: currentUserData.nickname,
                             email: currentUser.email,
                             isGroup: false,
-                            lastMessage: text.substring(0, 30),
-                            lastMessageTime: serverTimestamp(),
                             unread: true
                         })
                     });
                 }
-            } else if (currentGroup) {
-                await updateDoc(doc(db, "groups", currentGroup.id), {
-                    lastMessage: text.substring(0, 30),
-                    lastMessageTime: serverTimestamp()
-                });
             }
             
             input.value = '';
@@ -1840,9 +1825,8 @@
                 createdAt: serverTimestamp(),
                 createdBy: currentUser.uid,
                 members,
-                memberCount: members.length,
-                lastMessage: null,
-                lastMessageTime: null
+                memberCount: members.length
+                // lastMessage и lastMessageTime удалены
             });
             
             for (const member of members) {
@@ -1855,8 +1839,8 @@
                             id: groupRef.id,
                             name: groupName,
                             memberCount: members.length,
-                            role: member.role,
-                            lastMessage: null
+                            role: member.role
+                            // lastMessage удален
                         })
                     });
                 }
@@ -1922,8 +1906,7 @@
                             id: currentGroup.id,
                             name: groupData.name,
                             memberCount: updatedMembers.length,
-                            role: 'member',
-                            lastMessage: null
+                            role: 'member'
                         })
                     });
                 }
