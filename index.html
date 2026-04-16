@@ -178,7 +178,21 @@
         .divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
         .divider-line { flex: 1; height: 1px; background: var(--border); }
         .divider-text { font-size: 11px; color: var(--text-muted); }
-        .switch-link { text-align: center; margin-top: 16px; font-size: 13px; color: var(--accent); cursor: pointer; }
+        
+        .register-link { 
+            text-align: center; 
+            margin-top: 16px; 
+            font-size: 13px; 
+            color: var(--text-secondary);
+        }
+        .register-link a {
+            color: var(--accent);
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .register-link a:hover {
+            text-decoration: underline;
+        }
 
         .message {
             font-size: 12px;
@@ -625,6 +639,21 @@
             padding: 10px;
             font-size: 13px;
         }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+            margin-left: 8px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body class="theme-dark">
@@ -643,36 +672,19 @@
                 <div id="loginMode">
                     <div class="form-group">
                         <label class="form-label">Global ID или Email</label>
-                        <input type="text" id="loginIdentifier" placeholder="Global ID или your@email.com">
+                        <input type="text" id="loginIdentifier" placeholder="Global ID или your@email.com" autocomplete="username">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Пароль</label>
-                        <input type="password" id="loginPassword" placeholder="Введите пароль">
+                        <input type="password" id="loginPassword" placeholder="Введите пароль" autocomplete="current-password">
                     </div>
-                    <button class="btn btn-primary" onclick="login()">Войти в Айсберг</button>
-                    <div class="divider">
-                        <div class="divider-line"></div>
-                        <div class="divider-text">или</div>
-                        <div class="divider-line"></div>
+                    <button class="btn btn-primary" onclick="login()" id="loginBtn">
+                        <span id="loginBtnText">Войти в Айсберг</span>
+                    </button>
+                    
+                    <div class="register-link">
+                        Нет аккаунта? <a href="https://saryanich.github.io/Global-ID/" target="_blank">Создать в Global ID</a>
                     </div>
-                    <button class="btn btn-secondary" onclick="showRegister()">Создать аккаунт</button>
-                </div>
-
-                <div id="registerMode" style="display:none;">
-                    <div class="form-group">
-                        <label class="form-label">Email</label>
-                        <input type="email" id="regEmail" placeholder="your@email.com">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Пароль (минимум 6 символов)</label>
-                        <input type="password" id="regPassword" placeholder="Введите пароль">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Подтверждение пароля</label>
-                        <input type="password" id="regConfirmPassword" placeholder="Повторите пароль">
-                    </div>
-                    <button class="btn btn-primary" onclick="register()">Зарегистрироваться</button>
-                    <div class="switch-link" onclick="showLogin()">Уже есть аккаунт? Войти</div>
                 </div>
 
                 <div id="authMessage" class="message"></div>
@@ -897,7 +909,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, orderBy, addDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -992,10 +1004,15 @@
         }
 
         async function isDeviceKnown(uid) {
-            const userDoc = await getDoc(doc(db, "users", uid));
-            const data = userDoc.data();
-            const knownDevices = data?.knownDevices || [];
-            return knownDevices.some(d => d.fingerprint === deviceFingerprint);
+            try {
+                const userDoc = await getDoc(doc(db, "users", uid));
+                const data = userDoc.data();
+                const knownDevices = data?.knownDevices || [];
+                return knownDevices.some(d => d.fingerprint === deviceFingerprint);
+            } catch(e) {
+                console.error('Ошибка проверки устройства:', e);
+                return false;
+            }
         }
 
         async function addKnownDevice(uid) {
@@ -1020,11 +1037,6 @@
             const userDoc = await getDoc(doc(db, "users", uid));
             const data = userDoc.data();
             return data?.accountLocked === true;
-        }
-
-        function generateGlobalId() {
-            const chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-            return Array.from({length: 22}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
         }
 
         function showMessage(elementId, text, isError = true) {
@@ -1073,12 +1085,15 @@
 
         window.cancel2FA = () => {
             document.getElementById('twoFactorModal').style.display = 'none';
-            ['code1','code2','code3','code4'].forEach(id => document.getElementById(id).value = '');
+            ['code1','code2','code3','code4'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
             pendingUser = null;
         };
 
         window.verify2FA = async () => {
-            const code = ['code1','code2','code3','code4'].map(id => document.getElementById(id).value).join('');
+            const code = ['code1','code2','code3','code4'].map(id => document.getElementById(id)?.value || '').join('');
             if (code.length !== 4) {
                 showMessage('twoFactorMessage', 'Введите 4 цифры', true);
                 return;
@@ -1088,32 +1103,40 @@
                 return;
             }
             
-            const userDoc = await getDoc(doc(db, "users", pendingUser.uid));
-            const userData = userDoc.data();
-            
-            if (code === userData?.twoFactorCode) {
-                if (document.getElementById('trustDevice').checked) {
-                    await addKnownDevice(pendingUser.uid);
+            try {
+                const userDoc = await getDoc(doc(db, "users", pendingUser.uid));
+                const userData = userDoc.data();
+                
+                if (code === userData?.twoFactorCode) {
+                    if (document.getElementById('trustDevice')?.checked) {
+                        await addKnownDevice(pendingUser.uid);
+                    }
+                    
+                    await updateDoc(doc(db, "users", pendingUser.uid), { 
+                        twoFactorCode: null, 
+                        twoFactorCodeExpires: null, 
+                        online: true, 
+                        lastSeen: serverTimestamp(), 
+                        currentIP, 
+                        currentDevice: deviceFingerprint 
+                    });
+                    
+                    document.getElementById('twoFactorModal').style.display = 'none';
+                    document.getElementById('authForm').style.display = 'none';
+                    document.getElementById('messengerApp').style.display = 'flex';
+                    ['code1','code2','code3','code4'].forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.value = '';
+                    });
+                    
+                    await loadUserData(pendingUser);
+                    startBlockCheck(pendingUser.uid);
+                } else {
+                    showMessage('twoFactorMessage', '❌ Неверный код', true);
                 }
-                
-                await updateDoc(doc(db, "users", pendingUser.uid), { 
-                    twoFactorCode: null, 
-                    twoFactorCodeExpires: null, 
-                    online: true, 
-                    lastSeen: serverTimestamp(), 
-                    currentIP, 
-                    currentDevice: deviceFingerprint 
-                });
-                
-                document.getElementById('twoFactorModal').style.display = 'none';
-                document.getElementById('authForm').style.display = 'none';
-                document.getElementById('messengerApp').style.display = 'flex';
-                ['code1','code2','code3','code4'].forEach(id => document.getElementById(id).value = '');
-                
-                await loadUserData(pendingUser);
-                startBlockCheck(pendingUser.uid);
-            } else {
-                showMessage('twoFactorMessage', '❌ Неверный код', true);
+            } catch(e) {
+                console.error('Ошибка 2FA:', e);
+                showMessage('twoFactorMessage', 'Ошибка проверки кода', true);
             }
         };
 
@@ -1131,13 +1154,19 @@
 
         // Авторизация
         window.login = async () => {
-            const identifier = document.getElementById('loginIdentifier').value.trim();
-            const password = document.getElementById('loginPassword').value;
+            const identifier = document.getElementById('loginIdentifier')?.value.trim() || '';
+            const password = document.getElementById('loginPassword')?.value || '';
+            const loginBtn = document.getElementById('loginBtn');
+            const loginBtnText = document.getElementById('loginBtnText');
             
             if (!identifier || !password) {
                 showMessage('authMessage', 'Заполните все поля', true);
                 return;
             }
+            
+            // Показываем загрузку
+            loginBtn.disabled = true;
+            loginBtnText.innerHTML = 'Вход... <span class="loading-spinner"></span>';
             
             await getDeviceInfo();
             
@@ -1148,6 +1177,8 @@
                     const snap = await getDocs(q);
                     if (snap.empty) {
                         showMessage('authMessage', 'Global ID не найден', true);
+                        loginBtn.disabled = false;
+                        loginBtnText.textContent = 'Войти в Айсберг';
                         return;
                     }
                     email = snap.docs[0].data().email;
@@ -1158,6 +1189,8 @@
                 if (await isAccountLocked(userCred.user.uid)) { 
                     await signOut(auth); 
                     alert('Аккаунт заблокирован');
+                    loginBtn.disabled = false;
+                    loginBtnText.textContent = 'Войти в Айсберг';
                     return; 
                 }
                 
@@ -1196,64 +1229,20 @@
                          <strong>Для входа требуется код подтверждения</strong>`;
                     
                     document.getElementById('twoFactorModal').style.display = 'flex';
-                    document.getElementById('code1').focus();
+                    document.getElementById('code1')?.focus();
                     console.log('2FA код:', code); // Для тестирования
                 }
             } catch (error) { 
                 console.error('Ошибка входа:', error);
-                showMessage('authMessage', 'Неверные данные', true); 
-            }
-        };
-
-        window.register = async () => {
-            const email = document.getElementById('regEmail').value.trim();
-            const password = document.getElementById('regPassword').value;
-            const confirm = document.getElementById('regConfirmPassword').value;
-            
-            if (!email || !password || !confirm) {
-                showMessage('authMessage', 'Заполните все поля', true);
-                return;
-            }
-            if (password.length < 6) {
-                showMessage('authMessage', 'Пароль минимум 6 символов', true);
-                return;
-            }
-            if (password !== confirm) {
-                showMessage('authMessage', 'Пароли не совпадают', true);
-                return;
-            }
-            
-            await getDeviceInfo();
-            
-            try {
-                const userCred = await createUserWithEmailAndPassword(auth, email, password);
-                await setDoc(doc(db, "users", userCred.user.uid), {
-                    email, 
-                    globalId: generateGlobalId(), 
-                    nickname: email.split('@')[0],
-                    createdAt: serverTimestamp(), 
-                    contacts: [], 
-                    groups: [], 
-                    chats: [],
-                    online: true, 
-                    lastSeen: serverTimestamp(), 
-                    globalIdAccess: true, 
-                    icebergAccess: true, 
-                    accountLocked: false,
-                    knownDevices: [{ 
-                        fingerprint: deviceFingerprint, 
-                        ip: currentIP, 
-                        userAgent: navigator.userAgent, 
-                        addedAt: new Date(), 
-                        lastUsed: new Date() 
-                    }],
-                    currentIP
-                });
-                
-                showMessage('authMessage', '✅ Аккаунт создан!', false);
-                setTimeout(() => showLogin(), 1500);
-            } catch (error) { 
-                showMessage('authMessage', error.message, true); 
+                let errorMessage = 'Неверные данные';
+                if (error.code === 'auth/user-not-found') errorMessage = 'Пользователь не найден';
+                else if (error.code === 'auth/wrong-password') errorMessage = 'Неверный пароль';
+                else if (error.code === 'auth/invalid-email') errorMessage = 'Неверный формат email';
+                else if (error.code === 'auth/too-many-requests') errorMessage = 'Слишком много попыток. Попробуйте позже';
+                showMessage('authMessage', errorMessage, true); 
+            } finally {
+                loginBtn.disabled = false;
+                loginBtnText.textContent = 'Войти в Айсберг';
             }
         };
 
@@ -1270,25 +1259,15 @@
             await signOut(auth);
         };
 
-        window.showRegister = () => { 
-            document.getElementById('loginMode').style.display = 'none'; 
-            document.getElementById('registerMode').style.display = 'block'; 
-        };
-        
-        window.showLogin = () => { 
-            document.getElementById('loginMode').style.display = 'block'; 
-            document.getElementById('registerMode').style.display = 'none'; 
-        };
-
         // Загрузка данных пользователя
         async function loadUserData(user) {
             currentUser = user;
             const userDoc = await getDoc(doc(db, "users", user.uid));
             currentUserData = userDoc.data();
             
-            document.getElementById('userAvatar').innerText = currentUserData.nickname?.charAt(0).toUpperCase() || 'U';
-            document.getElementById('userName').innerText = currentUserData.nickname || user.email.split('@')[0];
-            document.getElementById('userGlobalId').innerHTML = currentUserData.globalId?.substring(0, 12) + '...' || '—';
+            document.getElementById('userAvatar').innerText = currentUserData?.nickname?.charAt(0).toUpperCase() || 'U';
+            document.getElementById('userName').innerText = currentUserData?.nickname || user.email?.split('@')[0] || 'Пользователь';
+            document.getElementById('userGlobalId').innerHTML = (currentUserData?.globalId?.substring(0, 12) || '') + '...' || '—';
             
             // Создаем чаты для всех контактов, если их нет
             await ensureChatsForContacts();
@@ -1299,7 +1278,7 @@
             listenForUpdates();
         }
 
-        // Новая функция: создание чатов для всех контактов
+        // Создание чатов для всех контактов
         async function ensureChatsForContacts() {
             if (!currentUser || !currentUserData) return;
             
@@ -1433,13 +1412,11 @@
             });
         }
 
-        // Открытие чата с контактом (создается автоматически)
+        // Открытие чата с контактом
         async function openChatWithContact(contact) {
-            // Проверяем, есть ли уже чат
             let chat = (currentUserData?.chats || []).find(c => c.uid === contact.uid && !c.isGroup);
             
             if (!chat) {
-                // Создаем новый чат
                 chat = {
                     uid: contact.uid,
                     globalId: contact.globalId,
@@ -1630,7 +1607,7 @@
             });
         }
 
-        // Функции групп
+        // Остальные функции (группы, модальные окна и т.д.)
         function renderContactsForGroup(containerId, selectedSet) {
             const contacts = currentUserData?.contacts || [];
             const container = document.getElementById(containerId);
@@ -2057,7 +2034,6 @@
             
             if (!(currentUserData?.contacts || []).some(c => c.uid === contact.uid)) {
                 await updateDoc(doc(db, "users", currentUser.uid), { contacts: arrayUnion(contact) });
-                // Автоматически создаем чат
                 await ensureChatsForContacts();
             }
             
@@ -2152,6 +2128,20 @@
             }
         });
 
+        // Обработка Enter в поле ввода сообщения
+        document.getElementById('messageInput')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Обработка Enter в полях логина
+        document.getElementById('loginPassword')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                login();
+            }
+        });
+
         // Отслеживание авторизации
         onAuthStateChanged(auth, async (user) => {
             if (user) {
@@ -2171,8 +2161,10 @@
                 currentUser = null;
                 document.getElementById('authForm').style.display = 'flex';
                 document.getElementById('messengerApp').style.display = 'none';
-                document.getElementById('loginIdentifier').value = '';
-                document.getElementById('loginPassword').value = '';
+                const loginInput = document.getElementById('loginIdentifier');
+                const passInput = document.getElementById('loginPassword');
+                if (loginInput) loginInput.value = '';
+                if (passInput) passInput.value = '';
             }
         });
 
