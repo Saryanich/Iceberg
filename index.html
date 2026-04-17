@@ -1048,6 +1048,7 @@
     </div>
 
     <script type="module">
+        // Firebase конфигурация
         const firebaseConfig = {
             apiKey: "AIzaSyA6GGJxAiao77U7_9mBUEjftmS_FnSWbIw",
             authDomain: "glob-data.firebaseapp.com",
@@ -1532,17 +1533,32 @@
                         <div class="item-subtitle">${escapeHtml(contact.globalId?.substring(0, 12) || '')}...</div>
                     </div>
                 `;
-                div.onclick = () => openChatWithContact(contact);
+                // Сохраняем контакт в dataset для последующего использования
+                div.dataset.contactUid = contact.uid;
+                div.dataset.contactGlobalId = contact.globalId || '';
+                div.dataset.contactNickname = contact.nickname || '';
+                div.dataset.contactEmail = contact.email || '';
+                div.onclick = (e) => {
+                    const contactData = {
+                        uid: div.dataset.contactUid,
+                        globalId: div.dataset.contactGlobalId,
+                        nickname: div.dataset.contactNickname,
+                        email: div.dataset.contactEmail
+                    };
+                    openChatWithContact(contactData);
+                };
                 container.appendChild(div);
             });
         }
 
         // ==================== ОТКРЫТИЕ ЧАТА С КОНТАКТОМ ====================
-        async function openChatWithContact(contact) {
+        window.openChatWithContact = async function(contact) {
             if (!contact || !contact.uid) {
                 console.error('Некорректный контакт:', contact);
                 return;
             }
+            
+            console.log('Открываем чат с контактом:', contact);
             
             let chats = currentUserData?.chats || [];
             let chat = chats.find(c => c.uid === contact.uid && !c.isGroup);
@@ -1564,13 +1580,16 @@
             
             await selectChat(chat);
             loadChats();
+            
+            // Переключаем на вкладку чатов
             switchTab('chats');
             
+            // Для мобильных устройств скрываем sidebar
             if (window.innerWidth <= 768 && window.matchMedia('(orientation: portrait)').matches) {
                 document.getElementById('sidebar').classList.add('hide-on-mobile');
                 document.getElementById('chatScreen').classList.add('show-on-mobile');
             }
-        }
+        };
 
         // ==================== ВЫБОР ЧАТА ====================
         async function selectChat(chat) {
@@ -1878,6 +1897,7 @@
             renderContactsForGroup('contactsForGroup', selectedContactsForGroup);
             updateInviteList();
             document.getElementById('createGroupModal').style.display = 'flex';
+            document.getElementById('plusMenu').style.display = 'none';
         };
 
         window.closeCreateGroupModal = () => { 
@@ -2103,7 +2123,7 @@
             document.getElementById('groupInfoModal').style.display = 'none'; 
         };
 
-        window.switchTab = (tab) => {
+        window.switchTab = function(tab) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
             
@@ -2149,6 +2169,7 @@
         
         window.showSearchModal = () => { 
             document.getElementById('searchModal').style.display = 'flex'; 
+            document.getElementById('plusMenu').style.display = 'none';
         };
         
         window.closeSearchModal = () => { 
@@ -2191,6 +2212,7 @@
 
         window.openScanner = () => {
             document.getElementById('scannerModal').style.display = 'flex';
+            document.getElementById('plusMenu').style.display = 'none';
             const html5QrCode = new Html5Qrcode("qr-reader");
             html5QrCode.start(
                 { facingMode: "environment" },
@@ -2293,6 +2315,10 @@
                         <div class="item-subtitle">${escapeHtml(contact.globalId?.substring(0, 12) || '')}...</div>
                     </div>
                 `;
+                div.dataset.contactUid = contact.uid;
+                div.dataset.contactGlobalId = contact.globalId || '';
+                div.dataset.contactNickname = contact.nickname || '';
+                div.dataset.contactEmail = contact.email || '';
                 div.onclick = () => openChatWithContact(contact);
                 container.appendChild(div);
             });
