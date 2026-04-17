@@ -408,10 +408,25 @@
         .chat-info h3 { font-size: 16px; color: var(--text-primary); }
         .chat-info p { font-size: 11px; color: var(--text-secondary); }
 
-        .add-contact-btn { background: var(--success); color: white; border: none; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; }
-        .delete-chat-btn { background: var(--danger); color: white; border: none; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; }
-        .group-info-btn { background: var(--accent); color: white; border: none; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; }
-        .clear-chat-btn { background: var(--warning); color: white; border: none; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; }
+        .header-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-icon {
+            background: var(--bg-surface);
+            color: var(--text-primary);
+            border: none;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .btn-icon.danger { background: var(--danger); color: white; }
+        .btn-icon.warning { background: var(--warning); color: white; }
+        .btn-icon.success { background: var(--success); color: white; }
 
         .user-profile {
             padding: 16px;
@@ -469,6 +484,7 @@
             padding: 12px 16px;
             cursor: pointer;
             border-bottom: 1px solid var(--border);
+            position: relative;
         }
         .chat-item:hover, .contact-item:hover, .group-item:hover { background: var(--hover); }
         .chat-item.unread { background: rgba(100, 181, 246, 0.1); }
@@ -491,6 +507,42 @@
         .name-row { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
         .item-name { font-size: 15px; font-weight: 500; color: var(--text-primary); }
         .item-subtitle { font-size: 11px; color: var(--text-secondary); }
+
+        .chat-actions {
+            display: none;
+            gap: 4px;
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .chat-item:hover .chat-actions {
+            display: flex;
+        }
+
+        .action-btn {
+            background: var(--bg-surface);
+            border: none;
+            color: var(--text-secondary);
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            cursor: pointer;
+        }
+
+        .action-btn:hover {
+            background: var(--accent);
+            color: white;
+        }
+
+        .action-btn.danger:hover {
+            background: var(--danger);
+        }
+
+        .action-btn.warning:hover {
+            background: var(--warning);
+        }
 
         .messages-area {
             flex: 1;
@@ -665,11 +717,6 @@
             border-radius: 12px;
             font-size: 10px;
             margin-left: 8px;
-        }
-
-        .external-link-icon {
-            font-size: 12px;
-            opacity: 0.7;
         }
 
         .registration-info {
@@ -860,10 +907,12 @@
                         <h3 id="chatName">Выберите чат</h3>
                         <p id="chatStatus">🔒 20 слоёв шифрования</p>
                     </div>
-                    <button id="groupInfoBtn" class="group-info-btn" style="display: none;" onclick="showGroupInfo()">ℹ️ Инфо</button>
-                    <button id="clearChatBtn" class="clear-chat-btn" style="display: none;" onclick="clearChat()">🗑 Очистить</button>
-                    <button id="addContactBtn" class="add-contact-btn" style="display: none;" onclick="addToContacts()">+ Добавить</button>
-                    <button id="deleteChatBtn" class="delete-chat-btn" style="display: none;" onclick="deleteCurrentChat()">Удалить</button>
+                    <div class="header-buttons">
+                        <button id="groupInfoBtn" class="btn-icon" style="display: none;" onclick="showGroupInfo()">ℹ️ Инфо</button>
+                        <button id="clearChatBtn" class="btn-icon warning" style="display: none;" onclick="clearCurrentChat()">🗑 Очистить</button>
+                        <button id="deleteChatBtn" class="btn-icon danger" style="display: none;" onclick="deleteCurrentChat()">❌ Удалить</button>
+                        <button id="deleteContactBtn" class="btn-icon danger" style="display: none;" onclick="deleteCurrentContact()">👤 Удалить контакт</button>
+                    </div>
                 </div>
                 <div class="messages-area" id="messagesArea">
                     <div class="empty-state">Выберите чат для начала общения</div>
@@ -1016,85 +1065,6 @@
         const auth = getAuth();
         const db = getFirestore();
         auth.setPersistence({ type: 'NONE' });
-
-        // ==================== УЛУЧШЕННОЕ ШИФРОВАНИЕ ====================
-        const CryptoUtils = {
-            generateKey: async (uid, salt) => {
-                const encoder = new TextEncoder();
-                const keyMaterial = await crypto.subtle.importKey(
-                    'raw',
-                    encoder.encode(uid + salt),
-                    { name: 'PBKDF2' },
-                    false,
-                    ['deriveBits', 'deriveKey']
-                );
-                return await crypto.subtle.deriveKey(
-                    {
-                        name: 'PBKDF2',
-                        salt: encoder.encode(salt),
-                        iterations: 100000,
-                        hash: 'SHA-256'
-                    },
-                    keyMaterial,
-                    { name: 'AES-GCM', length: 256 },
-                    true,
-                    ['encrypt', 'decrypt']
-                );
-            },
-            
-            encrypt: async (text, uid) => {
-                if (!text) return text;
-                try {
-                    const encoder = new TextEncoder();
-                    const salt = 'iceberg-salt-' + uid.substring(0, 8);
-                    const key = await CryptoUtils.generateKey(uid, salt);
-                    const iv = crypto.getRandomValues(new Uint8Array(12));
-                    
-                    const encrypted = await crypto.subtle.encrypt(
-                        { name: 'AES-GCM', iv: iv },
-                        key,
-                        encoder.encode(text)
-                    );
-                    
-                    const combined = new Uint8Array(iv.length + encrypted.byteLength);
-                    combined.set(iv);
-                    combined.set(new Uint8Array(encrypted), iv.length);
-                    
-                    return btoa(String.fromCharCode(...combined));
-                } catch (e) {
-                    console.error('Ошибка шифрования:', e);
-                    return btoa(unescape(encodeURIComponent(text)));
-                }
-            },
-            
-            decrypt: async (text, uid) => {
-                if (!text) return text;
-                try {
-                    const decoder = new TextDecoder();
-                    const salt = 'iceberg-salt-' + uid.substring(0, 8);
-                    const key = await CryptoUtils.generateKey(uid, salt);
-                    
-                    const combined = Uint8Array.from(atob(text), c => c.charCodeAt(0));
-                    const iv = combined.slice(0, 12);
-                    const encrypted = combined.slice(12);
-                    
-                    const decrypted = await crypto.subtle.decrypt(
-                        { name: 'AES-GCM', iv: iv },
-                        key,
-                        encrypted
-                    );
-                    
-                    return decoder.decode(decrypted);
-                } catch (e) {
-                    console.error('Ошибка расшифровки:', e);
-                    try {
-                        return decodeURIComponent(escape(atob(text)));
-                    } catch {
-                        return text;
-                    }
-                }
-            }
-        };
 
         // ==================== ПЕРЕМЕННЫЕ ====================
         let currentUser = null;
@@ -1324,25 +1294,17 @@
             }
         };
 
-        // ==================== ПЕРЕНАПРАВЛЕНИЕ НА GLOBAL ID ДЛЯ РЕГИСТРАЦИИ ====================
         window.redirectToGlobalID = function() {
-            // Сохраняем информацию о том, что пользователь пришёл из Айсберга
             localStorage.setItem('iceberg_referrer', window.location.href);
             localStorage.setItem('iceberg_app', 'true');
-            
-            // Перенаправляем на Global ID для регистрации
             window.location.href = 'https://saryanich.github.io/Global-ID/';
         };
 
-        // Проверка, вернулся ли пользователь после регистрации
         function checkReturnFromGlobalID() {
             const cameFromRegistration = localStorage.getItem('iceberg_app') === 'true';
             if (cameFromRegistration) {
-                // Очищаем флаги
                 localStorage.removeItem('iceberg_app');
                 localStorage.removeItem('iceberg_referrer');
-                
-                // Показываем сообщение о необходимости входа
                 setTimeout(() => {
                     showMessage('authMessage', '✅ Аккаунт создан! Теперь войдите в Айсберг', false);
                 }, 500);
@@ -1363,6 +1325,11 @@
             currentUser = user;
             const userDoc = await getDoc(doc(db, "users", user.uid));
             currentUserData = userDoc.data();
+            
+            if (!currentUserData.chats) currentUserData.chats = [];
+            if (!currentUserData.contacts) currentUserData.contacts = [];
+            if (!currentUserData.groups) currentUserData.groups = [];
+            
             document.getElementById('userAvatar').innerText = currentUserData.nickname?.charAt(0).toUpperCase() || 'U';
             document.getElementById('userName').innerText = currentUserData.nickname || user.email.split('@')[0];
             document.getElementById('userGlobalId').innerHTML = (currentUserData.globalId?.substring(0, 12) || '') + '...';
@@ -1384,6 +1351,7 @@
             let chats = currentUserData?.chats || [];
             let needsUpdate = false;
             
+            // Добавляем чаты для всех контактов, у которых их нет
             for (const contact of contacts) {
                 const existingChat = chats.find(c => c.uid === contact.uid && !c.isGroup);
                 if (!existingChat) {
@@ -1397,6 +1365,7 @@
                     });
                     needsUpdate = true;
                 } else {
+                    // Обновляем информацию о контакте в чате
                     const needsChatUpdate = 
                         existingChat.nickname !== contact.nickname ||
                         existingChat.globalId !== contact.globalId ||
@@ -1500,7 +1469,11 @@
                             <span class="item-name">${escapeHtml(name)}</span>
                             ${chat.unread ? '<span style="background:var(--accent); color:white; border-radius:10px; padding:2px 8px; font-size:10px;">Новое</span>' : ''}
                         </div>
-                        <div class="item-subtitle">🔒 Зашифрованный чат</div>
+                        <div class="item-subtitle">🔒 Чат</div>
+                    </div>
+                    <div class="chat-actions">
+                        ${!chat.isGroup ? `<button class="action-btn warning" onclick="event.stopPropagation(); clearChatById('${chat.uid}')">🗑 Очистить</button>` : ''}
+                        ${!chat.isGroup ? `<button class="action-btn danger" onclick="event.stopPropagation(); deleteChatById('${chat.uid}')">❌ Удалить</button>` : ''}
                     </div>
                 `;
                 div.onclick = () => selectChat(chat);
@@ -1571,8 +1544,6 @@
                 return;
             }
             
-            console.log('Открываем чат с контактом:', contact.nickname || contact.globalId);
-            
             let chats = currentUserData?.chats || [];
             let chat = chats.find(c => c.uid === contact.uid && !c.isGroup);
             
@@ -1589,7 +1560,6 @@
                 chats.push(chat);
                 await updateDoc(doc(db, "users", currentUser.uid), { chats: chats });
                 currentUserData.chats = chats;
-                console.log('Создан новый чат:', chat);
             }
             
             await selectChat(chat);
@@ -1604,12 +1574,7 @@
 
         // ==================== ВЫБОР ЧАТА ====================
         async function selectChat(chat) {
-            if (!chat) {
-                console.error('Попытка выбрать пустой чат');
-                return;
-            }
-            
-            console.log('Выбираем чат:', chat.nickname || chat.groupName || chat.globalId);
+            if (!chat) return;
             
             currentChat = chat;
             currentGroup = null;
@@ -1621,20 +1586,14 @@
             document.getElementById('chatName').innerText = chatName;
             document.getElementById('chatAvatar').innerText = chatAvatar;
             document.getElementById('chatStatus').innerHTML = chat.isGroup 
-                ? `👥 Групповой чат | 🔒 20 слоёв` 
-                : `🔒 20 слоёв шифрования`;
+                ? `👥 Групповой чат` 
+                : `🔒 Личный чат`;
             
             document.getElementById('chatInputArea').style.display = 'flex';
-            document.getElementById('groupInfoBtn').style.display = chat.isGroup ? 'block' : 'none';
-            document.getElementById('clearChatBtn').style.display = 'block';
-            document.getElementById('deleteChatBtn').style.display = 'block';
-            
-            if (!chat.isGroup) {
-                const isContact = (currentUserData?.contacts || []).some(c => c.uid === chat.uid);
-                document.getElementById('addContactBtn').style.display = isContact ? 'none' : 'block';
-            } else {
-                document.getElementById('addContactBtn').style.display = 'none';
-            }
+            document.getElementById('groupInfoBtn').style.display = chat.isGroup ? 'inline-block' : 'none';
+            document.getElementById('clearChatBtn').style.display = 'inline-block';
+            document.getElementById('deleteChatBtn').style.display = chat.isGroup ? 'none' : 'inline-block';
+            document.getElementById('deleteContactBtn').style.display = chat.isGroup ? 'none' : 'inline-block';
             
             if (window.innerWidth <= 768 && window.matchMedia('(orientation: portrait)').matches) {
                 document.getElementById('sidebar').classList.add('hide-on-mobile');
@@ -1672,12 +1631,12 @@
             currentChatId = `group_${group.id}`;
             document.getElementById('chatName').innerText = group.name;
             document.getElementById('chatAvatar').innerText = '👥';
-            document.getElementById('chatStatus').innerHTML = `👥 Групповой чат | ${group.memberCount || 0} участников | 🔒 20 слоёв`;
+            document.getElementById('chatStatus').innerHTML = `👥 Групповой чат | ${group.memberCount || 0} участников`;
             document.getElementById('chatInputArea').style.display = 'flex';
-            document.getElementById('groupInfoBtn').style.display = 'block';
-            document.getElementById('clearChatBtn').style.display = 'block';
-            document.getElementById('addContactBtn').style.display = 'none';
-            document.getElementById('deleteChatBtn').style.display = 'block';
+            document.getElementById('groupInfoBtn').style.display = 'inline-block';
+            document.getElementById('clearChatBtn').style.display = 'inline-block';
+            document.getElementById('deleteChatBtn').style.display = 'none';
+            document.getElementById('deleteContactBtn').style.display = 'none';
             
             if (window.innerWidth <= 768 && window.matchMedia('(orientation: portrait)').matches) {
                 document.getElementById('sidebar').classList.add('hide-on-mobile');
@@ -1687,13 +1646,13 @@
             loadMessages();
         }
 
-        // ==================== ЗАГРУЗКА СООБЩЕНИЙ ====================
+        // ==================== ЗАГРУЗКА СООБЩЕНИЙ (БЕЗ ШИФРОВАНИЯ) ====================
         async function loadMessages() {
             if (messagesListener) messagesListener();
             if (!currentChatId) return;
             
             const messagesRef = collection(db, "messages", currentChatId, "msgs");
-            messagesListener = onSnapshot(query(messagesRef, orderBy("timestamp", "asc")), async (snapshot) => {
+            messagesListener = onSnapshot(query(messagesRef, orderBy("timestamp", "asc")), (snapshot) => {
                 const messagesArea = document.getElementById('messagesArea');
                 if (snapshot.empty) {
                     messagesArea.innerHTML = '<div class="empty-state">Нет сообщений. Напишите первое!</div>';
@@ -1701,41 +1660,31 @@
                 }
                 
                 messagesArea.innerHTML = '';
-                for (const docSnap of snapshot.docs) {
+                snapshot.forEach((docSnap) => {
                     const msg = docSnap.data();
                     const isSent = msg.senderId === currentUser.uid;
-                    
-                    let decryptedText = msg.text;
-                    try {
-                        decryptedText = await CryptoUtils.decrypt(msg.text, currentUser.uid);
-                    } catch (e) {
-                        console.error('Ошибка расшифровки:', e);
-                        decryptedText = '[Ошибка расшифровки]';
-                    }
                     
                     const div = document.createElement('div');
                     div.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
                     div.innerHTML = `
                         ${!isSent && msg.senderName ? `<div style="font-size:10px; opacity:0.7; margin-bottom:4px;">${escapeHtml(msg.senderName)}</div>` : ''}
-                        <div>${escapeHtml(decryptedText)}</div>
+                        <div>${escapeHtml(msg.text)}</div>
                         <div class="message-time">${formatTime(msg.timestamp?.toDate())}</div>
                     `;
                     messagesArea.appendChild(div);
-                }
+                });
                 messagesArea.scrollTop = messagesArea.scrollHeight;
             });
         }
 
-        // ==================== ОТПРАВКА СООБЩЕНИЙ ====================
+        // ==================== ОТПРАВКА СООБЩЕНИЙ (БЕЗ ШИФРОВАНИЯ) ====================
         window.sendMessage = async () => {
             const input = document.getElementById('messageInput');
             const text = input.value.trim();
             if (!text || !currentChatId) return;
             
-            const encryptedText = await CryptoUtils.encrypt(text, currentUser.uid);
-            
             const message = {
-                text: encryptedText,
+                text: text,
                 senderId: currentUser.uid,
                 senderName: currentUserData.nickname,
                 timestamp: serverTimestamp(),
@@ -1782,6 +1731,89 @@
                 }
             });
         }
+
+        // ==================== ОЧИСТКА И УДАЛЕНИЕ ЧАТОВ ====================
+        window.clearCurrentChat = async () => {
+            if (!currentChatId) return;
+            if (!confirm('Очистить всю историю сообщений в этом чате?')) return;
+            
+            const messagesRef = collection(db, "messages", currentChatId, "msgs");
+            const snapshot = await getDocs(messagesRef);
+            const batch = writeBatch(db);
+            snapshot.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+            alert('✅ История сообщений очищена');
+        };
+
+        window.clearChatById = async (uid) => {
+            if (!uid) return;
+            if (!confirm('Очистить историю сообщений?')) return;
+            
+            const chatId = [currentUser.uid, uid].sort().join('_');
+            const messagesRef = collection(db, "messages", chatId, "msgs");
+            const snapshot = await getDocs(messagesRef);
+            const batch = writeBatch(db);
+            snapshot.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+            alert('✅ Чат очищен');
+        };
+
+        window.deleteCurrentChat = async () => {
+            if (!currentChat || currentChat.isGroup) return;
+            if (!confirm('Удалить этот чат? Контакт останется в списке контактов.')) return;
+            
+            const chats = currentUserData?.chats || [];
+            const updatedChats = chats.filter(c => c.uid !== currentChat.uid);
+            await updateDoc(doc(db, "users", currentUser.uid), { chats: updatedChats });
+            currentUserData.chats = updatedChats;
+            
+            closeChat();
+            loadChats();
+            alert('✅ Чат удалён');
+        };
+
+        window.deleteChatById = async (uid) => {
+            if (!uid) return;
+            if (!confirm('Удалить этот чат?')) return;
+            
+            const chats = currentUserData?.chats || [];
+            const updatedChats = chats.filter(c => c.uid !== uid);
+            await updateDoc(doc(db, "users", currentUser.uid), { chats: updatedChats });
+            currentUserData.chats = updatedChats;
+            
+            if (currentChat && currentChat.uid === uid) {
+                closeChat();
+            }
+            
+            loadChats();
+            alert('✅ Чат удалён');
+        };
+
+        window.deleteCurrentContact = async () => {
+            if (!currentChat || currentChat.isGroup) return;
+            if (!confirm('Удалить контакт? Чат также будет удалён.')) return;
+            
+            // Удаляем из контактов
+            const contacts = currentUserData?.contacts || [];
+            const updatedContacts = contacts.filter(c => c.uid !== currentChat.uid);
+            
+            // Удаляем чат
+            const chats = currentUserData?.chats || [];
+            const updatedChats = chats.filter(c => c.uid !== currentChat.uid);
+            
+            await updateDoc(doc(db, "users", currentUser.uid), { 
+                contacts: updatedContacts,
+                chats: updatedChats
+            });
+            
+            currentUserData.contacts = updatedContacts;
+            currentUserData.chats = updatedChats;
+            
+            closeChat();
+            loadChats();
+            loadContacts();
+            alert('✅ Контакт удалён');
+        };
 
         // ==================== ФУНКЦИИ ДЛЯ ГРУПП ====================
         function renderContactsForGroup(containerId, selectedSet) {
@@ -1992,7 +2024,6 @@
                         <div style="font-size: 64px; margin-bottom: 10px;">👥</div>
                         <div style="font-weight: bold; font-size: 20px;">${escapeHtml(groupData.name || 'Без названия')}</div>
                         <div style="font-size: 13px; color: var(--text-secondary);">${groupData.memberCount || groupData.members?.length || 0} участников</div>
-                        <div style="font-size: 11px; color: var(--accent); margin-top: 8px;">🔐 20 слоёв шифрования</div>
                     </div>
                     <div class="settings-title">📋 Участники</div>
                     ${membersHtml}
@@ -2072,18 +2103,6 @@
             document.getElementById('groupInfoModal').style.display = 'none'; 
         };
 
-        window.clearChat = async () => {
-            if (!currentChatId) return;
-            if (!confirm('Очистить всю историю сообщений?')) return;
-            
-            const messagesRef = collection(db, "messages", currentChatId, "msgs");
-            const snapshot = await getDocs(messagesRef);
-            const batch = writeBatch(db);
-            snapshot.forEach(doc => batch.delete(doc.ref));
-            await batch.commit();
-            alert('✅ История сообщений очищена');
-        };
-
         window.switchTab = (tab) => {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
@@ -2113,6 +2132,11 @@
             currentChat = null;
             currentGroup = null;
             currentChatId = null;
+            
+            document.getElementById('groupInfoBtn').style.display = 'none';
+            document.getElementById('clearChatBtn').style.display = 'none';
+            document.getElementById('deleteChatBtn').style.display = 'none';
+            document.getElementById('deleteContactBtn').style.display = 'none';
         };
 
         window.showSettings = () => { 
@@ -2146,16 +2170,22 @@
             if (userDoc.id === currentUser.uid) { alert('Это вы сами'); return; }
             
             const contact = { uid: userDoc.id, globalId: userData.globalId, nickname: userData.nickname, email: userData.email };
+            
+            // Добавляем в контакты, если ещё нет
             if (!(currentUserData?.contacts || []).some(c => c.uid === contact.uid)) {
                 await updateDoc(doc(db, "users", currentUser.uid), { contacts: arrayUnion(contact) });
-                await syncChatsWithContacts();
+                currentUserData.contacts = [...(currentUserData.contacts || []), contact];
             }
+            
+            // Создаём или обновляем чат
+            await syncChatsWithContacts();
             
             closeSearchModal();
             loadContacts();
             loadChats();
             alert(`✅ ${contact.nickname || contact.globalId} добавлен в контакты`);
             
+            // Открываем чат
             await openChatWithContact(contact);
         };
 
@@ -2177,48 +2207,6 @@
         
         window.closeScanner = () => { 
             document.getElementById('scannerModal').style.display = 'none'; 
-        };
-        
-        window.addToContacts = async () => {
-            if (!currentChat || currentChat.isGroup) return;
-            if (!(currentUserData?.contacts || []).some(c => c.uid === currentChat.uid)) {
-                await updateDoc(doc(db, "users", currentUser.uid), {
-                    contacts: arrayUnion({
-                        uid: currentChat.uid,
-                        globalId: currentChat.globalId,
-                        nickname: currentChat.nickname,
-                        email: currentChat.email
-                    })
-                });
-                await syncChatsWithContacts();
-                loadContacts();
-                document.getElementById('addContactBtn').style.display = 'none';
-                alert('✅ Контакт добавлен');
-            }
-        };
-        
-        window.deleteCurrentChat = async () => {
-            if (!currentChat && !currentGroup) return;
-            
-            if (currentChat && !currentChat.isGroup) {
-                if (!confirm('Удалить чат?')) return;
-                const chats = currentUserData?.chats || [];
-                const updatedChats = chats.filter(c => c.uid !== currentChat.uid);
-                await updateDoc(doc(db, "users", currentUser.uid), { chats: updatedChats });
-                currentUserData.chats = updatedChats;
-                alert('Чат удалён');
-            } else if (currentGroup) {
-                if (!confirm('Удалить группу из списка?')) return;
-                const groups = currentUserData?.groups || [];
-                const updatedGroups = groups.filter(g => g.id !== currentGroup.id);
-                await updateDoc(doc(db, "users", currentUser.uid), { groups: updatedGroups });
-                currentUserData.groups = updatedGroups;
-                alert('Группа удалена из списка');
-            }
-            
-            closeChat();
-            loadChats();
-            loadGroups();
         };
 
         window.toggleSedaProMode = function() {
@@ -2273,7 +2261,11 @@
                             <span class="item-name">${escapeHtml(name)}</span>
                             ${chat.unread ? '<span style="background:var(--accent); color:white; border-radius:10px; padding:2px 8px; font-size:10px;">Новое</span>' : ''}
                         </div>
-                        <div class="item-subtitle">🔒 Зашифрованный чат</div>
+                        <div class="item-subtitle">🔒 Чат</div>
+                    </div>
+                    <div class="chat-actions">
+                        ${!chat.isGroup ? `<button class="action-btn warning" onclick="event.stopPropagation(); clearChatById('${chat.uid}')">🗑 Очистить</button>` : ''}
+                        ${!chat.isGroup ? `<button class="action-btn danger" onclick="event.stopPropagation(); deleteChatById('${chat.uid}')">❌ Удалить</button>` : ''}
                     </div>
                 `;
                 div.onclick = () => selectChat(chat);
@@ -2380,8 +2372,6 @@
         loadTheme();
         initParticles();
         getDeviceInfo();
-        
-        // Проверяем, вернулся ли пользователь после регистрации
         checkReturnFromGlobalID();
     </script>
 </body>
