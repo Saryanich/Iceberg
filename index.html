@@ -197,7 +197,20 @@
         .divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
         .divider-line { flex: 1; height: 1px; background: var(--border); }
         .divider-text { font-size: 11px; color: var(--text-muted); }
-        .switch-link { text-align: center; margin-top: 16px; font-size: 13px; color: var(--accent); cursor: pointer; }
+        
+        .switch-link { 
+            text-align: center; 
+            margin-top: 16px; 
+            font-size: 13px; 
+            color: var(--accent); 
+            cursor: pointer; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .switch-link:hover { text-decoration: underline; }
 
         .message {
             font-size: 12px;
@@ -653,6 +666,53 @@
             font-size: 10px;
             margin-left: 8px;
         }
+
+        .external-link-icon {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        .registration-info {
+            background: rgba(100, 181, 246, 0.1);
+            border: 1px solid var(--accent);
+            border-radius: 12px;
+            padding: 16px;
+            margin: 16px 0;
+            text-align: center;
+        }
+
+        .registration-info h4 {
+            color: var(--accent);
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+
+        .registration-info p {
+            color: var(--text-secondary);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .btn-external {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+            color: white;
+            border: none;
+            padding: 14px 24px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-external:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
     </style>
 </head>
 <body class="theme-dark">
@@ -720,24 +780,12 @@
                         <div class="divider-text">или</div>
                         <div class="divider-line"></div>
                     </div>
-                    <button class="btn btn-secondary" onclick="showRegister()">Создать аккаунт</button>
-                </div>
-
-                <div id="registerMode" style="display:none;">
-                    <div class="form-group">
-                        <label class="form-label">Email</label>
-                        <input type="email" id="regEmail" placeholder="your@email.com">
+                    <button class="btn btn-secondary" onclick="redirectToGlobalID()">Создать аккаунт в Global ID</button>
+                    
+                    <div class="registration-info">
+                        <h4>🔐 Единая учётная запись</h4>
+                        <p>Айсберг использует Global ID для аутентификации. Создайте аккаунт в Global ID, чтобы получить доступ ко всем сервисам экосистемы.</p>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Пароль (минимум 6 символов)</label>
-                        <input type="password" id="regPassword" placeholder="Введите пароль">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Подтверждение пароля</label>
-                        <input type="password" id="regConfirmPassword" placeholder="Повторите пароль">
-                    </div>
-                    <button class="btn btn-primary" onclick="register()">Зарегистрироваться</button>
-                    <div class="switch-link" onclick="showLogin()">Уже есть аккаунт? Войти</div>
                 </div>
 
                 <div id="blockedMode" style="display:none;">
@@ -961,7 +1009,7 @@
         };
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, orderBy, addDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const app = initializeApp(firebaseConfig);
@@ -1104,11 +1152,6 @@
                     userAgent: navigator.userAgent, addedAt: new Date(), lastUsed: new Date()
                 })
             });
-        }
-
-        function generateGlobalId() {
-            const chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-            return Array.from({length: 22}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
         }
 
         function showMessage(element, text, isError = true) {
@@ -1281,27 +1324,30 @@
             }
         };
 
-        window.register = async () => {
-            const email = document.getElementById('regEmail').value;
-            const password = document.getElementById('regPassword').value;
-            const confirm = document.getElementById('regConfirmPassword').value;
-            if (!email || !password || !confirm) return showMessage('authMessage', 'Заполните все поля', true);
-            if (password.length < 6) return showMessage('authMessage', 'Пароль минимум 6 символов', true);
-            if (password !== confirm) return showMessage('authMessage', 'Пароли не совпадают', true);
-            await getDeviceInfo();
-            try {
-                const userCred = await createUserWithEmailAndPassword(auth, email, password);
-                await setDoc(doc(db, "users", userCred.user.uid), {
-                    email, globalId: generateGlobalId(), nickname: email.split('@')[0],
-                    createdAt: serverTimestamp(), contacts: [], groups: [], chats: [],
-                    online: true, lastSeen: serverTimestamp(), globalIdAccess: true, icebergAccess: true, accountLocked: false,
-                    knownDevices: [{ fingerprint: deviceFingerprint, ip: currentIP, userAgent: navigator.userAgent, addedAt: new Date(), lastUsed: new Date() }],
-                    currentIP
-                });
-                showMessage('authMessage', '✅ Аккаунт создан!', false);
-                setTimeout(() => showLogin(), 1500);
-            } catch (error) { showMessage('authMessage', error.message, true); }
+        // ==================== ПЕРЕНАПРАВЛЕНИЕ НА GLOBAL ID ДЛЯ РЕГИСТРАЦИИ ====================
+        window.redirectToGlobalID = function() {
+            // Сохраняем информацию о том, что пользователь пришёл из Айсберга
+            localStorage.setItem('iceberg_referrer', window.location.href);
+            localStorage.setItem('iceberg_app', 'true');
+            
+            // Перенаправляем на Global ID для регистрации
+            window.location.href = 'https://saryanich.github.io/Global-ID/';
         };
+
+        // Проверка, вернулся ли пользователь после регистрации
+        function checkReturnFromGlobalID() {
+            const cameFromRegistration = localStorage.getItem('iceberg_app') === 'true';
+            if (cameFromRegistration) {
+                // Очищаем флаги
+                localStorage.removeItem('iceberg_app');
+                localStorage.removeItem('iceberg_referrer');
+                
+                // Показываем сообщение о необходимости входа
+                setTimeout(() => {
+                    showMessage('authMessage', '✅ Аккаунт создан! Теперь войдите в Айсберг', false);
+                }, 500);
+            }
+        }
 
         window.logout = async () => {
             if (blockCheckInterval) clearInterval(blockCheckInterval);
@@ -1310,16 +1356,6 @@
             if (messagesRefreshInterval) clearInterval(messagesRefreshInterval);
             if (currentUser) await updateDoc(doc(db, "users", currentUser.uid), { online: false, lastSeen: serverTimestamp() }).catch(() => {});
             await signOut(auth);
-        };
-
-        window.showRegister = () => { 
-            document.getElementById('loginMode').style.display = 'none'; 
-            document.getElementById('registerMode').style.display = 'block'; 
-        };
-        
-        window.showLogin = () => { 
-            document.getElementById('loginMode').style.display = 'block'; 
-            document.getElementById('registerMode').style.display = 'none'; 
         };
 
         // ==================== ЗАГРУЗКА ДАННЫХ ПОЛЬЗОВАТЕЛЯ ====================
@@ -1523,13 +1559,12 @@
                         <div class="item-subtitle">${escapeHtml(contact.globalId?.substring(0, 12) || '')}...</div>
                     </div>
                 `;
-                // ИСПРАВЛЕНО: Клик по контакту открывает чат
                 div.onclick = () => openChatWithContact(contact);
                 container.appendChild(div);
             });
         }
 
-        // ==================== ОТКРЫТИЕ ЧАТА С КОНТАКТОМ - ИСПРАВЛЕННАЯ ВЕРСИЯ ====================
+        // ==================== ОТКРЫТИЕ ЧАТА С КОНТАКТОМ ====================
         async function openChatWithContact(contact) {
             if (!contact || !contact.uid) {
                 console.error('Некорректный контакт:', contact);
@@ -1538,12 +1573,10 @@
             
             console.log('Открываем чат с контактом:', contact.nickname || contact.globalId);
             
-            // Проверяем, есть ли уже чат с этим контактом
             let chats = currentUserData?.chats || [];
             let chat = chats.find(c => c.uid === contact.uid && !c.isGroup);
             
             if (!chat) {
-                // Создаем новый чат
                 chat = {
                     uid: contact.uid,
                     globalId: contact.globalId,
@@ -1553,37 +1586,23 @@
                     unread: false
                 };
                 
-                // Добавляем чат в массив
                 chats.push(chat);
-                
-                // Обновляем в Firestore
-                await updateDoc(doc(db, "users", currentUser.uid), { 
-                    chats: chats 
-                });
-                
-                // Обновляем локальные данные
+                await updateDoc(doc(db, "users", currentUser.uid), { chats: chats });
                 currentUserData.chats = chats;
-                
                 console.log('Создан новый чат:', chat);
             }
             
-            // Открываем чат
             await selectChat(chat);
-            
-            // Обновляем список чатов в UI
             loadChats();
-            
-            // Переключаемся на вкладку чатов
             switchTab('chats');
             
-            // На мобильных устройствах скрываем сайдбар
             if (window.innerWidth <= 768 && window.matchMedia('(orientation: portrait)').matches) {
                 document.getElementById('sidebar').classList.add('hide-on-mobile');
                 document.getElementById('chatScreen').classList.add('show-on-mobile');
             }
         }
 
-        // ==================== ВЫБОР ЧАТА - ИСПРАВЛЕННАЯ ВЕРСИЯ ====================
+        // ==================== ВЫБОР ЧАТА ====================
         async function selectChat(chat) {
             if (!chat) {
                 console.error('Попытка выбрать пустой чат');
@@ -1596,7 +1615,6 @@
             currentGroup = null;
             currentChatId = chat.isGroup ? `group_${chat.groupId}` : [currentUser.uid, chat.uid].sort().join('_');
             
-            // Обновляем UI заголовка чата
             const chatName = chat.isGroup ? chat.groupName : (chat.nickname || chat.globalId?.substring(0, 12) || 'Пользователь');
             const chatAvatar = chat.isGroup ? '👥' : (chat.nickname?.charAt(0).toUpperCase() || '👤');
             
@@ -1606,15 +1624,11 @@
                 ? `👥 Групповой чат | 🔒 20 слоёв` 
                 : `🔒 20 слоёв шифрования`;
             
-            // Показываем область ввода
             document.getElementById('chatInputArea').style.display = 'flex';
-            
-            // Настраиваем кнопки в заголовке
             document.getElementById('groupInfoBtn').style.display = chat.isGroup ? 'block' : 'none';
             document.getElementById('clearChatBtn').style.display = 'block';
             document.getElementById('deleteChatBtn').style.display = 'block';
             
-            // Для личных чатов показываем кнопку добавления в контакты, если контакт ещё не добавлен
             if (!chat.isGroup) {
                 const isContact = (currentUserData?.contacts || []).some(c => c.uid === chat.uid);
                 document.getElementById('addContactBtn').style.display = isContact ? 'none' : 'block';
@@ -1622,21 +1636,17 @@
                 document.getElementById('addContactBtn').style.display = 'none';
             }
             
-            // На мобильных устройствах переключаем вид
             if (window.innerWidth <= 768 && window.matchMedia('(orientation: portrait)').matches) {
                 document.getElementById('sidebar').classList.add('hide-on-mobile');
                 document.getElementById('chatScreen').classList.add('show-on-mobile');
             }
             
-            // Помечаем чат как прочитанный
             if (!chat.isGroup) {
                 await markChatRead(chat);
             }
             
-            // Загружаем сообщения
             await loadMessages();
             
-            // Фокусируемся на поле ввода
             setTimeout(() => {
                 document.getElementById('messageInput')?.focus();
             }, 100);
@@ -2146,7 +2156,6 @@
             loadChats();
             alert(`✅ ${contact.nickname || contact.globalId} добавлен в контакты`);
             
-            // Автоматически открываем чат с добавленным контактом
             await openChatWithContact(contact);
         };
 
@@ -2371,6 +2380,9 @@
         loadTheme();
         initParticles();
         getDeviceInfo();
+        
+        // Проверяем, вернулся ли пользователь после регистрации
+        checkReturnFromGlobalID();
     </script>
 </body>
 </html>
