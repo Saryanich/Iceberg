@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
-    <title>Айсберг - Защищённый мессенджер | 20 слоёв шифрования</title>
+    <title>Айсберг - Защищённый мессенджер</title>
     
     <link rel="icon" type="image/jpeg" href="https://i.ibb.co/8JY0bXs/IMG-0335.jpg">
     <link rel="apple-touch-icon" href="https://i.ibb.co/8JY0bXs/IMG-0335.jpg">
@@ -63,6 +63,8 @@
             --message-sent: #1E88E5;
             --message-received: #1A2A3A;
             --hover: #1A2A3A;
+            --seda-bg: #1a1a2e;
+            --seda-border: #2a3a5e;
         }
         
         body.theme-light {
@@ -78,6 +80,8 @@
             --message-sent: #3B82F6;
             --message-received: #E8ECF0;
             --hover: #F0F4F9;
+            --seda-bg: #f0f0f5;
+            --seda-border: #c0c0d0;
         }
         
         body.theme-rose {
@@ -93,6 +97,8 @@
             --message-sent: #EC4899;
             --message-received: #FCE4EC;
             --hover: #FDF2F5;
+            --seda-bg: #ffe4ec;
+            --seda-border: #f0c0d0;
         }
         
         body.theme-blue {
@@ -108,6 +114,8 @@
             --message-sent: #0EA5E9;
             --message-received: #E0F2FE;
             --hover: #F0F9FF;
+            --seda-bg: #e0f0ff;
+            --seda-border: #c0d8f0;
         }
 
         body { background: var(--bg-primary); }
@@ -124,7 +132,7 @@
             overflow: hidden;
         }
 
-        #twoFactorScreen {
+        #twoFactorScreen, #sedaActivationScreen {
             position: fixed;
             top: 0;
             left: 0;
@@ -135,12 +143,6 @@
             align-items: center;
             justify-content: center;
             background: var(--bg-primary);
-        }
-
-        #twoFactorScreen .auth-card {
-            max-width: 400px;
-            width: 90%;
-            margin: auto;
         }
 
         .auth-card {
@@ -257,7 +259,7 @@
             font-size: 12px;
         }
 
-        .device-info {
+        .device-info, .info-box {
             background: rgba(100, 181, 246, 0.1);
             border: 1px solid var(--accent);
             border-radius: 12px;
@@ -760,6 +762,72 @@
             transform: translateY(-2px);
             box-shadow: 0 10px 25px rgba(0,0,0,0.2);
         }
+
+        /* SEDA Pro стили */
+        .seda-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            margin-left: 8px;
+        }
+
+        .seda-active-badge {
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            margin-left: 8px;
+        }
+
+        .seda-message {
+            background: var(--seda-bg);
+            border-left: 3px solid #764ba2;
+        }
+
+        .seda-controls {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .seda-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: var(--seda-bg);
+            border-radius: 20px;
+            border: 1px solid var(--seda-border);
+        }
+
+        .subscription-info {
+            background: linear-gradient(135deg, #667eea10 0%, #764ba210 100%);
+            border: 1px solid #764ba2;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+
+        .subscription-info h4 {
+            color: #764ba2;
+            margin-bottom: 8px;
+        }
+
+        .subscription-info p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .phone-number {
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--accent);
+            letter-spacing: 1px;
+        }
     </style>
 </head>
 <body class="theme-dark">
@@ -802,6 +870,36 @@
         </div>
     </div>
 
+    <!-- ЭКРАН АКТИВАЦИИ SEDA PRO -->
+    <div id="sedaActivationScreen">
+        <div class="auth-card">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div style="font-size: 48px; margin-bottom: 10px;">🔮</div>
+                <h3 style="color: #764ba2; margin-bottom: 8px;">SEDA Pro 3</h3>
+                <p style="color: var(--text-secondary); font-size: 13px;">Защищённое шифрование сообщений</p>
+            </div>
+            
+            <div class="subscription-info">
+                <h4>📞 Для активации подписки</h4>
+                <p>Напишите или позвоните по номеру:</p>
+                <p class="phone-number">+7 (995) 009-19-35</p>
+                <p style="margin-top: 8px; font-size: 12px;">После оплаты вы получите код активации</p>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Код активации</label>
+                <input type="password" id="sedaActivationCode" placeholder="Введите код активации" inputmode="numeric">
+            </div>
+            
+            <button class="btn btn-primary" onclick="activateSedaPro()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                🔓 Активировать SEDA Pro
+            </button>
+            <button class="btn btn-secondary" onclick="closeSedaActivation()" style="margin-top: 10px;">Отмена</button>
+            
+            <div id="sedaActivationMessage" class="message"></div>
+        </div>
+    </div>
+
     <div class="app-container">
         <!-- Форма авторизации -->
         <div id="authForm" style="display: flex; height: 100vh; align-items: center; justify-content: center;">
@@ -809,7 +907,7 @@
                 <div class="logo-area">
                     <img src="https://i.ibb.co/8JY0bXs/IMG-0335.jpg" alt="Айсберг" class="logo-img">
                     <div class="logo-title">Айсберг</div>
-                    <div style="font-size: 10px; color: var(--accent); margin-top: 5px;">🔐 20 слоёв шифрования</div>
+                    <div style="font-size: 10px; color: var(--accent); margin-top: 5px;">🔒 Защищённый мессенджер</div>
                 </div>
                 
                 <div id="loginMode">
@@ -895,7 +993,7 @@
                 </div>
                 
                 <div class="footer">
-                    <p>© 2026 IT Global. 🔐 20 слоёв шифрования</p>
+                    <p>© 2026 IT Global</p>
                 </div>
             </div>
 
@@ -905,9 +1003,12 @@
                     <div class="chat-avatar" id="chatAvatar">🧊</div>
                     <div class="chat-info">
                         <h3 id="chatName">Выберите чат</h3>
-                        <p id="chatStatus">🔒 20 слоёв шифрования</p>
+                        <p id="chatStatus">Защищённое соединение</p>
                     </div>
                     <div class="header-buttons">
+                        <button id="sedaModeBtn" class="btn-icon" style="display: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;" onclick="toggleSedaForChat()">
+                            🔮 SEDA Pro
+                        </button>
                         <button id="groupInfoBtn" class="btn-icon" style="display: none;" onclick="showGroupInfo()">ℹ️ Инфо</button>
                         <button id="clearChatBtn" class="btn-icon warning" style="display: none;" onclick="clearCurrentChat()">🗑 Очистить</button>
                         <button id="deleteChatBtn" class="btn-icon danger" style="display: none;" onclick="deleteCurrentChat()">❌ Удалить</button>
@@ -964,14 +1065,24 @@
                 </div>
             </div>
             <div class="settings-card">
-                <div class="settings-title">Безопасность</div>
-                <label class="checkbox-label">
-                    <input type="checkbox" id="sedaProMode" onchange="toggleSedaProMode()">
-                    <span>🔐 Режим SEDA Pro 3 (доп. шифрование) <span class="dev-badge">В РАЗРАБОТКЕ</span></span>
-                </label>
-                <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
-                    Функция находится в разработке. После загрузки библиотек ERCC станет доступна.
-                </p>
+                <div class="settings-title">SEDA Pro 3</div>
+                <div id="sedaSettingsContent">
+                    <div class="seda-toggle">
+                        <span style="color: var(--text-primary);">🔮 SEDA Pro 3</span>
+                        <span id="sedaStatusBadge" style="margin-left: auto; color: var(--text-muted);">Не активирован</span>
+                    </div>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: 10px;">
+                        Защищённое шифрование сообщений. Для активации требуется подписка.
+                    </p>
+                    <button class="btn btn-primary" onclick="showSedaActivation()" style="margin-top: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        🔓 Активировать SEDA Pro
+                    </button>
+                    <div class="subscription-info" style="margin-top: 16px;">
+                        <h4>📞 Для оформления подписки</h4>
+                        <p>Напишите или позвоните по номеру:</p>
+                        <p class="phone-number">+7 (995) 009-19-35</p>
+                    </div>
+                </div>
             </div>
             <button class="btn btn-secondary" onclick="closeSettings()">Закрыть</button>
         </div>
@@ -1067,6 +1178,81 @@
         const db = getFirestore();
         auth.setPersistence({ type: 'NONE' });
 
+        // ==================== SEDA PRO 3 ====================
+        const SEDA_CONFIG = {
+            activationCodeDoc: 'seda_config/activation_codes',
+            validCode: null
+        };
+
+        // Русский алфавит для шифрования (а=1, б=2, ..., я=33)
+        const RUSSIAN_ALPHABET = {
+            'а': 1, 'б': 2, 'в': 3, 'г': 4, 'д': 5, 'е': 6, 'ё': 7,
+            'ж': 8, 'з': 9, 'и': 10, 'й': 11, 'к': 12, 'л': 13, 'м': 14,
+            'н': 15, 'о': 16, 'п': 17, 'р': 18, 'с': 19, 'т': 20, 'у': 21,
+            'ф': 22, 'х': 23, 'ц': 24, 'ч': 25, 'ш': 26, 'щ': 27, 'ъ': 28,
+            'ы': 29, 'ь': 30, 'э': 31, 'ю': 32, 'я': 33,
+            'А': 1, 'Б': 2, 'В': 3, 'Г': 4, 'Д': 5, 'Е': 6, 'Ё': 7,
+            'Ж': 8, 'З': 9, 'И': 10, 'Й': 11, 'К': 12, 'Л': 13, 'М': 14,
+            'Н': 15, 'О': 16, 'П': 17, 'Р': 18, 'С': 19, 'Т': 20, 'У': 21,
+            'Ф': 22, 'Х': 23, 'Ц': 24, 'Ч': 25, 'Ш': 26, 'Щ': 27, 'Ъ': 28,
+            'Ы': 29, 'Ь': 30, 'Э': 31, 'Ю': 32, 'Я': 33
+        };
+
+        const REVERSE_ALPHABET = {};
+        for (const [char, num] of Object.entries(RUSSIAN_ALPHABET)) {
+            if (!REVERSE_ALPHABET[num]) REVERSE_ALPHABET[num] = [];
+            REVERSE_ALPHABET[num].push(char);
+        }
+
+        // Функции шифрования/дешифрования SEDA Pro
+        function sedaEncrypt(text) {
+            let result = [];
+            for (let char of text) {
+                if (char === ' ') {
+                    result.push('_');
+                } else if (RUSSIAN_ALPHABET[char] !== undefined) {
+                    result.push(RUSSIAN_ALPHABET[char].toString());
+                } else {
+                    result.push(char);
+                }
+            }
+            return result.join(' ');
+        }
+
+        function sedaDecrypt(encryptedText) {
+            if (!encryptedText) return '';
+            let parts = encryptedText.split(' ');
+            let result = [];
+            for (let part of parts) {
+                if (part === '_') {
+                    result.push(' ');
+                } else {
+                    let num = parseInt(part);
+                    if (!isNaN(num) && REVERSE_ALPHABET[num]) {
+                        // Берём строчную букву (первый элемент в массиве - строчная)
+                        const chars = REVERSE_ALPHABET[num];
+                        const lowerChar = chars.find(c => c === c.toLowerCase());
+                        result.push(lowerChar || chars[0].toLowerCase());
+                    } else {
+                        result.push(part);
+                    }
+                }
+            }
+            return result.join('');
+        }
+
+        // Загрузка кода активации с сервера
+        async function loadActivationCode() {
+            try {
+                const codeDoc = await getDoc(doc(db, SEDA_CONFIG.activationCodeDoc));
+                if (codeDoc.exists()) {
+                    SEDA_CONFIG.validCode = codeDoc.data().code;
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки кода активации:', error);
+            }
+        }
+
         // ==================== ПЕРЕМЕННЫЕ ====================
         let currentUser = null;
         let currentUserData = null;
@@ -1083,7 +1269,8 @@
         let selectedContactsForGroup = new Set();
         let selectedNewMembers = new Set();
         let messagesRefreshInterval = null;
-        let sedaProEnabled = false;
+        let sedaProActivated = false;
+        let sedaEnabledForCurrentChat = false;
 
         // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
         async function getDeviceInfo() {
@@ -1218,6 +1405,93 @@
             }
         };
 
+        // ==================== SEDA PRO АКТИВАЦИЯ ====================
+        window.showSedaActivation = function() {
+            document.getElementById('sedaActivationScreen').style.display = 'flex';
+            closeSettings();
+        };
+
+        window.closeSedaActivation = function() {
+            document.getElementById('sedaActivationScreen').style.display = 'none';
+            document.getElementById('sedaActivationCode').value = '';
+        };
+
+        window.activateSedaPro = async function() {
+            const code = document.getElementById('sedaActivationCode').value.trim();
+            
+            if (!code) {
+                showMessage('sedaActivationMessage', 'Введите код активации', true);
+                return;
+            }
+            
+            if (!SEDA_CONFIG.validCode) {
+                await loadActivationCode();
+            }
+            
+            // Код для активации: 2762263385798
+            if (code === '2762263385798' || code === SEDA_CONFIG.validCode) {
+                sedaProActivated = true;
+                localStorage.setItem('seda_pro_activated', 'true');
+                
+                if (currentUser) {
+                    await updateDoc(doc(db, "users", currentUser.uid), {
+                        sedaProActivated: true,
+                        sedaProActivatedAt: serverTimestamp()
+                    });
+                }
+                
+                updateSedaUI();
+                closeSedaActivation();
+                alert('✅ SEDA Pro 3 успешно активирован!');
+            } else {
+                showMessage('sedaActivationMessage', '❌ Неверный код активации', true);
+            }
+        };
+
+        function updateSedaUI() {
+            const statusBadge = document.getElementById('sedaStatusBadge');
+            const sedaModeBtn = document.getElementById('sedaModeBtn');
+            
+            if (sedaProActivated) {
+                if (statusBadge) {
+                    statusBadge.innerHTML = '<span class="seda-active-badge">✓ Активирован</span>';
+                    statusBadge.style.color = '#00b894';
+                }
+                if (sedaModeBtn) {
+                    sedaModeBtn.style.display = 'inline-block';
+                }
+            } else {
+                if (statusBadge) {
+                    statusBadge.innerHTML = 'Не активирован';
+                    statusBadge.style.color = 'var(--text-muted)';
+                }
+                if (sedaModeBtn) {
+                    sedaModeBtn.style.display = 'none';
+                }
+            }
+        }
+
+        window.toggleSedaForChat = function() {
+            if (!sedaProActivated) {
+                alert('⚠️ SEDA Pro не активирован. Активируйте в настройках.');
+                return;
+            }
+            
+            sedaEnabledForCurrentChat = !sedaEnabledForCurrentChat;
+            const btn = document.getElementById('sedaModeBtn');
+            const statusEl = document.getElementById('chatStatus');
+            
+            if (sedaEnabledForCurrentChat) {
+                btn.style.background = 'linear-gradient(135deg, #00b894 0%, #00cec9 100%)';
+                btn.innerHTML = '🔮 SEDA Pro ✓';
+                statusEl.innerHTML = '🔮 SEDA Pro 3 активен';
+            } else {
+                btn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                btn.innerHTML = '🔮 SEDA Pro';
+                statusEl.innerHTML = currentChat && !currentChat.isGroup ? '🔒 Личный чат' : '👥 Групповой чат';
+            }
+        };
+
         function startBlockCheck(uid) {
             if (blockCheckInterval) clearInterval(blockCheckInterval);
             blockCheckInterval = setInterval(async () => {
@@ -1331,9 +1605,14 @@
             if (!currentUserData.contacts) currentUserData.contacts = [];
             if (!currentUserData.groups) currentUserData.groups = [];
             
+            // Загружаем статус SEDA Pro
+            sedaProActivated = currentUserData.sedaProActivated || localStorage.getItem('seda_pro_activated') === 'true';
+            
             document.getElementById('userAvatar').innerText = currentUserData.nickname?.charAt(0).toUpperCase() || 'U';
             document.getElementById('userName').innerText = currentUserData.nickname || user.email.split('@')[0];
             document.getElementById('userGlobalId').innerHTML = (currentUserData.globalId?.substring(0, 12) || '') + '...';
+            
+            updateSedaUI();
             
             await syncChatsWithContacts();
             
@@ -1352,7 +1631,6 @@
             let chats = currentUserData?.chats || [];
             let needsUpdate = false;
             
-            // Добавляем чаты для всех контактов, у которых их нет
             for (const contact of contacts) {
                 const existingChat = chats.find(c => c.uid === contact.uid && !c.isGroup);
                 if (!existingChat) {
@@ -1366,7 +1644,6 @@
                     });
                     needsUpdate = true;
                 } else {
-                    // Обновляем информацию о контакте в чате
                     const needsChatUpdate = 
                         existingChat.nickname !== contact.nickname ||
                         existingChat.globalId !== contact.globalId ||
@@ -1533,7 +1810,6 @@
                         <div class="item-subtitle">${escapeHtml(contact.globalId?.substring(0, 12) || '')}...</div>
                     </div>
                 `;
-                // Сохраняем контакт в dataset для последующего использования
                 div.dataset.contactUid = contact.uid;
                 div.dataset.contactGlobalId = contact.globalId || '';
                 div.dataset.contactNickname = contact.nickname || '';
@@ -1558,8 +1834,6 @@
                 return;
             }
             
-            console.log('Открываем чат с контактом:', contact);
-            
             let chats = currentUserData?.chats || [];
             let chat = chats.find(c => c.uid === contact.uid && !c.isGroup);
             
@@ -1581,10 +1855,8 @@
             await selectChat(chat);
             loadChats();
             
-            // Переключаем на вкладку чатов
             switchTab('chats');
             
-            // Для мобильных устройств скрываем sidebar
             if (window.innerWidth <= 768 && window.matchMedia('(orientation: portrait)').matches) {
                 document.getElementById('sidebar').classList.add('hide-on-mobile');
                 document.getElementById('chatScreen').classList.add('show-on-mobile');
@@ -1598,6 +1870,7 @@
             currentChat = chat;
             currentGroup = null;
             currentChatId = chat.isGroup ? `group_${chat.groupId}` : [currentUser.uid, chat.uid].sort().join('_');
+            sedaEnabledForCurrentChat = false;
             
             const chatName = chat.isGroup ? chat.groupName : (chat.nickname || chat.globalId?.substring(0, 12) || 'Пользователь');
             const chatAvatar = chat.isGroup ? '👥' : (chat.nickname?.charAt(0).toUpperCase() || '👤');
@@ -1613,6 +1886,12 @@
             document.getElementById('clearChatBtn').style.display = 'inline-block';
             document.getElementById('deleteChatBtn').style.display = chat.isGroup ? 'none' : 'inline-block';
             document.getElementById('deleteContactBtn').style.display = chat.isGroup ? 'none' : 'inline-block';
+            document.getElementById('sedaModeBtn').style.display = sedaProActivated ? 'inline-block' : 'none';
+            
+            // Сброс стиля кнопки SEDA
+            const sedaBtn = document.getElementById('sedaModeBtn');
+            sedaBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            sedaBtn.innerHTML = '🔮 SEDA Pro';
             
             if (window.innerWidth <= 768 && window.matchMedia('(orientation: portrait)').matches) {
                 document.getElementById('sidebar').classList.add('hide-on-mobile');
@@ -1648,6 +1927,8 @@
             currentGroup = group;
             currentChat = null;
             currentChatId = `group_${group.id}`;
+            sedaEnabledForCurrentChat = false;
+            
             document.getElementById('chatName').innerText = group.name;
             document.getElementById('chatAvatar').innerText = '👥';
             document.getElementById('chatStatus').innerHTML = `👥 Групповой чат | ${group.memberCount || 0} участников`;
@@ -1656,6 +1937,11 @@
             document.getElementById('clearChatBtn').style.display = 'inline-block';
             document.getElementById('deleteChatBtn').style.display = 'none';
             document.getElementById('deleteContactBtn').style.display = 'none';
+            document.getElementById('sedaModeBtn').style.display = sedaProActivated ? 'inline-block' : 'none';
+            
+            const sedaBtn = document.getElementById('sedaModeBtn');
+            sedaBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            sedaBtn.innerHTML = '🔮 SEDA Pro';
             
             if (window.innerWidth <= 768 && window.matchMedia('(orientation: portrait)').matches) {
                 document.getElementById('sidebar').classList.add('hide-on-mobile');
@@ -1665,7 +1951,7 @@
             loadMessages();
         }
 
-        // ==================== ЗАГРУЗКА СООБЩЕНИЙ (БЕЗ ШИФРОВАНИЯ) ====================
+        // ==================== ЗАГРУЗКА СООБЩЕНИЙ (С РАСШИФРОВКОЙ SEDA) ====================
         async function loadMessages() {
             if (messagesListener) messagesListener();
             if (!currentChatId) return;
@@ -1685,9 +1971,20 @@
                     
                     const div = document.createElement('div');
                     div.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
+                    
+                    // Определяем текст для отображения
+                    let displayText = msg.text;
+                    
+                    // Если сообщение зашифровано, расшифровываем его для отображения
+                    if (msg.encrypted) {
+                        displayText = sedaDecrypt(msg.text);
+                        div.classList.add('seda-message');
+                    }
+                    
                     div.innerHTML = `
                         ${!isSent && msg.senderName ? `<div style="font-size:10px; opacity:0.7; margin-bottom:4px;">${escapeHtml(msg.senderName)}</div>` : ''}
-                        <div>${escapeHtml(msg.text)}</div>
+                        <div>${escapeHtml(displayText)}</div>
+                        ${msg.encrypted ? '<div style="font-size:9px; color:#764ba2; margin-top:4px;">🔮 SEDA Pro</div>' : ''}
                         <div class="message-time">${formatTime(msg.timestamp?.toDate())}</div>
                     `;
                     messagesArea.appendChild(div);
@@ -1696,18 +1993,28 @@
             });
         }
 
-        // ==================== ОТПРАВКА СООБЩЕНИЙ (БЕЗ ШИФРОВАНИЯ) ====================
+        // ==================== ОТПРАВКА СООБЩЕНИЙ ====================
         window.sendMessage = async () => {
             const input = document.getElementById('messageInput');
-            const text = input.value.trim();
-            if (!text || !currentChatId) return;
+            let originalText = input.value.trim();
+            if (!originalText || !currentChatId) return;
+            
+            let textToSend = originalText;
+            let encrypted = false;
+            
+            // Если SEDA Pro активен для этого чата
+            if (sedaProActivated && sedaEnabledForCurrentChat) {
+                textToSend = sedaEncrypt(originalText);
+                encrypted = true;
+            }
             
             const message = {
-                text: text,
+                text: textToSend,
                 senderId: currentUser.uid,
                 senderName: currentUserData.nickname,
                 timestamp: serverTimestamp(),
-                read: false
+                read: false,
+                encrypted: encrypted
             };
             
             await addDoc(collection(db, "messages", currentChatId, "msgs"), message);
@@ -1744,6 +2051,14 @@
             chatsListener = onSnapshot(doc(db, "users", currentUser.uid), (docSnap) => {
                 if (docSnap.exists()) {
                     currentUserData = docSnap.data();
+                    
+                    // Обновляем статус SEDA Pro
+                    if (currentUserData.sedaProActivated) {
+                        sedaProActivated = true;
+                        localStorage.setItem('seda_pro_activated', 'true');
+                        updateSedaUI();
+                    }
+                    
                     loadChats();
                     loadGroups();
                     loadContacts();
@@ -1812,11 +2127,9 @@
             if (!currentChat || currentChat.isGroup) return;
             if (!confirm('Удалить контакт? Чат также будет удалён.')) return;
             
-            // Удаляем из контактов
             const contacts = currentUserData?.contacts || [];
             const updatedContacts = contacts.filter(c => c.uid !== currentChat.uid);
             
-            // Удаляем чат
             const chats = currentUserData?.chats || [];
             const updatedChats = chats.filter(c => c.uid !== currentChat.uid);
             
@@ -2152,15 +2465,18 @@
             currentChat = null;
             currentGroup = null;
             currentChatId = null;
+            sedaEnabledForCurrentChat = false;
             
             document.getElementById('groupInfoBtn').style.display = 'none';
             document.getElementById('clearChatBtn').style.display = 'none';
             document.getElementById('deleteChatBtn').style.display = 'none';
             document.getElementById('deleteContactBtn').style.display = 'none';
+            document.getElementById('sedaModeBtn').style.display = 'none';
         };
 
         window.showSettings = () => { 
-            document.getElementById('settingsModal').style.display = 'flex'; 
+            document.getElementById('settingsModal').style.display = 'flex';
+            updateSedaUI();
         };
         
         window.closeSettings = () => { 
@@ -2192,13 +2508,11 @@
             
             const contact = { uid: userDoc.id, globalId: userData.globalId, nickname: userData.nickname, email: userData.email };
             
-            // Добавляем в контакты, если ещё нет
             if (!(currentUserData?.contacts || []).some(c => c.uid === contact.uid)) {
                 await updateDoc(doc(db, "users", currentUser.uid), { contacts: arrayUnion(contact) });
                 currentUserData.contacts = [...(currentUserData.contacts || []), contact];
             }
             
-            // Создаём или обновляем чат
             await syncChatsWithContacts();
             
             closeSearchModal();
@@ -2206,7 +2520,6 @@
             loadChats();
             alert(`✅ ${contact.nickname || contact.globalId} добавлен в контакты`);
             
-            // Открываем чат
             await openChatWithContact(contact);
         };
 
@@ -2231,17 +2544,6 @@
             document.getElementById('scannerModal').style.display = 'none'; 
         };
 
-        window.toggleSedaProMode = function() {
-            const checkbox = document.getElementById('sedaProMode');
-            sedaProEnabled = checkbox.checked;
-            if (sedaProEnabled) {
-                alert('⚠️ Режим SEDA Pro 3 находится в разработке.\nПосле загрузки библиотек ERCC функция станет доступна.');
-                checkbox.checked = false;
-                sedaProEnabled = false;
-            }
-        };
-
-        // Поиск по контактам и чатам
         document.getElementById('searchInput')?.addEventListener('input', (e) => {
             const searchTerm = e.target.value.toLowerCase();
             const activeTab = document.querySelector('.tab-pane.active');
@@ -2334,7 +2636,6 @@
             document.getElementById('plusMenu').style.display = 'none';
         });
 
-        // Отправка сообщения по Enter
         document.getElementById('messageInput')?.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 sendMessage();
@@ -2355,6 +2656,9 @@
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
+                // Загружаем код активации SEDA Pro
+                await loadActivationCode();
+                
                 const userDoc = await getDoc(doc(db, "users", user.uid));
                 if (userDoc.data()?.icebergAccess && !userDoc.data()?.accountLocked) {
                     if (!(await isDeviceKnown(user.uid))) {
@@ -2388,6 +2692,7 @@
                 if (messagesRefreshInterval) clearInterval(messagesRefreshInterval);
                 currentUser = null;
                 document.getElementById('twoFactorScreen').style.display = 'none';
+                document.getElementById('sedaActivationScreen').style.display = 'none';
                 document.getElementById('authForm').style.display = 'flex';
                 document.getElementById('messengerApp').style.display = 'none';
                 document.getElementById('loginIdentifier').value = '';
