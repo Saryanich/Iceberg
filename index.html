@@ -606,7 +606,6 @@
             font-weight: bold;
         }
 
-        /* Новые стили для кнопки вставки ключа */
         .seda-decrypt-btn {
             display: inline-block;
             margin-top: 6px;
@@ -843,7 +842,6 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.2);
         }
 
-        /* SEDA Pro стили */
         .seda-badge {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -1326,13 +1324,15 @@
         };
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, browserLocalPersistence, setPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, orderBy, addDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth();
         const db = getFirestore();
-        auth.setPersistence({ type: 'NONE' });
+        
+        // Устанавливаем persistence для сохранения сессии
+        setPersistence(auth, browserLocalPersistence);
 
         // ==================== SEDA PRO 3 - СИСТЕМА ШИФРОВАНИЯ ====================
         // ERCC словари (встроенные)
@@ -2079,29 +2079,46 @@
         // ==================== ЗАГРУЗКА ДАННЫХ ПОЛЬЗОВАТЕЛЯ ====================
         async function loadUserData(user) {
             currentUser = user;
-            const userDoc = await getDoc(doc(db, "users", user.uid));
-            currentUserData = userDoc.data();
             
-            if (!currentUserData.chats) currentUserData.chats = [];
-            if (!currentUserData.contacts) currentUserData.contacts = [];
-            if (!currentUserData.groups) currentUserData.groups = [];
-            
-            // Загружаем статус SEDA Pro
-            sedaProActivated = currentUserData.sedaProActivated || localStorage.getItem('seda_pro_activated') === 'true';
-            
-            document.getElementById('userAvatar').innerText = currentUserData.nickname?.charAt(0).toUpperCase() || 'U';
-            document.getElementById('userName').innerText = currentUserData.nickname || user.email.split('@')[0];
-            document.getElementById('userGlobalId').innerHTML = (currentUserData.globalId?.substring(0, 12) || '') + '...';
-            
-            updateSedaUI();
-            
-            await syncChatsWithContacts();
-            
-            loadChats();
-            loadGroups();
-            loadContacts();
-            listenForUpdates();
-            startMessagesPolling();
+            try {
+                const userDoc = await getDoc(doc(db, "users", user.uid));
+                if (!userDoc.exists()) {
+                    console.error('Документ пользователя не найден');
+                    return;
+                }
+                
+                currentUserData = userDoc.data();
+                
+                // Инициализируем поля, если их нет
+                if (!currentUserData.chats) currentUserData.chats = [];
+                if (!currentUserData.contacts) currentUserData.contacts = [];
+                if (!currentUserData.groups) currentUserData.groups = [];
+                
+                // Загружаем статус SEDA Pro
+                sedaProActivated = currentUserData.sedaProActivated || localStorage.getItem('seda_pro_activated') === 'true';
+                
+                // Обновляем UI
+                document.getElementById('userAvatar').innerText = (currentUserData.nickname || 'U').charAt(0).toUpperCase();
+                document.getElementById('userName').innerText = currentUserData.nickname || (user.email ? user.email.split('@')[0] : 'Пользователь');
+                document.getElementById('userGlobalId').innerHTML = (currentUserData.globalId || 'ID').substring(0, 12) + '...';
+                
+                updateSedaUI();
+                
+                // Синхронизируем чаты с контактами
+                await syncChatsWithContacts();
+                
+                // Загружаем списки
+                loadChats();
+                loadGroups();
+                loadContacts();
+                
+                // Запускаем слушатели
+                listenForUpdates();
+                startMessagesPolling();
+                
+            } catch (error) {
+                console.error('Ошибка загрузки данных пользователя:', error);
+            }
         }
 
         // ==================== СИНХРОНИЗАЦИЯ ЧАТОВ С КОНТАКТАМИ ====================
@@ -2112,19 +2129,25 @@
             let chats = currentUserData?.chats || [];
             let needsUpdate = false;
             
+            // Добавляем чаты для всех контактов, у которых их нет
             for (const contact of contacts) {
+                if (!contact.uid) continue;
+                
                 const existingChat = chats.find(c => c.uid === contact.uid && !c.isGroup);
                 if (!existingChat) {
                     chats.push({
                         uid: contact.uid,
-                        globalId: contact.globalId,
-                        nickname: contact.nickname,
-                        email: contact.email,
+                        globalId: contact.globalId || '',
+                        nickname: contact.nickname || '',
+                        email: contact.email || '',
                         isGroup: false,
-                        unread: false
+                        unread: false,
+                        lastMessage: '',
+                        lastMessageTime: null
                     });
                     needsUpdate = true;
                 } else {
+                    // Обновляем данные контакта в чате, если они изменились
                     const needsChatUpdate = 
                         existingChat.nickname !== contact.nickname ||
                         existingChat.globalId !== contact.globalId ||
@@ -2135,9 +2158,9 @@
                         if (chatIndex !== -1) {
                             chats[chatIndex] = {
                                 ...chats[chatIndex],
-                                nickname: contact.nickname,
-                                globalId: contact.globalId,
-                                email: contact.email
+                                nickname: contact.nickname || existingChat.nickname || '',
+                                globalId: contact.globalId || existingChat.globalId || '',
+                                email: contact.email || existingChat.email || ''
                             };
                             needsUpdate = true;
                         }
@@ -2145,10 +2168,64 @@
                 }
             }
             
+            // Сохраняем изменения ТОЛЬКО если они были
             if (needsUpdate) {
-                await updateDoc(doc(db, "users", currentUser.uid), { chats: chats });
-                currentUserData.chats = chats;
+                try {
+                    await updateDoc(doc(db, "users", currentUser.uid), { 
+                        chats: chats 
+                    });
+                    currentUserData.chats = chats;
+                    console.log('Чаты синхронизированы с контактами, сохранено в Firestore');
+                } catch (error) {
+                    console.error('Ошибка синхронизации чатов:', error);
+                }
             }
+        }
+
+        // ==================== ВОССТАНОВЛЕНИЕ ЧАТОВ ПРИ ЗАГРУЗКЕ ====================
+        async function restoreChatsOnStartup() {
+            if (!currentUser || !currentUserData) return;
+            
+            const contacts = currentUserData.contacts || [];
+            let chats = currentUserData.chats || [];
+            let needsSave = false;
+            
+            // Проверяем, есть ли у всех контактов чаты
+            for (const contact of contacts) {
+                if (!contact.uid) continue;
+                
+                const existingChat = chats.find(c => !c.isGroup && c.uid === contact.uid);
+                if (!existingChat) {
+                    // Создаем чат для контакта
+                    chats.push({
+                        uid: contact.uid,
+                        globalId: contact.globalId || '',
+                        nickname: contact.nickname || '',
+                        email: contact.email || '',
+                        isGroup: false,
+                        unread: false,
+                        lastMessage: '',
+                        lastMessageTime: null
+                    });
+                    needsSave = true;
+                }
+            }
+            
+            // Сохраняем изменения в Firestore
+            if (needsSave) {
+                try {
+                    await updateDoc(doc(db, "users", currentUser.uid), {
+                        chats: chats
+                    });
+                    currentUserData.chats = chats;
+                    console.log('Чаты восстановлены при запуске');
+                } catch (error) {
+                    console.error('Ошибка восстановления чатов:', error);
+                }
+            }
+            
+            // Обновляем UI
+            loadChats();
         }
 
         // ==================== ПОЛЛИНГ СООБЩЕНИЙ ====================
@@ -2203,25 +2280,31 @@
         function loadChats() {
             const chats = currentUserData?.chats || [];
             const container = document.getElementById('chatsList');
+            
+            if (!container) return;
+            
             if (chats.length === 0) { 
                 container.innerHTML = '<div class="empty-state">Нет активных чатов</div>'; 
                 return; 
             }
             
+            // Сортируем чаты по имени
             const sortedChats = [...chats].sort((a, b) => {
-                const nameA = a.isGroup ? a.groupName : (a.nickname || a.globalId || '');
-                const nameB = b.isGroup ? b.groupName : (b.nickname || b.globalId || '');
+                const nameA = a.isGroup ? (a.groupName || '') : (a.nickname || a.globalId || '');
+                const nameB = b.isGroup ? (b.groupName || '') : (b.nickname || b.globalId || '');
                 return nameA.localeCompare(nameB);
             });
             
             container.innerHTML = '';
+            
             sortedChats.forEach(chat => {
                 const div = document.createElement('div');
                 div.className = `chat-item ${chat.unread ? 'unread' : ''}`;
-                const avatar = chat.isGroup ? '👥' : (chat.nickname?.charAt(0).toUpperCase() || '👤');
-                const name = chat.isGroup ? chat.groupName : (chat.nickname || chat.globalId?.substring(0, 12) || 'Пользователь');
                 
-                // Проверяем, есть ли ключ SEDA для этого чата
+                const avatar = chat.isGroup ? '👥' : (chat.nickname?.charAt(0) || '👤').toUpperCase();
+                const name = chat.isGroup ? (chat.groupName || 'Группа') : (chat.nickname || chat.globalId?.substring(0, 12) || 'Пользователь');
+                
+                // Проверяем, есть ли ключ SEDA
                 const chatId = chat.isGroup ? `group_${chat.groupId}` : [currentUser.uid, chat.uid].sort().join('_');
                 const hasSedaKey = !!getSedaKey(chatId);
                 
@@ -2233,13 +2316,16 @@
                             ${chat.unread ? '<span style="background:var(--accent); color:white; border-radius:10px; padding:2px 8px; font-size:10px;">Новое</span>' : ''}
                             ${hasSedaKey ? '<span class="seda-badge">🔮 SEDA</span>' : ''}
                         </div>
-                        <div class="item-subtitle">🔒 Чат</div>
+                        <div class="item-subtitle">
+                            ${chat.lastMessage ? escapeHtml(chat.lastMessage.substring(0, 50)) : '🔒 Чат'}
+                        </div>
                     </div>
                     <div class="chat-actions">
                         ${!chat.isGroup ? `<button class="action-btn warning" onclick="event.stopPropagation(); clearChatById('${chat.uid}')">🗑 Очистить</button>` : ''}
                         ${!chat.isGroup ? `<button class="action-btn danger" onclick="event.stopPropagation(); deleteChatById('${chat.uid}')">❌ Удалить</button>` : ''}
                     </div>
                 `;
+                
                 div.onclick = () => selectChat(chat);
                 container.appendChild(div);
             });
@@ -2328,16 +2414,26 @@
             if (!chat) {
                 chat = {
                     uid: contact.uid,
-                    globalId: contact.globalId,
-                    nickname: contact.nickname,
-                    email: contact.email,
+                    globalId: contact.globalId || '',
+                    nickname: contact.nickname || '',
+                    email: contact.email || '',
                     isGroup: false,
-                    unread: false
+                    unread: false,
+                    lastMessage: '',
+                    lastMessageTime: null
                 };
                 
                 chats.push(chat);
-                await updateDoc(doc(db, "users", currentUser.uid), { chats: chats });
-                currentUserData.chats = chats;
+                
+                try {
+                    await updateDoc(doc(db, "users", currentUser.uid), { 
+                        chats: chats 
+                    });
+                    currentUserData.chats = chats;
+                    console.log('Чат создан и сохранен для контакта:', contact.nickname || contact.globalId);
+                } catch (error) {
+                    console.error('Ошибка сохранения чата:', error);
+                }
             }
             
             await selectChat(chat);
@@ -3301,10 +3397,19 @@
             }
         });
 
+        // Обработчик для восстановления чатов после перезагрузки
+        window.addEventListener('load', async () => {
+            if (currentUser && currentUserData) {
+                await restoreChatsOnStartup();
+            }
+        });
+
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 const userDoc = await getDoc(doc(db, "users", user.uid));
-                if (userDoc.data()?.icebergAccess && !userDoc.data()?.accountLocked) {
+                const userData = userDoc.data();
+                
+                if (userData?.icebergAccess && !userData?.accountLocked) {
                     if (!(await isDeviceKnown(user.uid))) {
                         pendingUser = user;
                         const code = Math.floor(1000 + Math.random() * 9000).toString();
@@ -3325,6 +3430,8 @@
                         document.getElementById('authForm').style.display = 'none';
                         document.getElementById('messengerApp').style.display = 'flex';
                         await loadUserData(user);
+                        await restoreChatsOnStartup();
+                        startBlockCheck(user.uid);
                     }
                 } else {
                     await signOut(auth);
@@ -3335,6 +3442,7 @@
                 if (chatsListener) chatsListener();
                 if (messagesRefreshInterval) clearInterval(messagesRefreshInterval);
                 currentUser = null;
+                currentUserData = null;
                 document.getElementById('twoFactorScreen').style.display = 'none';
                 document.getElementById('sedaActivationScreen').style.display = 'none';
                 document.getElementById('sedaKeyScreen').style.display = 'none';
