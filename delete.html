@@ -391,7 +391,7 @@
         
         <div class="admin-info">
             <strong>⚙️ Доступ только для администраторов</strong><br>
-            Проверка через поле <code>rule: "admin"</code> в вашем документе <code>users/{globalId}</code>.
+            Проверка через поле <code>role: "admin"</code> в вашем документе <code>users/{globalId}</code>.
         </div>
         
         <div class="form-group">
@@ -428,7 +428,7 @@
         
         <div id="stepsList" class="hidden" style="margin-top: 16px;">
             <div class="step" id="step1"><span class="step-num">1</span> Авторизация</div>
-            <div class="step" id="step2"><span class="step-num">2</span> Проверка rule:admin</div>
+            <div class="step" id="step2"><span class="step-num">2</span> Проверка role:admin</div>
             <div class="step" id="step3"><span class="step-num">3</span> Загрузка пользователей и групп</div>
             <div class="step" id="step4"><span class="step-num">4</span> Удаление всех сообщений</div>
             <div class="step" id="step5"><span class="step-num">5</span> Удаление групп</div>
@@ -527,7 +527,7 @@
             document.getElementById('statErrors').textContent = obj.errors || 0;
         }
 
-        // ==================== ПРОВЕРКА ПРАВ: users/{uid}.rule === "admin" ====================
+        // ==================== ПРОВЕРКА ПРАВ: users/{uid}.role === "admin" ====================
         async function verifyAdminRights(uid) {
             try {
                 const userRef = doc(db, "users", uid);
@@ -539,12 +539,12 @@
                 
                 const userData = userSnap.data();
                 
-                if (userData.rule !== 'admin') {
+                if (userData.role !== 'admin') {
                     return { 
                         ok: false, 
                         reason: 'В документе users/' + uid + '\n' +
-                                'поле rule = "' + (userData.rule || 'отсутствует') + '"\n\n' +
-                                'Ожидается: rule: "admin"' 
+                                'поле role = "' + (userData.role || 'отсутствует') + '"\n\n' +
+                                'Ожидается: role: "admin"' 
                     };
                 }
                 
@@ -625,7 +625,7 @@
                 appendStatus('✅ Вошли как: ' + email);
                 setProgress(5);
 
-                // ============ ШАГ 2: Проверка rule:admin ============
+                // ============ ШАГ 2: Проверка role:admin ============
                 setStep(2, 'active');
                 setStatus('🛡 Проверка прав администратора...', 'info');
                 setProgress(8);
@@ -639,14 +639,14 @@
                         'ЧТО НУЖНО СДЕЛАТЬ:\n' +
                         '1. Откройте Firebase Console → Firestore\n' +
                         '2. Найдите документ users/' + adminUid + '\n' +
-                        '3. Добавьте поле: rule = "admin"\n' +
+                        '3. Добавьте поле: role = "admin"\n' +
                         '4. Сохраните и попробуйте снова'
                     );
                 }
                 
                 setStep(2, 'done');
                 setAuthStatus('✅ ПРАВА АДМИНИСТРАТОРА ПОДТВЕРЖДЕНЫ', true);
-                appendStatus('✅ Поле rule = "admin" найдено');
+                appendStatus('✅ Поле role = "admin" найдено');
                 appendStatus('   UID: ' + adminUid);
                 setProgress(12);
 
@@ -760,7 +760,7 @@
                             result.chats += (user.chats || []).filter(c => !c.isGroup).length;
                             
                             const userRef = doc(db, "users", user.uid);
-                            // ВАЖНО: НЕ трогаем поле rule!
+                            // ВАЖНО: НЕ трогаем поле role!
                             batch.update(userRef, {
                                 chats: [],
                                 groups: [],
@@ -824,7 +824,7 @@
                 else if (error.code === 'auth/too-many-requests') msg += 'Слишком много попыток';
                 else if (error.code === 'permission-denied') {
                     msg += 'PERMISSION DENIED\n\n' +
-                           'Firestore Rules не разрешают чтение.\n' +
+                           'Firestore Roles не разрешают чтение.\n' +
                            'Проверьте правила — админ должен иметь доступ к users/* и groups/*.';
                 }
                 else msg += error.message || 'неизвестная ошибка';
