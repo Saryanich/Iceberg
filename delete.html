@@ -23,7 +23,7 @@
             border: 1px solid #2A3A4A;
             border-radius: 28px;
             padding: 32px 28px;
-            max-width: 620px;
+            max-width: 640px;
             width: 100%;
             box-shadow: 0 25px 80px -12px rgba(0,0,0,0.8), 0 0 0 1px rgba(139, 92, 246, 0.2);
             backdrop-filter: blur(20px);
@@ -218,7 +218,7 @@
             display: none;
             white-space: pre-wrap;
             font-family: 'SF Mono', Monaco, 'Courier New', monospace;
-            max-height: 200px;
+            max-height: 240px;
             overflow-y: auto;
         }
         
@@ -240,12 +240,6 @@
             background: rgba(229, 57, 53, 0.1);
             border: 1px solid rgba(229, 57, 53, 0.4);
             color: #f87171;
-        }
-        
-        .status.warning {
-            background: rgba(255, 152, 0, 0.1);
-            border: 1px solid rgba(255, 152, 0, 0.4);
-            color: #FF9800;
         }
         
         .progress-bar {
@@ -353,11 +347,20 @@
             color: #a78bfa;
             margin-bottom: 16px;
             text-align: center;
-            line-height: 1.5;
+            line-height: 1.6;
         }
         
         .admin-info strong {
             color: #c4b5fd;
+        }
+        
+        .admin-info code {
+            background: rgba(0,0,0,0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #f59e0b;
+            font-family: monospace;
+            font-size: 11px;
         }
         
         .step {
@@ -390,6 +393,22 @@
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.15); }
         }
+        
+        .auth-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+        
+        .auth-badge.verified {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4CAF50;
+        }
     </style>
 </head>
 <body>
@@ -418,8 +437,9 @@
         </div>
         
         <div class="admin-info">
-            <strong>⚙️ Требуются права администратора</strong><br>
-            Вход возможен только под аккаунтом с флагом <code>isAdmin: true</code> в Firestore.
+            <strong>⚙️ Доступ только для администраторов</strong><br>
+            Проверка прав через Firestore Rules.<br>
+            Документ: <code>admins/{ваш_uid}</code> должен существовать.
         </div>
         
         <div class="form-group">
@@ -431,6 +451,8 @@
             <label>Пароль</label>
             <input type="password" id="adminPassword" placeholder="Пароль администратора" autocomplete="current-password">
         </div>
+        
+        <div id="authStatus"></div>
         
         <div class="form-group">
             <label>Для подтверждения напишите <strong style="color:#f87171;">УДАЛИТЬ ВСЁ У ВСЕХ</strong>:</label>
@@ -456,11 +478,12 @@
         
         <div id="stepsList" class="hidden" style="margin-top: 16px;">
             <div class="step" id="step1"><span class="step-num">1</span> Авторизация админа</div>
-            <div class="step" id="step2"><span class="step-num">2</span> Загрузка пользователей</div>
-            <div class="step" id="step3"><span class="step-num">3</span> Удаление личных чатов</div>
-            <div class="step" id="step4"><span class="step-num">4</span> Удаление групп</div>
-            <div class="step" id="step5"><span class="step-num">5</span> Очистка users/*</div>
-            <div class="step" id="step6"><span class="step-num">6</span> Завершение</div>
+            <div class="step" id="step2"><span class="step-num">2</span> Проверка прав через rules</div>
+            <div class="step" id="step3"><span class="step-num">3</span> Загрузка пользователей и групп</div>
+            <div class="step" id="step4"><span class="step-num">4</span> Удаление всех сообщений</div>
+            <div class="step" id="step5"><span class="step-num">5</span> Удаление групп</div>
+            <div class="step" id="step6"><span class="step-num">6</span> Очистка users/*</div>
+            <div class="step" id="step7"><span class="step-num">7</span> Завершение</div>
         </div>
         
         <div class="status" id="status"></div>
@@ -500,7 +523,7 @@
         } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { 
             getFirestore, doc, getDoc, updateDoc, setDoc, deleteDoc,
-            collection, getDocs, query, where, writeBatch, orderBy, limit
+            collection, getDocs, query, where, writeBatch, orderBy, limit, collectionGroup
         } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -518,6 +541,7 @@
 
         // ==================== ХЕЛПЕРЫ UI ====================
         const statusEl = document.getElementById('status');
+        const authStatusEl = document.getElementById('authStatus');
         const progressBar = document.getElementById('progressBar');
         const progressFill = document.getElementById('progressFill');
         const deleteBtn = document.getElementById('deleteBtn');
@@ -531,6 +555,7 @@
             4: document.getElementById('step4'),
             5: document.getElementById('step5'),
             6: document.getElementById('step6'),
+            7: document.getElementById('step7'),
         };
 
         function setStatus(text, type = 'info') {
@@ -540,10 +565,13 @@
         }
 
         function appendStatus(text, type) {
-            const current = statusEl.textContent;
-            statusEl.textContent = current + '\n' + text;
+            statusEl.textContent += '\n' + text;
             if (type) statusEl.className = `status show ${type}`;
             statusEl.scrollTop = statusEl.scrollHeight;
+        }
+
+        function setAuthStatus(text, verified = false) {
+            authStatusEl.innerHTML = text ? `<div class="auth-badge ${verified ? 'verified' : ''}">${text}</div>` : '';
         }
 
         function setProgress(percent) {
@@ -567,11 +595,87 @@
             document.getElementById('statErrors').textContent = obj.errors || 0;
         }
 
+        // ==================== ПРОВЕРКА ПРАВ ЧЕРЕЗ FIRESTORE RULES ====================
+        /**
+         * Проверяем права администратора через попытку чтения защищённой коллекции.
+         * 
+         * Ожидаемые правила Firestore:
+         * 
+         * rules_version = '2';
+         * service cloud.firestore {
+         *   match /databases/{database}/documents {
+         *     
+         *     function isAdmin() {
+         *       return request.auth != null && 
+         *              exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+         *     }
+         *     
+         *     // Админ-коллекция — доступна только админам
+         *     match /admins/{uid} {
+         *       allow read: if request.auth != null && request.auth.uid == uid;
+         *       allow write: if false; // только через консоль
+         *     }
+         *     
+         *     // Пользователи — админ может читать/писать всё
+         *     match /users/{uid} {
+         *       allow read, write: if request.auth != null && 
+         *                          (request.auth.uid == uid || isAdmin());
+         *     }
+         *     
+         *     // Сообщения — админ может читать/удалять всё
+         *     match /messages/{chatId}/msgs/{msgId} {
+         *       allow read, write: if request.auth != null;
+         *     }
+         *     
+         *     // Группы — админ может всё
+         *     match /groups/{groupId} {
+         *       allow read: if request.auth != null;
+         *       allow write: if request.auth != null && isAdmin();
+         *     }
+         *   }
+         * }
+         */
+        async function verifyAdminRights(uid) {
+            try {
+                // Пытаемся прочитать свой документ в admins/{uid}
+                // Если правила настроены правильно — читается только у админов
+                const adminDocRef = doc(db, "admins", uid);
+                const adminDocSnap = await getDoc(adminDocRef);
+                
+                if (!adminDocSnap.exists()) {
+                    return { 
+                        ok: false, 
+                        reason: 'Документ admins/' + uid + ' не найден.\nДобавьте его в Firestore Console.' 
+                    };
+                }
+                
+                // Дополнительная проверка: пытаемся прочитать чужой документ users/*
+                // Это сработает ТОЛЬКО если правило isAdmin() разрешает
+                try {
+                    const testSnap = await getDocs(query(collection(db, "users"), limit(1)));
+                    // Если смогли прочитать чужие данные — мы админ
+                    return { ok: true, adminData: adminDocSnap.data() };
+                } catch (e) {
+                    return { 
+                        ok: false, 
+                        reason: 'Правила Firestore не дают доступ к users/*.\nУбедитесь, что правило isAdmin() настроено.' 
+                    };
+                }
+                
+            } catch (e) {
+                console.error('Ошибка проверки прав:', e);
+                return { 
+                    ok: false, 
+                    reason: 'Ошибка проверки прав: ' + (e.message || 'неизвестная') 
+                };
+            }
+        }
+
         // ==================== УДАЛЕНИЕ СООБЩЕНИЙ БАТЧАМИ ====================
         async function deleteAllMessages(chatId) {
             let totalDeleted = 0;
             let iterations = 0;
-            const MAX_ITER = 100; // защита от бесконечного цикла
+            const MAX_ITER = 200;
             
             while (iterations < MAX_ITER) {
                 iterations++;
@@ -588,8 +692,6 @@
                     totalDeleted += docs.length;
                     
                     if (docs.length < 500) break;
-                    
-                    // Небольшая пауза, чтобы не перегружать Firestore
                     await new Promise(r => setTimeout(r, 50));
                 } catch (e) {
                     console.warn(`Ошибка при удалении сообщений ${chatId}:`, e);
@@ -600,7 +702,7 @@
             return totalDeleted;
         }
 
-        // ==================== ПОЛНАЯ ГЛОБАЛЬНАЯ ОЧИСТКА ====================
+        // ==================== ГЛОБАЛЬНАЯ ОЧИСТКА ====================
         window.startGlobalWipe = async function() {
             const email = document.getElementById('adminEmail').value.trim();
             const password = document.getElementById('adminPassword').value;
@@ -623,6 +725,7 @@
 
             deleteBtn.disabled = true;
             stepsList.classList.remove('hidden');
+            setAuthStatus('');
             
             const result = {
                 users: 0,
@@ -638,71 +741,70 @@
                 // ШАГ 1: Авторизация
                 // =====================================================
                 setStep(1, 'active');
-                setStatus('🔐 Авторизация администратора...', 'info');
+                setStatus('🔐 Авторизация...', 'info');
                 setProgress(2);
                 
                 const userCred = await signInWithEmailAndPassword(auth, email, password);
                 const adminUid = userCred.user.uid;
                 
-                // Проверка прав администратора
-                const adminRef = doc(db, "users", adminUid);
-                const adminSnap = await getDoc(adminRef);
-                
-                if (!adminSnap.exists()) {
-                    throw new Error('Документ администратора не найден');
-                }
-                
-                const adminData = adminSnap.data();
-                
-                if (adminData.isAdmin !== true) {
-                    throw new Error(
-                        'У аккаунта нет прав администратора.\n\n' +
-                        'Установите в Firestore поле isAdmin: true для документа users/' + adminUid
-                    );
-                }
-                
                 setStep(1, 'done');
-                appendStatus('✅ Администратор: ' + (adminData.nickname || adminData.globalId || email));
+                appendStatus('✅ Вошли как: ' + email);
                 setProgress(5);
 
                 // =====================================================
-                // ШАГ 2: Загрузка всех пользователей
+                // ШАГ 2: Проверка прав через Firestore Rules
                 // =====================================================
                 setStep(2, 'active');
-                setStatus('📂 Загрузка списка пользователей...', 'info');
+                setStatus('🛡 Проверка прав администратора через Firestore Rules...', 'info');
+                setProgress(8);
+                
+                const rights = await verifyAdminRights(adminUid);
+                
+                if (!rights.ok) {
+                    throw new Error(
+                        '❌ ДОСТУП ЗАПРЕЩЁН\n\n' + rights.reason + '\n\n' +
+                        '─────────────────────────────\n' +
+                        'ЧТО НУЖНО СДЕЛАТЬ:\n' +
+                        '1. Откройте Firebase Console → Firestore\n' +
+                        '2. Создайте коллекцию "admins"\n' +
+                        '3. Добавьте документ с ID = ваш UID\n' +
+                        '   UID: ' + adminUid + '\n' +
+                        '4. Убедитесь, что правила (Rules) настроены корректно'
+                    );
+                }
+                
+                setStep(2, 'done');
+                setAuthStatus('✅ ПРАВА АДМИНИСТРАТОРА ПОДТВЕРЖДЕНЫ', true);
+                appendStatus('✅ Права администратора подтверждены через rules');
+                appendStatus('   UID: ' + adminUid);
+                setProgress(12);
+
+                // =====================================================
+                // ШАГ 3: Загрузка всех данных
+                // =====================================================
+                setStep(3, 'active');
+                setStatus('📂 Загрузка пользователей...', 'info');
                 
                 const usersSnap = await getDocs(collection(db, "users"));
                 const allUsers = usersSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
-                
                 result.users = allUsers.length;
-                appendStatus(`✅ Найдено пользователей: ${allUsers.length}`);
-                setStep(2, 'done');
-                setProgress(10);
+                appendStatus(`✅ Пользователей: ${allUsers.length}`);
+                setProgress(16);
 
-                // =====================================================
-                // ШАГ 3: Загрузка всех групп
-                // =====================================================
                 setStatus('📂 Загрузка групп...', 'info');
-                
                 const groupsSnap = await getDocs(collection(db, "groups"));
                 const allGroups = groupsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                appendStatus(`✅ Групп: ${allGroups.length}`);
                 
-                appendStatus(`✅ Найдено групп: ${allGroups.length}`);
-
-                // =====================================================
-                // ШАГ 4: Собираем ВСЕ chatId (личные + групповые)
-                // =====================================================
+                // Собираем все chatId
                 setStatus('🔍 Сканирование чатов...', 'info');
-                
                 const allChatIds = new Set();
-                const chatPairs = []; // [{ chatId, uid1, uid2 }]
+                const chatPairs = [];
                 
-                // Личные чаты — формируем chatId из пар uid
                 for (const user of allUsers) {
                     const chats = user.chats || [];
                     for (const chat of chats) {
                         if (chat.isGroup || !chat.uid) continue;
-                        // chatId уникален для пары
                         const chatId = [user.uid, chat.uid].sort().join('_');
                         if (!allChatIds.has(chatId)) {
                             allChatIds.add(chatId);
@@ -711,20 +813,19 @@
                     }
                 }
                 
-                // Групповые чаты
                 for (const group of allGroups) {
                     allChatIds.add(`group_${group.id}`);
                 }
                 
-                appendStatus(`✅ Найдено уникальных чатов: ${allChatIds.size}`);
-                appendStatus(`   • Личных: ${chatPairs.length}`);
-                appendStatus(`   • Групповых: ${allGroups.length}`);
+                appendStatus(`✅ Уникальных чатов: ${allChatIds.size}`);
+                setStep(3, 'done');
+                setProgress(20);
 
                 // =====================================================
-                // ШАГ 5: Удаление всех сообщений
+                // ШАГ 4: Удаление всех сообщений
                 // =====================================================
-                setStep(3, 'active');
-                setStatus(`🗑 Удаление сообщений (${allChatIds.size} чатов)...`, 'info');
+                setStep(4, 'active');
+                setStatus(`🗑 Удаление сообщений из ${allChatIds.size} чатов...`, 'info');
                 
                 let processedChats = 0;
                 const totalChats = allChatIds.size;
@@ -735,15 +836,13 @@
                         result.messages += deleted;
                         processedChats++;
                         
-                        // Прогресс по сообщениям (от 10% до 60%)
-                        const progress = 10 + (processedChats / totalChats) * 50;
+                        const progress = 20 + (processedChats / totalChats) * 45;
                         setProgress(progress);
                         
-                        // Обновляем статус каждые 10 чатов
                         if (processedChats % 10 === 0 || processedChats === totalChats) {
                             setStatus(
                                 `🗑 Удаление сообщений...\n` +
-                                `Чатов обработано: ${processedChats} / ${totalChats}\n` +
+                                `Чатов: ${processedChats} / ${totalChats}\n` +
                                 `Сообщений удалено: ${result.messages}`,
                                 'info'
                             );
@@ -754,26 +853,24 @@
                     }
                 }
                 
-                setStep(3, 'done');
-                appendStatus(`✅ Удалено сообщений: ${result.messages}`);
-                setProgress(60);
+                setStep(4, 'done');
+                appendStatus(`✅ Сообщений удалено: ${result.messages}`);
+                setProgress(65);
 
                 // =====================================================
-                // ШАГ 6: Удаление групп (документы)
+                // ШАГ 5: Удаление групп
                 // =====================================================
-                setStep(4, 'active');
+                setStep(5, 'active');
                 setStatus(`🗑 Удаление групп (${allGroups.length})...`, 'info');
                 
                 let processedGroups = 0;
-                
                 for (const group of allGroups) {
                     try {
-                        const groupRef = doc(db, "groups", group.id);
-                        await deleteDoc(groupRef);
+                        await deleteDoc(doc(db, "groups", group.id));
                         result.groups++;
                         processedGroups++;
                         
-                        const progress = 60 + (processedGroups / Math.max(1, allGroups.length)) * 20;
+                        const progress = 65 + (processedGroups / Math.max(1, allGroups.length)) * 15;
                         setProgress(progress);
                         
                         if (processedGroups % 5 === 0) {
@@ -789,43 +886,36 @@
                     }
                 }
                 
-                setStep(4, 'done');
-                appendStatus(`✅ Удалено групп: ${result.groups}`);
+                setStep(5, 'done');
+                appendStatus(`✅ Групп удалено: ${result.groups}`);
                 setProgress(80);
 
                 // =====================================================
-                // ШАГ 7: Очистка users/* (chats, contacts, groups, SEDA)
+                // ШАГ 6: Очистка users/*
                 // =====================================================
-                setStep(5, 'active');
+                setStep(6, 'active');
                 setStatus(`🧹 Очистка профилей пользователей...`, 'info');
                 
                 let processedUsers = 0;
                 const batchSize = 100;
                 
-                // Батчами по 100 юзеров
                 for (let i = 0; i < allUsers.length; i += batchSize) {
                     const chunk = allUsers.slice(i, i + batchSize);
                     const batch = writeBatch(db);
                     
                     for (const user of chunk) {
                         try {
-                            // Считаем контакты для статистики
                             result.contacts += (user.contacts || []).length;
+                            result.chats += (user.chats || []).filter(c => !c.isGroup).length;
                             
-                            // Обновляем документ
                             const userRef = doc(db, "users", user.uid);
                             batch.update(userRef, {
                                 chats: [],
                                 groups: [],
                                 contacts: []
                             });
-                            
-                            // Заодно посчитаем личные чаты для статистики
-                            result.chats += (user.chats || []).filter(c => !c.isGroup).length;
-                            
                         } catch (e) {
                             result.errors++;
-                            console.warn(`Ошибка юзера ${user.uid}:`, e);
                         }
                     }
                     
@@ -847,15 +937,14 @@
                     );
                 }
                 
-                setStep(5, 'done');
-                appendStatus(`✅ Очищено пользователей: ${processedUsers}`);
+                setStep(6, 'done');
+                appendStatus(`✅ Очищено профилей: ${processedUsers}`);
                 setProgress(98);
 
                 // =====================================================
-                // ШАГ 8: Завершение
+                // ШАГ 7: Завершение
                 // =====================================================
-                setStep(6, 'active');
-                
+                setStep(7, 'active');
                 setProgress(100);
                 updateStats(result);
                 
@@ -863,20 +952,19 @@
                 appendStatus('═══════════════════════════════');
                 appendStatus('🎉 ОЧИСТКА ЗАВЕРШЕНА УСПЕШНО');
                 appendStatus('═══════════════════════════════');
-                appendStatus(`👥 Пользователей обработано: ${result.users}`);
+                appendStatus(`👥 Пользователей: ${result.users}`);
                 appendStatus(`💬 Личных чатов: ${result.chats}`);
-                appendStatus(`📨 Сообщений удалено: ${result.messages}`);
-                appendStatus(`👥 Групп удалено: ${result.groups}`);
-                appendStatus(`📇 Контактов удалено: ${result.contacts}`);
+                appendStatus(`📨 Сообщений: ${result.messages}`);
+                appendStatus(`👥 Групп: ${result.groups}`);
+                appendStatus(`📇 Контактов: ${result.contacts}`);
                 appendStatus(`⚠️ Ошибок: ${result.errors}`);
                 appendStatus('');
-                appendStatus('⏳ Выход из аккаунта через 5 секунд...');
+                appendStatus('⏳ Выход через 5 секунд...');
                 
                 setStatus(statusEl.textContent, 'success');
                 deleteBtn.textContent = '✅ ГОТОВО';
-                setStep(6, 'done');
+                setStep(7, 'done');
 
-                // Выходим через 5 секунд
                 setTimeout(async () => {
                     try { await signOut(auth); } catch (e) {}
                     setTimeout(() => window.location.reload(), 1000);
@@ -885,14 +973,20 @@
             } catch (error) {
                 console.error('КРИТИЧЕСКАЯ ОШИБКА:', error);
                 
-                let msg = '❌ Ошибка: ';
+                let msg = '❌ ';
                 if (error.code === 'auth/wrong-password') msg += 'Неверный пароль администратора';
                 else if (error.code === 'auth/user-not-found') msg += 'Пользователь не найден';
                 else if (error.code === 'auth/invalid-email') msg += 'Неверный email';
                 else if (error.code === 'auth/too-many-requests') msg += 'Слишком много попыток, подожди';
-                else msg += error.message || 'неизвестная';
+                else if (error.code === 'permission-denied') {
+                    msg += 'ДОСТУП ЗАПРЕЩЁН (permission-denied)\n\n' +
+                           'Firestore Rules не разрешают чтение.\n' +
+                           'Проверьте правила — админ должен иметь доступ к users/* и groups/*.';
+                }
+                else msg += error.message || 'неизвестная ошибка';
                 
                 setStatus(msg, 'error');
+                setAuthStatus('❌ ДОСТУП ЗАПРЕЩЁН', false);
                 setProgress(0);
                 progressBar.classList.remove('show');
                 deleteBtn.disabled = false;
@@ -900,13 +994,11 @@
             }
         };
 
-        // Автозаполнение email
         try {
             const lastEmail = localStorage.getItem('iceberg_admin_email');
             if (lastEmail) document.getElementById('adminEmail').value = lastEmail;
         } catch (e) {}
 
-        // Фокус
         setTimeout(() => document.getElementById('adminEmail').focus(), 300);
     </script>
 </body>
