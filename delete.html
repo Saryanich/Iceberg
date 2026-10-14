@@ -41,9 +41,7 @@
             animation: rainbow 3s linear infinite;
         }
         
-        @keyframes rainbow {
-            to { background-position: 200% 0; }
-        }
+        @keyframes rainbow { to { background-position: 200% 0; } }
         
         .logo { text-align: center; margin-bottom: 24px; }
         
@@ -72,11 +70,7 @@
             letter-spacing: 1px;
         }
         
-        .logo p {
-            font-size: 12px;
-            color: #88A9C4;
-            margin-top: 6px;
-        }
+        .logo p { font-size: 12px; color: #88A9C4; margin-top: 6px; }
         
         .danger-title {
             color: #f87171;
@@ -147,33 +141,10 @@
             background: linear-gradient(135deg, #ef4444, #b91c1c);
             color: white;
             box-shadow: 0 8px 24px -6px rgba(239, 68, 68, 0.5);
-            position: relative;
-            overflow: hidden;
         }
         
-        .btn-danger::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-            transform: translateX(-100%);
-            animation: btnShine 3s infinite;
-        }
-        
-        @keyframes btnShine { to { transform: translateX(100%); } }
-        
-        .btn-danger:hover {
-            box-shadow: 0 12px 32px -6px rgba(239, 68, 68, 0.8);
-            transform: translateY(-1px);
-        }
-        
-        .btn-danger:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            animation: none;
-        }
-        
-        .btn-danger:disabled::after { display: none; }
+        .btn-danger:hover { box-shadow: 0 12px 32px -6px rgba(239, 68, 68, 0.8); transform: translateY(-1px); }
+        .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
         
         .btn-secondary {
             background: transparent;
@@ -320,37 +291,6 @@
             font-size: 11px;
         }
         
-        .step {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 0;
-            font-size: 12px;
-            color: #88A9C4;
-        }
-        
-        .step-num {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: #2A3A4A;
-            color: #64B5F6;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            font-weight: bold;
-            flex-shrink: 0;
-        }
-        
-        .step.done .step-num { background: #4CAF50; color: white; }
-        .step.active .step-num { background: #f59e0b; color: white; animation: pulse 1s infinite; }
-        
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.15); }
-        }
-        
         .auth-badge {
             display: inline-flex;
             align-items: center;
@@ -383,15 +323,14 @@
                 <li>🗑 Всю историю сообщений</li>
                 <li>🗑 Все группы (документы + сообщения)</li>
                 <li>🗑 Все контакты</li>
-                <li>🗑 Все ключи SEDA Pro в localStorage</li>
             </ul>
             <br>
-            <strong style="color: #f87171;">Аккаунты Firebase Auth и документы users/* останутся нетронутыми!</strong>
+            <strong style="color: #f87171;">Аккаунты Firebase Auth останутся. Сами документы users/* — тоже.</strong>
         </div>
         
         <div class="admin-info">
             <strong>⚙️ Доступ только для администраторов</strong><br>
-            Проверка через поле <code>role: "admin"</code> в вашем документе <code>users/{globalId}</code>.
+            Проверка: <code>users/{uid}.role === "admin"</code>
         </div>
         
         <div class="form-group">
@@ -401,19 +340,19 @@
         
         <div class="form-group">
             <label>Пароль</label>
-            <input type="password" id="adminPassword" placeholder="Пароль администратора" autocomplete="current-password">
+            <input type="password" id="adminPassword" placeholder="Пароль" autocomplete="current-password">
         </div>
         
         <div id="authStatus"></div>
         
         <div class="form-group">
-            <label>Для подтверждения напишите <strong style="color:#f87171;">УДАЛИТЬ ВСЁ У ВСЕХ</strong>:</label>
+            <label>Напишите <strong style="color:#f87171;">УДАЛИТЬ ВСЁ У ВСЕХ</strong>:</label>
             <input type="text" id="confirmText" placeholder="УДАЛИТЬ ВСЁ У ВСЕХ" autocomplete="off">
         </div>
         
         <label class="checkbox-label">
             <input type="checkbox" id="understand">
-            <span>Я понимаю, что это затронет ВСЕХ пользователей базы. Действие необратимо.</span>
+            <span>Я понимаю, что это затронет ВСЕХ пользователей. Действие необратимо.</span>
         </label>
         
         <button class="btn btn-danger" id="deleteBtn" onclick="startGlobalWipe()">
@@ -424,16 +363,6 @@
         
         <div class="progress-bar" id="progressBar">
             <div class="progress-fill" id="progressFill"></div>
-        </div>
-        
-        <div id="stepsList" class="hidden" style="margin-top: 16px;">
-            <div class="step" id="step1"><span class="step-num">1</span> Авторизация</div>
-            <div class="step" id="step2"><span class="step-num">2</span> Проверка role:admin</div>
-            <div class="step" id="step3"><span class="step-num">3</span> Загрузка пользователей и групп</div>
-            <div class="step" id="step4"><span class="step-num">4</span> Удаление всех сообщений</div>
-            <div class="step" id="step5"><span class="step-num">5</span> Удаление групп</div>
-            <div class="step" id="step6"><span class="step-num">6</span> Очистка users/*</div>
-            <div class="step" id="step7"><span class="step-num">7</span> Завершение</div>
         </div>
         
         <div class="status" id="status"></div>
@@ -469,6 +398,44 @@
         const auth = getAuth();
         const db = getFirestore();
 
+        // ==================== ХЕЛПЕРЫ ДЛЯ РАБОТЫ С FIRESTORE-СТРУКТУРАМИ ====================
+        /**
+         * Firestore возвращает поля как:
+         * - array → настоящий массив [a, b, c]
+         * - map   → объект {0: a, 1: b, 2: c} или {key: value}
+         * - string, number, boolean
+         * - null / undefined
+         * 
+         * Эта функция приводит ЛЮБОЕ значение к массиву.
+         */
+        function toArray(value) {
+            if (!value) return [];
+            if (Array.isArray(value)) return value;
+            if (typeof value === 'object') return Object.values(value).filter(v => v != null);
+            return [];
+        }
+
+        /**
+         * Извлекает чаты пользователя (поле chats — MAP, а не массив!)
+         */
+        function getUserChats(user) {
+            return toArray(user.chats).filter(c => c && typeof c === 'object');
+        }
+
+        /**
+         * Извлекает контакты пользователя (поле contacts — ARRAY)
+         */
+        function getUserContacts(user) {
+            return toArray(user.contacts).filter(c => c && typeof c === 'object');
+        }
+
+        /**
+         * Извлекает группы пользователя
+         */
+        function getUserGroups(user) {
+            return toArray(user.groups).filter(g => g && typeof g === 'object');
+        }
+
         // ==================== UI ====================
         const statusEl = document.getElementById('status');
         const authStatusEl = document.getElementById('authStatus');
@@ -476,17 +443,6 @@
         const progressFill = document.getElementById('progressFill');
         const deleteBtn = document.getElementById('deleteBtn');
         const statsEl = document.getElementById('stats');
-        const stepsList = document.getElementById('stepsList');
-
-        const steps = {
-            1: document.getElementById('step1'),
-            2: document.getElementById('step2'),
-            3: document.getElementById('step3'),
-            4: document.getElementById('step4'),
-            5: document.getElementById('step5'),
-            6: document.getElementById('step6'),
-            7: document.getElementById('step7'),
-        };
 
         function setStatus(text, type = 'info') {
             statusEl.textContent = text;
@@ -508,13 +464,7 @@
 
         function setProgress(percent) {
             progressBar.classList.add('show');
-            progressFill.style.width = Math.min(100, percent) + '%';
-        }
-
-        function setStep(n, state) {
-            if (!steps[n]) return;
-            steps[n].classList.remove('active', 'done');
-            if (state) steps[n].classList.add(state);
+            progressFill.style.width = Math.min(100, Math.max(0, percent)) + '%';
         }
 
         function updateStats(obj) {
@@ -527,11 +477,10 @@
             document.getElementById('statErrors').textContent = obj.errors || 0;
         }
 
-        // ==================== ПРОВЕРКА ПРАВ: users/{uid}.role === "admin" ====================
+        // ==================== ПРОВЕРКА ПРАВ ====================
         async function verifyAdminRights(uid) {
             try {
-                const userRef = doc(db, "users", uid);
-                const userSnap = await getDoc(userRef);
+                const userSnap = await getDoc(doc(db, "users", uid));
                 
                 if (!userSnap.exists()) {
                     return { ok: false, reason: 'Документ users/' + uid + ' не найден' };
@@ -539,12 +488,13 @@
                 
                 const userData = userSnap.data();
                 
+                // ✅ ПРАВИЛЬНАЯ ПРОВЕРКА: поле называется role
                 if (userData.role !== 'admin') {
                     return { 
                         ok: false, 
                         reason: 'В документе users/' + uid + '\n' +
-                                'поле role = "' + (userData.role || 'отсутствует') + '"\n\n' +
-                                'Ожидается: role: "admin"' 
+                                'поле role = "' + (userData.role ?? 'отсутствует') + '"\n\n' +
+                                'Ожидается: role = "admin"' 
                     };
                 }
                 
@@ -594,7 +544,7 @@
             const understand = document.getElementById('understand').checked;
 
             if (!email || !password) {
-                setStatus('❌ Введите email и пароль администратора', 'error');
+                setStatus('❌ Введите email и пароль', 'error');
                 return;
             }
             if (confirmText !== 'УДАЛИТЬ ВСЁ У ВСЕХ') {
@@ -607,27 +557,23 @@
             }
 
             deleteBtn.disabled = true;
-            stepsList.classList.remove('hidden');
             setAuthStatus('');
             
             const result = { users: 0, chats: 0, messages: 0, groups: 0, contacts: 0, errors: 0 };
 
             try {
                 // ============ ШАГ 1: Авторизация ============
-                setStep(1, 'active');
                 setStatus('🔐 Авторизация...', 'info');
                 setProgress(2);
                 
                 const userCred = await signInWithEmailAndPassword(auth, email, password);
                 const adminUid = userCred.user.uid;
                 
-                setStep(1, 'done');
                 appendStatus('✅ Вошли как: ' + email);
                 setProgress(5);
 
                 // ============ ШАГ 2: Проверка role:admin ============
-                setStep(2, 'active');
-                setStatus('🛡 Проверка прав администратора...', 'info');
+                setStatus('🛡 Проверка role === "admin"...', 'info');
                 setProgress(8);
                 
                 const rights = await verifyAdminRights(adminUid);
@@ -637,21 +583,19 @@
                         '❌ ДОСТУП ЗАПРЕЩЁН\n\n' + rights.reason + '\n\n' +
                         '─────────────────────────────\n' +
                         'ЧТО НУЖНО СДЕЛАТЬ:\n' +
-                        '1. Откройте Firebase Console → Firestore\n' +
-                        '2. Найдите документ users/' + adminUid + '\n' +
+                        '1. Firebase Console → Firestore\n' +
+                        '2. Откройте users/' + adminUid + '\n' +
                         '3. Добавьте поле: role = "admin"\n' +
                         '4. Сохраните и попробуйте снова'
                     );
                 }
                 
-                setStep(2, 'done');
                 setAuthStatus('✅ ПРАВА АДМИНИСТРАТОРА ПОДТВЕРЖДЕНЫ', true);
-                appendStatus('✅ Поле role = "admin" найдено');
+                appendStatus('✅ role === "admin" ✓');
                 appendStatus('   UID: ' + adminUid);
                 setProgress(12);
 
                 // ============ ШАГ 3: Загрузка данных ============
-                setStep(3, 'active');
                 setStatus('📂 Загрузка пользователей...', 'info');
                 
                 const usersSnap = await getDocs(collection(db, "users"));
@@ -668,8 +612,9 @@
                 setStatus('🔍 Сканирование чатов...', 'info');
                 const allChatIds = new Set();
                 
+                // ✅ ИСПОЛЬЗУЕМ getUserChats() — правильно обрабатывает MAP
                 for (const user of allUsers) {
-                    const chats = user.chats || [];
+                    const chats = getUserChats(user);
                     for (const chat of chats) {
                         if (chat.isGroup || !chat.uid) continue;
                         const chatId = [user.uid, chat.uid].sort().join('_');
@@ -678,15 +623,14 @@
                 }
                 
                 for (const group of allGroups) {
+                    if (!group.id) continue;
                     allChatIds.add(`group_${group.id}`);
                 }
                 
                 appendStatus(`✅ Уникальных чатов: ${allChatIds.size}`);
-                setStep(3, 'done');
                 setProgress(20);
 
                 // ============ ШАГ 4: Удаление сообщений ============
-                setStep(4, 'active');
                 setStatus(`🗑 Удаление сообщений из ${allChatIds.size} чатов...`, 'info');
                 
                 let processedChats = 0;
@@ -698,7 +642,7 @@
                         result.messages += deleted;
                         processedChats++;
                         
-                        setProgress(20 + (processedChats / totalChats) * 45);
+                        setProgress(20 + (processedChats / Math.max(1, totalChats)) * 45);
                         
                         if (processedChats % 10 === 0 || processedChats === totalChats) {
                             setStatus(
@@ -714,37 +658,30 @@
                     }
                 }
                 
-                setStep(4, 'done');
                 appendStatus(`✅ Сообщений удалено: ${result.messages}`);
                 setProgress(65);
 
                 // ============ ШАГ 5: Удаление групп ============
-                setStep(5, 'active');
                 setStatus(`🗑 Удаление групп (${allGroups.length})...`, 'info');
                 
                 let processedGroups = 0;
                 for (const group of allGroups) {
+                    if (!group.id) continue;
                     try {
                         await deleteDoc(doc(db, "groups", group.id));
                         result.groups++;
                         processedGroups++;
                         
                         setProgress(65 + (processedGroups / Math.max(1, allGroups.length)) * 15);
-                        
-                        if (processedGroups % 5 === 0) {
-                            setStatus(`🗑 Группы: ${processedGroups} / ${allGroups.length}`, 'info');
-                        }
                     } catch (e) {
                         result.errors++;
                     }
                 }
                 
-                setStep(5, 'done');
                 appendStatus(`✅ Групп удалено: ${result.groups}`);
                 setProgress(80);
 
                 // ============ ШАГ 6: Очистка users/* ============
-                setStep(6, 'active');
                 setStatus('🧹 Очистка профилей пользователей...', 'info');
                 
                 let processedUsers = 0;
@@ -756,18 +693,22 @@
                     
                     for (const user of chunk) {
                         try {
-                            result.contacts += (user.contacts || []).length;
-                            result.chats += (user.chats || []).filter(c => !c.isGroup).length;
+                            // ✅ Считаем через хелперы
+                            const contactsArr = getUserContacts(user);
+                            const chatsArr = getUserChats(user);
                             
-                            const userRef = doc(db, "users", user.uid);
-                            // ВАЖНО: НЕ трогаем поле role!
-                            batch.update(userRef, {
-                                chats: [],
+                            result.contacts += contactsArr.length;
+                            result.chats += chatsArr.filter(c => !c.isGroup).length;
+                            
+                            // ✅ Обнуляем поля. НЕ трогаем role!
+                            batch.update(doc(db, "users", user.uid), {
+                                chats: {},
                                 groups: [],
                                 contacts: []
                             });
                         } catch (e) {
                             result.errors++;
+                            console.warn('Ошибка юзера:', user.uid, e);
                         }
                     }
                     
@@ -776,19 +717,17 @@
                         processedUsers += chunk.length;
                     } catch (e) {
                         result.errors++;
-                        console.error('Ошибка батча users:', e);
+                        console.error('Ошибка батча:', e);
                     }
                     
                     setProgress(80 + (processedUsers / Math.max(1, allUsers.length)) * 18);
                     setStatus(`🧹 Очистка: ${processedUsers} / ${allUsers.length}`, 'info');
                 }
                 
-                setStep(6, 'done');
                 appendStatus(`✅ Очищено профилей: ${processedUsers}`);
                 setProgress(98);
 
                 // ============ ШАГ 7: Завершение ============
-                setStep(7, 'active');
                 setProgress(100);
                 updateStats(result);
                 
@@ -802,12 +741,9 @@
                 appendStatus(`👥 Групп: ${result.groups}`);
                 appendStatus(`📇 Контактов: ${result.contacts}`);
                 appendStatus(`⚠️ Ошибок: ${result.errors}`);
-                appendStatus('');
-                appendStatus('⏳ Выход через 5 секунд...');
                 
                 setStatus(statusEl.textContent, 'success');
                 deleteBtn.textContent = '✅ ГОТОВО';
-                setStep(7, 'done');
 
                 setTimeout(async () => {
                     try { await signOut(auth); } catch (e) {}
@@ -821,12 +757,7 @@
                 if (error.code === 'auth/wrong-password') msg += 'Неверный пароль';
                 else if (error.code === 'auth/user-not-found') msg += 'Пользователь не найден';
                 else if (error.code === 'auth/invalid-email') msg += 'Неверный email';
-                else if (error.code === 'auth/too-many-requests') msg += 'Слишком много попыток';
-                else if (error.code === 'permission-denied') {
-                    msg += 'PERMISSION DENIED\n\n' +
-                           'Firestore Roles не разрешают чтение.\n' +
-                           'Проверьте правила — админ должен иметь доступ к users/* и groups/*.';
-                }
+                else if (error.code === 'permission-denied') msg += 'PERMISSION DENIED\nПравила Firestore не разрешают доступ.';
                 else msg += error.message || 'неизвестная ошибка';
                 
                 setStatus(msg, 'error');
@@ -837,11 +768,6 @@
                 deleteBtn.textContent = '💥 УДАЛИТЬ ВСЁ У ВСЕХ ПОЛЬЗОВАТЕЛЕЙ';
             }
         };
-
-        try {
-            const lastEmail = localStorage.getItem('iceberg_admin_email');
-            if (lastEmail) document.getElementById('adminEmail').value = lastEmail;
-        } catch (e) {}
 
         setTimeout(() => document.getElementById('adminEmail').focus(), 300);
     </script>
