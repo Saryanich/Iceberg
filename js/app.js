@@ -2,9 +2,9 @@
 // js/app.js — Точка входа, связка всех модулей
 //
 //  • Инициализация тем, particles, SW
-//  • Роутинг между auth и мессенджером
-//  • Автовход через onAuthStateChanged
-//  • Обработка всех UI-событий (клики, ввод)
+//  • Моментальный автовход из localStorage
+//  • Фоновая синхронизация с Firestore
+//  • Обработка всех UI-событий
 //  • Запуск фоновых задач
 // ===================================================================
 
@@ -23,7 +23,8 @@ import {
     subscribeAuthState,
     startBlockCheck,
     stopBlockCheck,
-    collectDeviceInfo
+    collectDeviceInfo,
+    tryInstantRestore
 } from './auth.js';
 
 import * as DB from './db.js';
@@ -81,7 +82,7 @@ import {
 } from './push.js';
 
 // ===================================================================
-// ИНИЦИАЛИЗАЦИЯ PARTICLES
+// PARTICLES
 // ===================================================================
 function initParticles() {
     if (typeof particlesJS === 'undefined') return;
@@ -179,11 +180,10 @@ async function handleLoginClick() {
         msg.className = 'message message-error';
         msg.style.display = 'block';
     }
-    // Успех — обработает onAuthStateChanged
 }
 
 // ===================================================================
-// 2FA — ВВОД КОДА
+// 2FA — ВВОД
 // ===================================================================
 function setup2FAInputs() {
     for (let i = 1; i <= 4; i++) {
@@ -199,9 +199,7 @@ function setup2FAInputs() {
             if (e.key === 'Backspace' && !el.value && i > 1) {
                 document.getElementById(`code${i - 1}`)?.focus();
             }
-            if (e.key === 'Enter') {
-                handle2FAVerify();
-            }
+            if (e.key === 'Enter') handle2FAVerify();
         });
     }
 }
@@ -239,49 +237,24 @@ async function handle2FACancel() {
 // ===================================================================
 async function bootMessenger(user, userData) {
     try {
-        // Обновляем userData в authState
         authState.user = user;
         if (userData) authState.userData = userData;
 
-        // Тема
         loadTheme();
-
-        // Инициализация стикеров
         initStickerPicker();
-
-        // Рендер профиля
         renderUserProfile();
-
-        // SEDA статус
         updateSedaUI();
 
-        // Автоудаление
-        uiState.autoDeleteHours = authState.userData.autoDeleteHours || 0;
+        uiState.autoDeleteHours = authState.userData?.autoDeleteHours || 0;
 
-        // Загружаем списки (с кэшем сначала)
         const uid = user.uid;
 
-        // Мгновенно — из кэша
-        const [cachedProfile, cachedChats, cachedGroups, cachedChannels, cachedContacts] = await Promise.all([
-            DB.getCachedProfile(uid),
-            DB.Lists.getChats(uid),
-            DB.Lists.getGroups(uid),
-            DB.Lists.getChannels(uid),
-            DB.Lists.getContacts(uid)
-        ]);
-
-        if (cachedChats) authState.userData.chats = cachedChats;
-        if (cachedGroups) authState.userData.groups = cachedGroups;
-        if (cachedChannels) authState.userData.channels = cachedChannels;
-        if (cachedContacts) authState.userData.contacts = cachedContacts;
-
-        // Рендерим что есть
+        // Мгновенно — что есть в памяти
         loadChats();
         loadGroups();
         loadChannels();
         loadContacts();
 
-        // Показываем экран
         showMessengerScreen();
 
         // SEDA-слушатель
@@ -293,27 +266,14 @@ async function bootMessenger(user, userData) {
             showAuthScreen();
         });
 
-        // Push-уведомления (в фоне, не блокируя UI)
+        // Push в фоне
         setTimeout(() => {
             initPushNotifications().catch(e => console.warn('[Push] init error:', e));
             refreshTokenForUser(user.uid).catch(() => {});
         }, 1500);
-
-        // Обновляем данные с сервера (в фоне)
-        setTimeout(() => refreshUserDataFromServer(uid), 500);
     } catch (e) {
         console.error('[bootMessenger] Ошибка:', e);
         showToast('Ошибка загрузки', 'error');
-    }
-}
-
-async function refreshUserDataFromServer(uid) {
-    try {
-        const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
-        const snap = await getDoc(doc(DB_STORE(), 'users', uid));
-        // Здесь DB_STORE() не нужен — используем прямой импорт из config
-    } catch (e) {
-        console.warn('[refreshUserData] skip:', e);
     }
 }
 
@@ -322,12 +282,17 @@ async function refreshUserDataFromServer(uid) {
 // ===================================================================
 function setupAuthState() {
     subscribeAuthState(async (user) => {
-        // Если ждём ввода 2FA — игнорируем
         if (authState.awaitingTwoFactor) return;
 
         if (user) {
+            // Если уже вошли моментально — не перезагружаем UI
+            if (authState.restoredFromCache && authState.user?.uid === user.uid) {
+                return;
+            }
+
             showLoading();
-            await collectDeviceInfo();
+            collectDeviceInfo().catch(() => {});
+
             await handleAuthLogin(user, {
                 onSuccess: async (u, data) => {
                     await bootMessenger(u, data);
@@ -350,13 +315,39 @@ function setupAuthState() {
                 }
             });
         } else {
-            // Выход
             cleanupPush();
             stopBlockCheck();
             showAuthScreen();
             document.getElementById('loginIdentifier').value = '';
             document.getElementById('loginPassword').value = '';
         }
+    });
+}
+
+// ===================================================================
+// СОБЫТИЯ ОТ auth.js (фоновая синхронизация)
+// ===================================================================
+function setupAuthSyncEvents() {
+    window.addEventListener('iceberg:user-data-updated', (e) => {
+        const data = e.detail?.data;
+        if (!data) return;
+        authState.userData = data;
+        authState.sedaProActivated = data.sedaProActivated || false;
+        renderUserProfile();
+        updateSedaUI();
+        loadChats();
+        loadGroups();
+        loadChannels();
+        loadContacts();
+    });
+
+    window.addEventListener('iceberg:force-logout', (e) => {
+        const reason = e.detail?.reason;
+        showAuthScreen();
+        showToast(
+            reason === 'locked' ? '🔒 Аккаунт заблокирован' : 'Вы вышли из аккаунта',
+            'error'
+        );
     });
 }
 
@@ -369,22 +360,21 @@ function bindUIEvents() {
         if (e.key === 'Enter') handleLoginClick();
     });
 
-    document.getElementById('btnLogin')?.addEventListener('click', handleLoginClick);
-    // Кнопки внутри authForm с onclick — не трогаем, дублируем через id
-    const loginBtn = document.querySelector('#loginMode .btn-primary');
-    if (loginBtn) loginBtn.onclick = handleLoginClick;
+    document.getElementById('btnLogin').onclick = handleLoginClick;
 
-    const blockedBack = document.querySelector('#blockedMode .btn-secondary');
-    if (blockedBack) blockedBack.onclick = () => {
+    document.querySelector('#blockedMode .btn-secondary').onclick = () => {
         document.getElementById('loginMode').style.display = 'block';
         document.getElementById('blockedMode').style.display = 'none';
     };
 
-    const globalIdBtn = document.querySelector('#loginMode .btn-secondary');
-    if (globalIdBtn) globalIdBtn.onclick = () => {
+    document.getElementById('btnGlobalId').onclick = () => {
         localStorage.setItem('iceberg_referrer', location.href);
         localStorage.setItem('iceberg_app', 'true');
         location.href = 'https://saryanich.github.io/Global-ID/';
+    };
+
+    document.getElementById('disclaimerBlock').onclick = () => {
+        window.open('https://saryanich.github.io/TLC-services/', '_blank');
     };
 
     // --- 2FA ---
@@ -392,8 +382,9 @@ function bindUIEvents() {
     document.querySelector('#twoFactorScreen .btn-secondary').onclick = handle2FACancel;
 
     // --- Профиль ---
-    document.querySelector('.user-info').onclick = () => {
+    document.getElementById('userInfoClicker').onclick = () => {
         const d = authState.userData;
+        if (!d) return;
         document.getElementById('profileFirstName').value = d.firstName || '';
         document.getElementById('profileLastName').value = d.lastName || '';
         document.getElementById('profileMood').value = d.mood || '';
@@ -409,14 +400,65 @@ function bindUIEvents() {
         document.getElementById('profileModal').classList.add('active');
     };
 
-    document.querySelector('#profileModal .close-modal').onclick = () => {
-        document.getElementById('profileModal').classList.remove('active');
+    document.getElementById('avatarClicker').onclick = () => {
+        document.getElementById('avatarUploadInput').click();
     };
-    document.querySelector('#profileModal .btn-primary').onclick = saveProfile;
-    document.getElementById('avatarUploadInput').onchange = uploadAvatar;
+
+    document.getElementById('avatarUploadInput').onchange = async function () {
+        const file = this.files?.[0];
+        this.value = '';
+        if (!file) return;
+        try {
+            const { compressImage } = await import('./ui.js');
+            const dataUrl = await compressImage(file, 1024 * 1024);
+            authState.userData.avatar = dataUrl;
+
+            const av = document.getElementById('profileAvatarBig');
+            av.innerHTML = '';
+            const img = document.createElement('img');
+            img.src = dataUrl;
+            av.appendChild(img);
+
+            const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+            const { db } = await import('./config.js');
+            await updateDoc(doc(db, 'users', authState.user.uid), { avatar: dataUrl });
+            await DB.setCachedProfile(authState.user.uid, authState.userData);
+            renderUserProfile();
+            showToast('✅ Аватар обновлён', 'success');
+        } catch (e) {
+            showToast('Ошибка загрузки', 'error');
+        }
+    };
+
+    document.querySelector('#profileModal .btn-primary').onclick = async () => {
+        const fn = document.getElementById('profileFirstName').value.trim();
+        const ln = document.getElementById('profileLastName').value.trim();
+        const mood = document.getElementById('profileMood').value.trim();
+        const nick = (fn || ln) ? `${fn} ${ln}`.trim() : (authState.userData.nickname || 'Пользователь');
+        try {
+            const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+            const { db } = await import('./config.js');
+            await updateDoc(doc(db, 'users', authState.user.uid), {
+                firstName: fn, lastName: ln, mood, nickname: nick,
+                avatar: authState.userData.avatar || null
+            });
+            authState.userData.firstName = fn;
+            authState.userData.lastName = ln;
+            authState.userData.mood = mood;
+            authState.userData.nickname = nick;
+            await DB.setCachedProfile(authState.user.uid, authState.userData);
+            renderUserProfile();
+            showToast('✅ Профиль сохранён', 'success');
+            setTimeout(() => {
+                document.getElementById('profileModal').classList.remove('active');
+            }, 600);
+        } catch (e) {
+            showToast('Ошибка сохранения', 'error');
+        }
+    };
 
     // --- Настройки ---
-    document.querySelector('.logout-btn[title="Настройки"]').onclick = () => {
+    document.getElementById('openSettingsBtn').onclick = () => {
         document.getElementById('settingsModal').classList.add('active');
         updateSedaUI();
         const ad = document.getElementById('autoDeleteValue');
@@ -425,9 +467,17 @@ function bindUIEvents() {
                 : uiState.autoDeleteHours === 24 ? '24ч'
                 : uiState.autoDeleteHours === 168 ? '7д' : '30д';
         }
+        const sb = document.getElementById('sedaStatusBadge');
+        if (sb) {
+            sb.textContent = authState.sedaProActivated ? '✓ Активирован' : 'Не активирован';
+            sb.style.color = authState.sedaProActivated ? 'var(--success)' : 'var(--warning)';
+        }
     };
 
     document.querySelector('#settingsModal .close-modal').onclick = () => {
+        document.getElementById('settingsModal').classList.remove('active');
+    };
+    document.querySelector('#settingsModal .close-settings-btn').onclick = () => {
         document.getElementById('settingsModal').classList.remove('active');
     };
 
@@ -436,8 +486,10 @@ function bindUIEvents() {
     });
 
     // --- Logout ---
-    document.querySelector('.logout-btn[title="Выйти"]').onclick = () => {
-        if (confirm('Выйти из аккаунта?')) logout();
+    document.getElementById('logoutBtn').onclick = async () => {
+        if (confirm('Выйти из аккаунта?')) {
+            await logout();
+        }
     };
 
     // --- Вкладки ---
@@ -446,7 +498,7 @@ function bindUIEvents() {
         tab.onclick = () => switchTab(names[i]);
     });
 
-    // --- Поиск в списке ---
+    // --- Поиск ---
     document.getElementById('searchInput')?.addEventListener('input', (e) => {
         const term = e.target.value.toLowerCase().trim();
         const active = document.querySelector('.tab-pane.active');
@@ -487,11 +539,8 @@ function bindUIEvents() {
     // --- Закрытие модалок ---
     document.querySelectorAll('.close-modal').forEach(el => {
         el.onclick = () => {
-            const modal = el.closest('#profileModal, #settingsModal, #storiesModal, #storyViewerModal, #autoDeleteModal, #searchModal, #createGroupModal, #createChannelModal, #groupInfoModal, #channelManageModal, #contactPickerModal, #scannerModal');
-            if (modal) {
-                modal.classList.remove('active');
-                modal.style.display = '';
-            }
+            const modal = el.closest('.modal-overlay');
+            if (modal) modal.classList.remove('active');
         };
     });
 
@@ -502,7 +551,7 @@ function bindUIEvents() {
     document.getElementById('clearChatBtn').onclick = clearCurrentChat;
     document.getElementById('deleteChatBtn').onclick = deleteCurrentChat;
     document.getElementById('groupInfoBtn').onclick = showGroupInfo;
-    document.getElementById('channelManageBtn').onclick = showChannelManage;
+    document.getElementById('channelManageBtn').onclick = () => showToast('В разработке', 'info');
 
     // --- Отправка ---
     document.getElementById('chatSend').onclick = sendMessage;
@@ -519,36 +568,48 @@ function bindUIEvents() {
     });
 
     // --- Стикеры / медиа / голос ---
-    document.querySelector('.chat-input-bar .chat-icon-btn:nth-child(1)').onclick = () => {
+    document.getElementById('stickerBtn').onclick = () => {
         const sp = document.getElementById('stickerPicker');
         uiState.stickerPickerOpen = !uiState.stickerPickerOpen;
         sp.classList.toggle('show', uiState.stickerPickerOpen);
     };
-    document.querySelector('.chat-input-bar .chat-icon-btn:nth-child(2)').onclick = () => {
+    document.getElementById('attachBtn').onclick = () => {
         document.getElementById('chatMediaInput').click();
     };
-    document.getElementById('chatMediaInput').onchange = function() { sendMediaFile(this); };
+    document.getElementById('chatMediaInput').onchange = function () { sendMediaFile(this); };
     document.getElementById('voiceBtn').onclick = toggleVoiceRecording;
 
     // --- Reply preview close ---
-    document.querySelector('.reply-preview-close')?.addEventListener('click', cancelReply);
+    document.querySelector('.reply-preview-close').onclick = cancelReply;
 
     // --- SEDA активация ---
-    const sedaActivateBtn = document.querySelector('#sedaActivationScreen .btn-seda');
-    if (sedaActivateBtn) sedaActivateBtn.onclick = handleSedaActivation;
-    const sedaCancelBtn = document.querySelector('#sedaActivationScreen .btn-secondary');
-    if (sedaCancelBtn) sedaCancelBtn.onclick = () => {
+    document.getElementById('openSedaActivation').onclick = () => {
+        document.getElementById('settingsModal').classList.remove('active');
+        document.getElementById('sedaActivationScreen').classList.add('active');
+    };
+    document.querySelector('#sedaActivationScreen .btn-seda').onclick = async () => {
+        const code = document.getElementById('sedaActivationCode').value.trim();
+        if (!code) { showToast('Введите код', 'error'); return; }
+        const res = await activateSedaPro(code);
+        if (res.success) {
+            showToast('✅ SEDA Pro активирован!', 'success');
+            document.getElementById('sedaActivationScreen').classList.remove('active');
+            document.getElementById('sedaActivationCode').value = '';
+            updateSedaUI();
+        } else {
+            showToast(res.error || 'Ошибка', 'error');
+        }
+    };
+    document.querySelector('#sedaActivationScreen .btn-secondary').onclick = () => {
         document.getElementById('sedaActivationScreen').classList.remove('active');
         document.getElementById('sedaActivationCode').value = '';
     };
 
     // --- SEDA ключ ---
-    const keyCopyBtn = document.querySelector('#sedaKeyScreen .btn-seda');
-    if (keyCopyBtn) keyCopyBtn.onclick = copySedaKeyToClipboard;
-    const keyPasteBtn = document.querySelector('#sedaKeyScreen .btn-secondary:nth-of-type(1)');
-    if (keyPasteBtn) keyPasteBtn.onclick = pasteSedaKeyFromClipboard;
-    const keyCloseBtn = document.querySelector('#sedaKeyScreen .btn-secondary:nth-of-type(2)');
-    if (keyCloseBtn) keyCloseBtn.onclick = () => {
+    document.querySelector('#sedaKeyScreen .btn-seda').onclick = copySedaKeyToClipboard;
+    const keyBtns = document.querySelectorAll('#sedaKeyScreen .btn-secondary');
+    keyBtns[0].onclick = pasteSedaKeyFromClipboard;
+    keyBtns[1].onclick = () => {
         document.getElementById('sedaKeyScreen').classList.remove('active');
     };
 
@@ -558,19 +619,19 @@ function bindUIEvents() {
         row.onclick = () => setAutoDelete(hours);
     });
 
-    // --- Настройки: очистка ---
-    document.querySelectorAll('#settingsModal .settings-row').forEach(row => {
-        const label = row.querySelector('.settings-row-label')?.textContent || '';
-        if (label.includes('Автоудаление')) row.onclick = openAutoDelete;
-        else if (label.includes('Удалить все чаты')) row.onclick = clearAllChats;
-        else if (label.includes('Очистить все сообщения')) row.onclick = clearAllMessages;
+    // --- Настройки: клики по строкам ---
+    document.querySelectorAll('#settingsModal .settings-row[data-action]').forEach(row => {
+        const action = row.dataset.action;
+        if (action === 'autodelete') row.onclick = openAutoDelete;
+        else if (action === 'clear-chats') row.onclick = clearAllChats;
+        else if (action === 'clear-messages') row.onclick = clearAllMessages;
     });
 
     // --- Обработчик клика по уведомлению ---
     window.addEventListener('iceberg:notification-click', (e) => {
         const chatId = e.detail?.chatId;
         if (!chatId) return;
-        const chat = (authState.userData.chats || []).find(c =>
+        const chat = (authState.userData?.chats || []).find(c =>
             c.uid === e.detail.senderId || c.sedaChatId === chatId
         );
         if (chat) selectChat(chat);
@@ -624,86 +685,13 @@ function renderFilteredList(containerId, list, type) {
 }
 
 // ===================================================================
-// ПРОФИЛЬ
-// ===================================================================
-async function saveProfile() {
-    const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
-    const { db } = await import('./config.js');
-    const fn = document.getElementById('profileFirstName').value.trim();
-    const ln = document.getElementById('profileLastName').value.trim();
-    const mood = document.getElementById('profileMood').value.trim();
-    const nick = (fn || ln) ? `${fn} ${ln}`.trim() : (authState.userData.nickname || 'Пользователь');
-    try {
-        await updateDoc(doc(db, 'users', authState.user.uid), {
-            firstName: fn, lastName: ln, mood, nickname: nick,
-            avatar: authState.userData.avatar || null
-        });
-        authState.userData.firstName = fn;
-        authState.userData.lastName = ln;
-        authState.userData.mood = mood;
-        authState.userData.nickname = nick;
-        await DB.setCachedProfile(authState.user.uid, authState.userData);
-        renderUserProfile();
-        showToast('✅ Профиль сохранён', 'success');
-        setTimeout(() => {
-            document.getElementById('profileModal').classList.remove('active');
-        }, 600);
-    } catch (e) {
-        showToast('Ошибка сохранения', 'error');
-    }
-}
-
-async function uploadAvatar(input) {
-    const file = input.files?.[0];
-    input.value = '';
-    if (!file) return;
-    try {
-        const { compressImage } = await import('./ui.js');
-        const dataUrl = await compressImage(file, 1024 * 1024);
-        authState.userData.avatar = dataUrl;
-        const av = document.getElementById('profileAvatarBig');
-        av.innerHTML = '';
-        const img = document.createElement('img');
-        img.src = dataUrl;
-        av.appendChild(img);
-        const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
-        const { db } = await import('./config.js');
-        await updateDoc(doc(db, 'users', authState.user.uid), { avatar: dataUrl });
-        renderUserProfile();
-        showToast('✅ Аватар обновлён', 'success');
-    } catch (e) {
-        showToast('Ошибка загрузки', 'error');
-    }
-}
-
-// ===================================================================
-// SEDA АКТИВАЦИЯ
-// ===================================================================
-async function handleSedaActivation() {
-    const code = document.getElementById('sedaActivationCode').value.trim();
-    if (!code) {
-        showToast('Введите код', 'error');
-        return;
-    }
-    const res = await activateSedaPro(code);
-    if (res.success) {
-        showToast('✅ SEDA Pro активирован!', 'success');
-        document.getElementById('sedaActivationScreen').classList.remove('active');
-        document.getElementById('sedaActivationCode').value = '';
-        updateSedaUI();
-    } else {
-        showToast(res.error || 'Ошибка', 'error');
-    }
-}
-
-// ===================================================================
-// ЗАГЛУШКИ для функций из плюс-меню (перенесём в ui.js позже)
+// ЗАГЛУШКИ (переносим в ui.js при необходимости)
 // ===================================================================
 function showCreateGroupModal() {
     uiState.selectedContactsForGroup.clear();
     document.getElementById('groupName').value = '';
     renderContactsForGroup('contactsForGroup', uiState.selectedContactsForGroup);
-    document.getElementById('createGroupModal').style.display = 'flex';
+    document.getElementById('createGroupModal').classList.add('active');
     document.getElementById('plusMenu').classList.remove('show');
 }
 
@@ -735,17 +723,17 @@ function renderContactsForGroup(containerId, selectedSet) {
 function showCreateChannelModal() {
     document.getElementById('channelName').value = '';
     document.getElementById('channelDescription').value = '';
-    document.getElementById('createChannelModal').style.display = 'flex';
+    document.getElementById('createChannelModal').classList.add('active');
     document.getElementById('plusMenu').classList.remove('show');
 }
 
 function showSearchModal() {
-    document.getElementById('searchModal').style.display = 'flex';
+    document.getElementById('searchModal').classList.add('active');
     document.getElementById('plusMenu').classList.remove('show');
 }
 
 function openScanner() {
-    document.getElementById('scannerModal').style.display = 'flex';
+    document.getElementById('scannerModal').classList.add('active');
     document.getElementById('plusMenu').classList.remove('show');
     if (typeof Html5Qrcode === 'undefined') {
         showToast('QR-сканер не загружен', 'error');
@@ -758,7 +746,7 @@ function openScanner() {
             { fps: 10, qrbox: { width: 250, height: 250 } },
             (text) => {
                 h.stop().catch(() => {});
-                document.getElementById('scannerModal').style.display = 'none';
+                document.getElementById('scannerModal').classList.remove('active');
                 document.getElementById('searchGlobalIdInput').value = text.replace('Global ID: ', '');
                 searchByGlobalId();
             },
@@ -774,8 +762,24 @@ function openStories() {
     document.getElementById('storiesModal').classList.add('active');
 }
 
+// --- Обработчики кнопок в модалках ---
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('searchGlobalIdBtn').onclick = searchByGlobalId;
+    document.getElementById('closeScannerBtn').onclick = () => {
+        document.getElementById('scannerModal').classList.remove('active');
+    };
+    document.getElementById('createGroupBtn').onclick = createGroupFromModal;
+    document.getElementById('createChannelBtn').onclick = createChannelFromModal;
+    document.getElementById('clearGroupBtn').onclick = () => showToast('В разработке', 'info');
+    document.getElementById('leaveGroupBtn').onclick = () => showToast('В разработке', 'info');
+    document.getElementById('deleteGroupFromListBtn').onclick = () => showToast('В разработке', 'info');
+    document.getElementById('closeChannelManageBtn').onclick = () => {
+        document.getElementById('channelManageModal').classList.remove('active');
+    };
+});
+
 // ===================================================================
-// ЗАГЛУШКИ (переносим логику из старого кода)
+// SEARCH BY GLOBAL ID
 // ===================================================================
 async function searchByGlobalId() {
     const gid = document.getElementById('searchGlobalIdInput').value.trim();
@@ -800,7 +804,7 @@ async function searchByGlobalId() {
             authState.userData.contacts = [...(authState.userData.contacts || []), contact];
             await DB.Lists.setContacts(authState.user.uid, authState.userData.contacts);
         }
-        document.getElementById('searchModal').style.display = 'none';
+        document.getElementById('searchModal').classList.remove('active');
         loadContacts();
         loadChats();
         showToast(`✅ ${contact.nickname || contact.globalId} добавлен`, 'success');
@@ -810,6 +814,92 @@ async function searchByGlobalId() {
     }
 }
 
+// ===================================================================
+// СОЗДАНИЕ ГРУППЫ / КАНАЛА
+// ===================================================================
+async function createGroupFromModal() {
+    const name = document.getElementById('groupName').value.trim();
+    if (!name) return showToast('Введите название', 'error');
+    try {
+        const { addDoc, collection, doc, updateDoc, getDoc, arrayUnion, serverTimestamp } =
+            await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+        const { db } = await import('./config.js');
+
+        const members = [
+            { uid: authState.user.uid, globalId: authState.userData.globalId, nickname: authState.userData.nickname, role: 'admin' },
+            ...Array.from(uiState.selectedContactsForGroup).map(uid => {
+                const c = (authState.userData.contacts || []).find(x => x.uid === uid);
+                return c ? { uid: c.uid, globalId: c.globalId, nickname: c.nickname, role: 'member' } : null;
+            }).filter(Boolean)
+        ];
+
+        const ref = await addDoc(collection(db, 'groups'), {
+            name,
+            createdAt: serverTimestamp(),
+            createdBy: authState.user.uid,
+            members,
+            memberCount: members.length
+        });
+
+        for (const m of members) {
+            const uRef = doc(db, 'users', m.uid);
+            await updateDoc(uRef, {
+                groups: arrayUnion({ id: ref.id, name, memberCount: members.length, role: m.role })
+            }).catch(() => {});
+        }
+
+        document.getElementById('createGroupModal').classList.remove('active');
+        showToast(`✅ Группа "${name}" создана!`, 'success');
+
+        const ud = await getDoc(doc(db, 'users', authState.user.uid));
+        authState.userData.groups = ud.data().groups || [];
+        loadGroups();
+    } catch (e) {
+        showToast('Ошибка создания', 'error');
+    }
+}
+
+async function createChannelFromModal() {
+    const name = document.getElementById('channelName').value.trim();
+    const description = document.getElementById('channelDescription').value.trim();
+    if (!name) return showToast('Введите название', 'error');
+    try {
+        const { addDoc, collection, doc, updateDoc, arrayUnion, serverTimestamp } =
+            await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+        const { db } = await import('./config.js');
+
+        const ref = await addDoc(collection(db, 'channels'), {
+            name, description,
+            createdAt: serverTimestamp(),
+            createdBy: authState.user.uid,
+            admins: [authState.user.uid],
+            members: [authState.user.uid],
+            memberCount: 1
+        });
+
+        const channelEntry = {
+            id: ref.id, name, description, isAdmin: true,
+            memberCount: 1, unread: false, lastMessage: '', lastMessageTime: null
+        };
+
+        await updateDoc(doc(db, 'users', authState.user.uid), {
+            channels: arrayUnion(channelEntry)
+        });
+
+        authState.userData.channels = [...(authState.userData.channels || []), channelEntry];
+
+        document.getElementById('createChannelModal').classList.remove('active');
+        loadChannels();
+        switchTab('channels');
+        showToast(`✅ Канал "${name}" создан!`, 'success');
+    } catch (e) {
+        showToast('Ошибка создания', 'error');
+    }
+}
+
+// ===================================================================
+// SHOW GROUP INFO / CLEAR ALL
+// ===================================================================
 async function showGroupInfo() {
     if (!uiState.currentGroup) return;
     try {
@@ -818,15 +908,25 @@ async function showGroupInfo() {
         const d = await getDoc(doc(db, 'groups', uiState.currentGroup.id));
         if (!d.exists()) return;
         const g = d.data();
+
         document.getElementById('groupInfoTitle').textContent = g.name;
         const content = document.getElementById('groupInfoContent');
         content.innerHTML = '';
+
         const header = document.createElement('div');
         header.style.cssText = 'text-align:center;margin-bottom:16px;';
-        header.innerHTML = `<div style="font-size:56px;">👥</div>
-            <div style="font-weight:bold;font-size:18px;color:var(--text-primary);"></div>
-            <div style="font-size:12px;color:var(--text-secondary);">${g.memberCount || g.members?.length || 0} участников</div>`;
-        header.querySelector('div:nth-child(2)').textContent = g.name;
+        const emoji = document.createElement('div');
+        emoji.style.fontSize = '56px';
+        emoji.textContent = '👥';
+        const nameEl = document.createElement('div');
+        nameEl.style.cssText = 'font-weight:bold;font-size:18px;color:var(--text-primary);';
+        nameEl.textContent = g.name;
+        const countEl = document.createElement('div');
+        countEl.style.cssText = 'font-size:12px;color:var(--text-secondary);';
+        countEl.textContent = `${g.memberCount || g.members?.length || 0} участников`;
+        header.appendChild(emoji);
+        header.appendChild(nameEl);
+        header.appendChild(countEl);
         content.appendChild(header);
 
         for (const m of (g.members || [])) {
@@ -850,14 +950,10 @@ async function showGroupInfo() {
             row.appendChild(info);
             content.appendChild(row);
         }
-        document.getElementById('groupInfoModal').style.display = 'flex';
+        document.getElementById('groupInfoModal').classList.add('active');
     } catch (e) {
         showToast('Ошибка', 'error');
     }
-}
-
-async function showChannelManage() {
-    showToast('В разработке', 'info');
 }
 
 async function clearAllChats() {
@@ -875,7 +971,8 @@ async function clearAllChats() {
 async function clearAllMessages() {
     if (!confirm('ОЧИСТИТЬ ВСЕ СООБЩЕНИЯ? Это нельзя отменить!')) return;
     try {
-        const { collection, getDocs, writeBatch } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+        const { collection, getDocs, writeBatch } =
+            await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
         const { db } = await import('./config.js');
         const chats = authState.userData.chats || [];
         for (const chat of chats) {
@@ -908,23 +1005,35 @@ async function init() {
     // Регистрируем SW
     registerServiceWorkers().catch(e => console.warn('[SW]', e));
 
-    // Привязка событий
+    // Привязки
     bindUIEvents();
     setup2FAInputs();
+    setupAuthSyncEvents();
     setupAuthState();
 
-    // Таймаут безопасности на загрузку
-    setTimeout(() => {
-        const ls = document.getElementById('loadingScreen');
-        const af = document.getElementById('authForm');
-        const ms = document.getElementById('messengerApp');
-        if (ls && !ls.classList.contains('hidden') && af.style.display === 'none' && ms.style.display === 'none') {
-            hideLoading();
-            af.style.display = 'flex';
-        }
-    }, 3000);
+    // ============================================================
+    // МОМЕНТАЛЬНЫЙ АВТОВХОД
+    // ============================================================
+    const restored = tryInstantRestore();
+    if (restored && authState.user) {
+        // Показываем UI сразу, без ожидания сети
+        await bootMessenger(authState.user, restored);
+    } else {
+        // Нет кэша — ждём onAuthStateChanged или показываем форму
+        setTimeout(() => {
+            const ls = document.getElementById('loadingScreen');
+            const af = document.getElementById('authForm');
+            const ms = document.getElementById('messengerApp');
+            if (ls && !ls.classList.contains('hidden')
+                && af.style.display === 'none'
+                && ms.style.display === 'none') {
+                hideLoading();
+                af.style.display = 'flex';
+            }
+        }, 1500);
+    }
 
-    // Проверка возврата из Global ID
+    // Возврат из Global ID
     if (localStorage.getItem('iceberg_app') === 'true') {
         localStorage.removeItem('iceberg_app');
         localStorage.removeItem('iceberg_referrer');
@@ -948,7 +1057,7 @@ if (document.readyState === 'loading') {
     init();
 }
 
-// Экспорт для отладки
+// Отладка
 window.__iceberg = {
     authState, uiState, DB,
     logout, login, activateSedaPro
