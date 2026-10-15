@@ -458,43 +458,34 @@
                     <div class="logo-title">Айсберг</div>
                     <div style="font-size:10px;color:var(--accent);margin-top:5px;letter-spacing:1px;">🔒 ЗАЩИЩЁННЫЙ МЕССЕНДЖЕР</div>
                 </div>
-       <div id="loginMode">
-    <div class="form-group">
-        <label class="form-label">Global ID или Email</label>
-        <input type="text" id="loginIdentifier" placeholder="Global ID или email">
-    </div>
-    <div class="form-group">
-        <label class="form-label">Пароль</label>
-        <input type="password" id="loginPassword" placeholder="Пароль" onkeydown="if(event.key==='Enter')login()">
-    </div>
-    <button class="btn btn-primary" onclick="login()">Войти</button>
-    <div class="divider"><div class="divider-line"></div><div class="divider-text">или</div><div class="divider-line"></div></div>
-    <button class="btn btn-secondary" onclick="redirectToGlobalID()">Создать в Global ID</button>
-
-    <!-- ДИСКЛЕЙМЕР -->
-    <div class="device-info" style="margin-top:14px;">
-        <h4 style="color:var(--accent);margin-bottom:8px;font-size:13px;">📄 Пользовательское соглашение</h4>
-        <p style="font-size:12px;line-height:1.6;color:var(--text-secondary);">
-            Входя в Айсберг, вы подтверждаете, что ознакомились и <strong>соглашаетесь</strong> с
-            <strong>Политикой конфиденциальности</strong>, <strong>Пользовательским соглашением</strong>
-            и <strong>Условиями обработки персональных данных</strong>.
-        </p>
-        <p style="font-size:12px;line-height:1.6;color:var(--text-secondary);margin-top:8px;">
-            Вы также соглашаетесь с тем, что несёте ответственность за сохранность своих данных,
-            ключей шифрования и кодов доступа. Сервис не несёт ответственности за последствия
-            передачи вами конфиденциальной информации третьим лицам.
-        </p>
-        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
-            <p style="font-size:12px;color:var(--text-secondary);">
-                👉 Ознакомиться с полными правилами можно на сайте:
-            </p>
-            <a href="https://saryanich.github.io/TLC-services/" target="_blank"
-               style="display:inline-block;margin-top:6px;color:var(--accent);font-size:13px;font-weight:600;text-decoration:none;">
-                Перейти к правилам и политике →
-            </a>
+                <div id="loginMode">
+                    <div class="form-group">
+                        <label class="form-label">Global ID или Email</label>
+                        <input type="text" id="loginIdentifier" placeholder="Global ID или email">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Пароль</label>
+                        <input type="password" id="loginPassword" placeholder="Пароль" onkeydown="if(event.key==='Enter')login()">
+                    </div>
+                    <button class="btn btn-primary" onclick="login()">Войти</button>
+                    <div class="divider"><div class="divider-line"></div><div class="divider-text">или</div><div class="divider-line"></div></div>
+                    <button class="btn btn-secondary" onclick="redirectToGlobalID()">Создать в Global ID</button>
+                    <div class="device-info" style="margin-top:14px;">
+                        <h4 style="color:var(--accent);margin-bottom:6px;font-size:13px;">🔐 Единый аккаунт</h4>
+                        <p>Айсберг использует Global ID для входа.</p>
+                    </div>
+                </div>
+                <div id="blockedMode" style="display:none;">
+                    <div style="text-align:center;margin-bottom:16px;">
+                        <div style="font-size:40px;margin-bottom:8px;">🚫</div>
+                        <h3 style="color:var(--danger);margin-bottom:6px;">Доступ запрещён</h3>
+                    </div>
+                    <div class="warning-box"><strong>🔒 Аккаунт заблокирован</strong><br>Разблокируйте в Global ID.</div>
+                    <button class="btn btn-secondary" onclick="cancelBlocked()">Назад</button>
+                </div>
+                <div id="authMessage" class="message"></div>
+            </div>
         </div>
-    </div>
-</div>
 
         <!-- МЕССЕНДЖЕР -->
         <div id="messengerApp" style="display:none;" class="messenger-container">
