@@ -21,9 +21,31 @@
         body.theme-light { --bg-primary:#F5F7FA; --bg-secondary:#FFF; --bg-surface:#E8ECF0; --bg-card:rgba(255,255,255,.95); --text-primary:#1C1C1E; --text-secondary:#5B6B7C; --text-muted:#8E9AAB; --border:#D1D9E6; --accent:#3B82F6; --accent-dark:#2563EB; --message-sent:linear-gradient(135deg,#3B82F6,#60A5FA); --message-received:#E8ECF0; --hover:#F0F4F9; --seda-accent:#7c3aed; --glow:rgba(59,130,246,.3); }
         body.theme-rose { --bg-primary:#FFF5F7; --bg-secondary:#FFF; --bg-surface:#FCE4EC; --bg-card:rgba(255,255,255,.95); --text-primary:#4A2B3A; --text-secondary:#8B6B7C; --text-muted:#C4A5B5; --border:#F0D0D8; --accent:#EC4899; --accent-dark:#DB2777; --message-sent:linear-gradient(135deg,#EC4899,#F472B6); --message-received:#FCE4EC; --hover:#FDF2F5; --seda-accent:#be185d; --glow:rgba(236,72,153,.3); }
         body.theme-blue { --bg-primary:#F0F9FF; --bg-secondary:#FFF; --bg-surface:#E0F2FE; --bg-card:rgba(255,255,255,.95); --text-primary:#1A3A5C; --text-secondary:#5B8CB0; --text-muted:#9BBED4; --border:#CCE4F0; --accent:#0EA5E9; --accent-dark:#0284C7; --message-sent:linear-gradient(135deg,#0EA5E9,#38BDF8); --message-received:#E0F2FE; --hover:#F0F9FF; --seda-accent:#6366f1; --glow:rgba(14,165,233,.3); }
+        body.theme-rain { --bg-primary:#0B1B3A; --bg-secondary:#0F2547; --bg-surface:#1A3560; --bg-card:rgba(15,37,71,.95); --text-primary:#E0EAFF; --text-secondary:#89A8D4; --text-muted:#4A6A94; --border:#1E3A66; --accent:#5B9EFF; --accent-dark:#2E6FD4; --message-sent:linear-gradient(135deg,#2E6FD4,#5B9EFF); --message-received:#1A3560; --hover:#1A3560; --seda-accent:#764ba2; --glow:rgba(91,158,255,.4); }
+        body.theme-sun { --bg-primary:#FFF8E1; --bg-secondary:#FFFDF5; --bg-surface:#FFECB3; --bg-card:rgba(255,253,245,.95); --text-primary:#4A3A1A; --text-secondary:#8B7245; --text-muted:#C4A574; --border:#FFE082; --accent:#FFB300; --accent-dark:#F57C00; --message-sent:linear-gradient(135deg,#FFB300,#FFCA28); --message-received:#FFECB3; --hover:#FFF8E1; --seda-accent:#E65100; --glow:rgba(255,179,0,.4); }
+        body.theme-winter { --bg-primary:#E8F4F8; --bg-secondary:#FFF; --bg-surface:#D4E8F0; --bg-card:rgba(255,255,255,.95); --text-primary:#1A3A4A; --text-secondary:#5B7C8C; --text-muted:#9BBEC4; --border:#C4DCE8; --accent:#4FC3F7; --accent-dark:#0288D1; --message-sent:linear-gradient(135deg,#4FC3F7,#81D4FA); --message-received:#D4E8F0; --hover:#E8F4F8; --seda-accent:#1565C0; --glow:rgba(79,195,247,.4); }
+        body.theme-spring { --bg-primary:#F0F8E8; --bg-secondary:#FFF; --bg-surface:#E0F0CC; --bg-card:rgba(255,255,255,.95); --text-primary:#2A4A1A; --text-secondary:#5B7C3A; --text-muted:#9BBE74; --border:#CCE4B0; --accent:#8BC34A; --accent-dark:#689F38; --message-sent:linear-gradient(135deg,#8BC34A,#AED581); --message-received:#E0F0CC; --hover:#F0F8E8; --seda-accent:#33691E; --glow:rgba(139,195,74,.4); }
+        body.theme-autumn { --bg-primary:#FFF3E0; --bg-secondary:#FFF8F0; --bg-surface:#FFE0B2; --bg-card:rgba(255,248,240,.95); --text-primary:#4A2A1A; --text-secondary:#8B5A2B; --text-muted:#C4946A; --border:#FFCC80; --accent:#FF7043; --accent-dark:#E64A19; --message-sent:linear-gradient(135deg,#FF7043,#FF8A65); --message-received:#FFE0B2; --hover:#FFF3E0; --seda-accent:#BF360C; --glow:rgba(255,112,67,.4); }
         body { background:var(--bg-primary); transition:background .4s,color .4s; }
 
         #particles-js { position:fixed; top:0; left:0; width:100%; height:100%; z-index:0; pointer-events:none; }
+
+        /* ================= ЭФФЕКТЫ ПОГОДЫ ================= */
+        #weatherFx { position:fixed; top:0; left:0; width:100%; height:100%; z-index:1; pointer-events:none; overflow:hidden; display:none; }
+        #weatherFx.show { display:block; }
+        .raindrop { position:absolute; width:2px; height:18px; background:linear-gradient(transparent,rgba(120,180,255,.7)); top:-20px; animation:rainFall linear infinite; }
+        @keyframes rainFall { to { transform:translateY(110vh); } }
+        .puddle { position:absolute; bottom:0; height:60px; background:radial-gradient(ellipse at center,rgba(100,160,255,.25),transparent 70%); border-radius:50%; animation:puddlePulse 3s ease-in-out infinite; }
+        @keyframes puddlePulse { 0%,100% { opacity:.4; } 50% { opacity:.7; } }
+        .sun-ray { position:absolute; top:-50%; left:-50%; width:200%; height:200%; background:conic-gradient(from 0deg,transparent 0deg,rgba(255,220,100,.08) 10deg,transparent 20deg,transparent 30deg,rgba(255,220,100,.08) 40deg,transparent 50deg,transparent 60deg,rgba(255,220,100,.08) 70deg,transparent 80deg); animation:sunRotate 60s linear infinite; }
+        @keyframes sunRotate { to { transform:rotate(360deg); } }
+        .grass { position:absolute; bottom:0; left:0; width:100%; height:40px; background:linear-gradient(to top,rgba(120,200,80,.3),transparent); }
+        .snowflake { position:absolute; color:#fff; font-size:14px; top:-20px; animation:snowFall linear infinite; opacity:.8; }
+        @keyframes snowFall { to { transform:translateY(110vh) rotate(360deg); } }
+        .petal { position:absolute; font-size:16px; top:-20px; animation:petalFall linear infinite; opacity:.85; }
+        @keyframes petalFall { to { transform:translateY(110vh) translateX(60px) rotate(720deg); } }
+        .leaf { position:absolute; font-size:18px; top:-20px; animation:leafFall linear infinite; opacity:.9; }
+        @keyframes leafFall { 0% { transform:translateY(0) rotate(0deg); } 100% { transform:translateY(110vh) translateX(-80px) rotate(540deg); } }
 
         .app-container { flex:1; display:flex; flex-direction:column; width:100%; height:100vh; margin:0 auto; position:relative; z-index:2; overflow:hidden; }
 
@@ -144,9 +166,9 @@
         .plus-btn { background:linear-gradient(135deg,var(--accent),var(--accent-dark)); color:white; border:none; width:40px; height:40px; border-radius:20px; font-size:22px; cursor:pointer; flex-shrink:0; transition:transform .25s; box-shadow:0 4px 12px var(--glow); }
         .plus-btn:hover { transform:rotate(90deg); }
 
-        .chats-list,.contacts-list,.groups-list,.channels-list { flex:1; overflow-y:auto; }
-        .chat-item,.contact-item,.group-item,.channel-item { display:flex; align-items:center; gap:12px; padding:12px 16px; cursor:pointer; border-bottom:1px solid var(--border); position:relative; transition:background .2s; }
-        .chat-item:hover,.contact-item:hover,.group-item:hover,.channel-item:hover { background:var(--hover); }
+        .chats-list,.contacts-list,.groups-list { flex:1; overflow-y:auto; }
+        .chat-item,.contact-item,.group-item { display:flex; align-items:center; gap:12px; padding:12px 16px; cursor:pointer; border-bottom:1px solid var(--border); position:relative; transition:background .2s; }
+        .chat-item:hover,.contact-item:hover,.group-item:hover { background:var(--hover); }
         .chat-item.unread { background:linear-gradient(90deg,rgba(100,181,246,.1),transparent); border-left:3px solid var(--accent); }
 
         .avatar-small { width:46px; height:46px; background:var(--bg-surface); border-radius:23px; display:flex; align-items:center; justify-content:center; font-weight:600; font-size:18px; color:var(--text-primary); flex-shrink:0; overflow:hidden; position:relative; }
@@ -300,12 +322,12 @@
         ::-webkit-scrollbar-thumb:hover { background:var(--accent); }
 
         .fullwidth-btn { width:100%; padding:11px; border-radius:12px; border:none; font-size:13px; font-weight:600; cursor:pointer; margin-top:8px; }
-
-        .channel-badge { font-size:9px; background:var(--accent); color:white; padding:1px 6px; border-radius:8px; }
+        .city-select { width:100%; padding:11px 14px; border-radius:12px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary); font-size:14px; margin-top:8px; }
     </style>
 </head>
 <body class="theme-dark">
     <div id="particles-js"></div>
+    <div id="weatherFx"></div>
     <div class="toast-container" id="toastContainer"></div>
 
     <!-- ЗАГРУЗКА -->
@@ -509,13 +531,11 @@
                 <div class="tabs-container">
                     <div class="tab active" onclick="switchTab('chats')">Чаты</div>
                     <div class="tab" onclick="switchTab('groups')">Группы</div>
-                    <div class="tab" onclick="switchTab('channels')">Каналы</div>
                     <div class="tab" onclick="switchTab('contacts')">Контакты</div>
                 </div>
                 <div class="tab-content">
                     <div id="chatsPane" class="tab-pane active"><div class="chats-list" id="chatsList"></div></div>
                     <div id="groupsPane" class="tab-pane"><div class="groups-list" id="groupsList"></div></div>
-                    <div id="channelsPane" class="tab-pane"><div class="channels-list" id="channelsList"></div></div>
                     <div id="contactsPane" class="tab-pane"><div class="contacts-list" id="contactsList"></div></div>
                 </div>
                 <div style="text-align:center;padding:8px;font-size:10px;color:var(--text-muted);background:var(--bg-primary);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;">
@@ -536,7 +556,6 @@
                         <button id="sedaModeBtn" class="btn-icon seda" style="display:none;" onclick="startSedaChat()">🔮 Начать SEDA чат</button>
                         <button id="sedaKeyBtn" class="btn-icon" style="display:none;background:#ff8c00;color:white;" onclick="showCurrentSedaKey()">🔑</button>
                         <button id="groupInfoBtn" class="btn-icon" style="display:none;" onclick="showGroupInfo()">ℹ️</button>
-                        <button id="channelInfoBtn" class="btn-icon" style="display:none;" onclick="showChannelInfo()">ℹ️</button>
                         <button id="clearChatBtn" class="btn-icon warning" style="display:none;" onclick="clearCurrentChat()">🗑</button>
                         <button id="deleteChatBtn" class="btn-icon danger" style="display:none;" onclick="deleteCurrentChat()">❌</button>
                     </div>
@@ -566,7 +585,6 @@
     <!-- МЕНЮ + -->
     <div id="plusMenu" class="plus-menu">
         <div class="plus-menu-item" onclick="showCreateGroupModal()">👥 Создать группу</div>
-        <div class="plus-menu-item" onclick="showCreateChannelModal()">📢 Создать канал</div>
         <div class="plus-menu-item" onclick="showSearchModal()">🔍 Найти по Global ID</div>
         <div class="plus-menu-item" onclick="openScanner()">📷 Сканировать QR</div>
         <div class="plus-menu-item" onclick="openStories()">📸 Мои истории</div>
@@ -586,6 +604,30 @@
                     <div class="theme-cell" data-theme="light" onclick="setTheme('light')"><div class="theme-swatch" style="background:#F5F7FA;"></div><span>Светлая</span></div>
                     <div class="theme-cell" data-theme="rose" onclick="setTheme('rose')"><div class="theme-swatch" style="background:#FFF5F7;"></div><span>Роза</span></div>
                     <div class="theme-cell" data-theme="blue" onclick="setTheme('blue')"><div class="theme-swatch" style="background:#F0F9FF;"></div><span>Голубая</span></div>
+                </div>
+                <div class="settings-row" onclick="toggleThemeAuto()">
+                    <span class="settings-row-label">🤖 Автопереключение по погоде</span>
+                    <div class="toggle-switch" id="themeAutoToggle"></div>
+                </div>
+                <div id="cityPickerWrap" style="display:none;">
+                    <select class="city-select" id="citySelect" onchange="onCityChange()">
+                        <option value="">Выберите город</option>
+                        <option value="Moscow">Москва</option>
+                        <option value="Saint Petersburg">Санкт-Петербург</option>
+                        <option value="Kazan">Казань</option>
+                        <option value="Novosibirsk">Новосибирск</option>
+                        <option value="Yekaterinburg">Екатеринбург</option>
+                        <option value="Sochi">Сочи</option>
+                        <option value="Krasnodar">Краснодар</option>
+                        <option value="Vladivostok">Владивосток</option>
+                    </select>
+                </div>
+                <div class="settings-title" style="margin-top:12px;">🌦 Сезонные темы</div>
+                <div class="theme-grid">
+                    <div class="theme-cell" data-theme="winter" onclick="setTheme('winter')"><div class="theme-swatch" style="background:#E8F4F8;"></div><span>Зима</span></div>
+                    <div class="theme-cell" data-theme="spring" onclick="setTheme('spring')"><div class="theme-swatch" style="background:#F0F8E8;"></div><span>Весна</span></div>
+                    <div class="theme-cell" data-theme="sun" onclick="setTheme('sun')"><div class="theme-swatch" style="background:#FFF8E1;"></div><span>Лето</span></div>
+                    <div class="theme-cell" data-theme="autumn" onclick="setTheme('autumn')"><div class="theme-swatch" style="background:#FFF3E0;"></div><span>Осень</span></div>
                 </div>
             </div>
             <div class="settings-section">
@@ -635,16 +677,6 @@
         </div>
     </div>
 
-    <!-- СОЗДАНИЕ КАНАЛА -->
-    <div id="createChannelModal" class="modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);z-index:1000;align-items:center;justify-content:center;padding:20px;">
-        <div class="modal-content">
-            <div class="modal-header"><h3>Создание канала</h3><span class="close-modal" onclick="closeCreateChannelModal()">&times;</span></div>
-            <div class="form-group"><label class="form-label">Название канала</label><input type="text" id="channelName" placeholder="Название канала"></div>
-            <div class="form-group"><label class="form-label">Описание</label><textarea id="channelDescription" rows="2" placeholder="О чём канал?" style="resize:vertical;"></textarea></div>
-            <button class="btn btn-primary" onclick="createChannel()">Создать канал</button>
-        </div>
-    </div>
-
     <!-- ИНФО ГРУППЫ -->
     <div id="groupInfoModal" class="modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);z-index:1000;align-items:center;justify-content:center;padding:20px;">
         <div class="modal-content">
@@ -653,17 +685,6 @@
             <button class="btn btn-warning fullwidth-btn" onclick="clearGroupChat()">🗑 Очистить</button>
             <button class="btn btn-danger fullwidth-btn" onclick="leaveGroup()">🚪 Выйти</button>
             <button class="btn btn-secondary fullwidth-btn" onclick="deleteGroupFromList()">❌ Удалить из списка</button>
-        </div>
-    </div>
-
-    <!-- ИНФО КАНАЛА -->
-    <div id="channelInfoModal" class="modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);z-index:1000;align-items:center;justify-content:center;padding:20px;">
-        <div class="modal-content">
-            <div class="modal-header"><h3 id="channelInfoTitle">Канал</h3><span class="close-modal" onclick="closeChannelInfo()">&times;</span></div>
-            <div id="channelInfoContent"></div>
-            <button class="btn btn-warning fullwidth-btn" onclick="clearChannelChat()">🗑 Очистить</button>
-            <button class="btn btn-danger fullwidth-btn" onclick="leaveChannel()">🚪 Покинуть</button>
-            <button class="btn btn-secondary fullwidth-btn" onclick="deleteChannelFromList()">❌ Удалить из списка</button>
         </div>
     </div>
 
@@ -758,16 +779,17 @@
         // ==================== ПЕРЕМЕННЫЕ ====================
         let currentUser=null, currentUserData=null, pendingUser=null;
         let currentIP=null, deviceFingerprint=null;
-        let currentChat=null, currentChatId=null, currentGroup=null, currentChannel=null;
+        let currentChat=null, currentChatId=null, currentGroup=null;
         let messagesListener=null, blockCheckInterval=null, messagesRefreshInterval=null;
         let pendingInvites=[], selectedContactsForGroup=new Set();
         let sedaProActivated=false, sedaEnabledForCurrentChat=false, currentSedaKey=null;
         let replyToMessage=null, activeActionBar=null;
         let stickerPickerOpen=false, awaitingTwoFactor=false, isLoggingIn=false;
-        let currentTheme='dark';
+        let currentTheme='dark', themeAuto=false, currentCity='';
         let autoDeleteHours=0, mediaRecorder=null, recordedChunks=[], isRecording=false;
         let currentStories=[], storyViewerIndex=0;
         let sedaHandshakeListener=null;
+        // Храним id уже обработанных handshake, чтобы не отвечать повторно
         const processedHandshakes = new Set();
 
         // ==================== TOAST ====================
@@ -879,12 +901,128 @@
             localStorage.setItem('iceberg_theme',theme);
             document.querySelectorAll('.theme-cell').forEach(el=>el.classList.remove('active'));
             document.querySelector(`.theme-cell[data-theme="${theme}"]`)?.classList.add('active');
+            applyWeatherEffects(theme);
         };
+
+        function applyWeatherEffects(theme){
+            const fx=document.getElementById('weatherFx');
+            if(!fx)return;
+            fx.innerHTML='';
+            fx.classList.remove('show');
+            if(theme==='rain'){
+                fx.classList.add('show');
+                for(let i=0;i<60;i++){
+                    const d=document.createElement('div');
+                    d.className='raindrop';
+                    d.style.left=Math.random()*100+'%';
+                    d.style.animationDuration=(0.5+Math.random()*0.5)+'s';
+                    d.style.animationDelay=Math.random()*2+'s';
+                    fx.appendChild(d);
+                }
+                for(let i=0;i<5;i++){
+                    const p=document.createElement('div');
+                    p.className='puddle';
+                    p.style.left=(Math.random()*80)+'%';
+                    p.style.width=(80+Math.random()*100)+'px';
+                    p.style.animationDelay=Math.random()*3+'s';
+                    fx.appendChild(p);
+                }
+            } else if(theme==='sun'){
+                fx.classList.add('show');
+                const sun=document.createElement('div');
+                sun.className='sun-ray';
+                fx.appendChild(sun);
+                const g=document.createElement('div');
+                g.className='grass';
+                fx.appendChild(g);
+            } else if(theme==='winter'){
+                fx.classList.add('show');
+                for(let i=0;i<40;i++){
+                    const s=document.createElement('div');
+                    s.className='snowflake';
+                    s.textContent='❄';
+                    s.style.left=Math.random()*100+'%';
+                    s.style.animationDuration=(4+Math.random()*4)+'s';
+                    s.style.animationDelay=Math.random()*5+'s';
+                    s.style.fontSize=(8+Math.random()*10)+'px';
+                    fx.appendChild(s);
+                }
+            } else if(theme==='spring'){
+                fx.classList.add('show');
+                for(let i=0;i<30;i++){
+                    const p=document.createElement('div');
+                    p.className='petal';
+                    p.textContent='🌸';
+                    p.style.left=Math.random()*100+'%';
+                    p.style.animationDuration=(5+Math.random()*5)+'s';
+                    p.style.animationDelay=Math.random()*5+'s';
+                    fx.appendChild(p);
+                }
+            } else if(theme==='autumn'){
+                fx.classList.add('show');
+                for(let i=0;i<30;i++){
+                    const l=document.createElement('div');
+                    l.className='leaf';
+                    l.textContent=['🍂','🍁'][Math.floor(Math.random()*2)];
+                    l.style.left=Math.random()*100+'%';
+                    l.style.animationDuration=(5+Math.random()*5)+'s';
+                    l.style.animationDelay=Math.random()*5+'s';
+                    fx.appendChild(l);
+                }
+            }
+        }
 
         function loadTheme(){
             const saved=localStorage.getItem('iceberg_theme')||'dark';
-            setTheme(saved);
+            themeAuto=localStorage.getItem('iceberg_theme_auto')==='true';
+            currentCity=localStorage.getItem('iceberg_city')||'';
+            if(themeAuto && currentCity){
+                fetchWeatherTheme(currentCity);
+            } else {
+                setTheme(saved);
+            }
+            document.querySelectorAll('.theme-cell').forEach(el=>el.classList.remove('active'));
+            document.querySelector(`.theme-cell[data-theme="${currentTheme}"]`)?.classList.add('active');
+            updateThemeAutoUI();
         }
+
+        async function fetchWeatherTheme(city){
+            try{
+                const r=await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1`);
+                const d=await r.json();
+                const desc=d.current_condition[0].weatherDesc[0].value.toLowerCase();
+                const temp=parseInt(d.current_condition[0].temp_C);
+                let theme='dark';
+                if(desc.includes('rain')||desc.includes('drizzle')||desc.includes('shower'))theme='rain';
+                else if(desc.includes('snow'))theme='winter';
+                else if(desc.includes('sun')||desc.includes('clear'))theme='sun';
+                else if(temp>=20)theme='sun';
+                else if(temp<=0)theme='winter';
+                else theme='light';
+                setTheme(theme);
+            }catch(e){setTheme('dark');}
+        }
+
+        window.toggleThemeAuto=function(){
+            themeAuto=!themeAuto;
+            localStorage.setItem('iceberg_theme_auto',themeAuto);
+            document.getElementById('cityPickerWrap').style.display=themeAuto?'block':'none';
+            updateThemeAutoUI();
+            if(themeAuto && currentCity)fetchWeatherTheme(currentCity);
+        };
+        function updateThemeAutoUI(){
+            const t=document.getElementById('themeAutoToggle');
+            if(t)t.classList.toggle('on',themeAuto);
+            const w=document.getElementById('cityPickerWrap');
+            if(w)w.style.display=themeAuto?'block':'none';
+            const s=document.getElementById('citySelect');
+            if(s)s.value=currentCity;
+        }
+        window.onCityChange=function(){
+            currentCity=document.getElementById('citySelect').value;
+            localStorage.setItem('iceberg_city',currentCity);
+            if(themeAuto && currentCity)fetchWeatherTheme(currentCity);
+        };
 
         // ==================== 2FA ====================
         window.moveToNext=(input,index)=>{
@@ -998,6 +1136,8 @@
                 expiresAt: Date.now() + 5 * 60 * 1000
             });
 
+            // Страховка от "зависших" handshake — если собеседник не отвечает 5 минут,
+            // документ удаляется, чтобы не копился мусор на сервере.
             setTimeout(async () => {
                 try {
                     const s = await getDoc(handshakeRef);
@@ -1007,6 +1147,7 @@
                 } catch (e) {}
             }, 5 * 60 * 1000);
 
+            // Слушаем ответ собеседника
             let unsub = null;
             unsub = onSnapshot(handshakeRef, async (snap) => {
                 if (!snap.exists()) return;
@@ -1015,6 +1156,7 @@
                     saveSedaKey(sedaChatId, data.peerKey);
                     currentSedaKey = data.peerKey;
                     if (unsub) unsub();
+                    // Сразу удаляем handshake с сервера после получения ключа
                     try { await deleteDoc(handshakeRef); } catch (e) {}
                     showToast('✅ SEDA-чат создан!', 'success');
                 }
@@ -1055,6 +1197,7 @@
             loadChats();
         }
 
+        // Слушаем входящие handshake как peer
         function startSedaHandshakeListener() {
             if (sedaHandshakeListener) sedaHandshakeListener();
             const q = query(collection(db, 'seda_handshakes'), where('peer', '==', currentUser.uid));
@@ -1066,19 +1209,25 @@
                     if (!data.initiatorKey) continue;
                     processedHandshakes.add(d.id);
 
+                    // Генерируем свой ключ и отвечаем
                     const myResult = sedaProEncrypt('handshake_' + Date.now());
                     const myKey = myResult.key;
 
+                    // Сохраняем ключ инициатора локально
                     saveSedaKey(d.id, data.initiatorKey);
 
+                    // Отвечаем ключом
                     try {
                         await updateDoc(d.ref, { peerKey: myKey, respondedAt: Date.now() });
                     } catch (e) {}
 
+                    // Инициатор сразу удалит handshake при получении. Мы — тоже,
+                    // но с небольшой задержкой, чтобы успело дойти.
                     setTimeout(async () => {
                         try { await deleteDoc(d.ref); } catch (e) {}
                     }, 1500);
 
+                    // Добавляем SEDA-чат себе
                     const initiatorUid = data.initiator;
                     const contact = (currentUserData.contacts || []).find(c => c.uid === initiatorUid);
                     if (contact) {
@@ -1187,6 +1336,7 @@
                     document.getElementById('newDeviceInfo').innerHTML=`<strong>🆕 Новое устройство</strong><br><strong>IP:</strong> ${currentIP}<br><strong>Требуется код</strong>`;
                     document.getElementById('twoFactorScreen').classList.add('active');
                     document.getElementById('code1').focus();
+                    // Код НЕ выводится в консоль
                 }
             }catch(e){
                 let m='Неверные данные';
@@ -1394,13 +1544,12 @@
             try{
                 const ud=await getDoc(doc(db,"users",user.uid));
                 if(!ud.exists()){
-                    currentUserData={chats:[],contacts:[],groups:[],channels:[],stories:[]};
+                    currentUserData={chats:[],contacts:[],groups:[],stories:[]};
                 }else{
                     currentUserData=ud.data();
                     if(!currentUserData.chats)currentUserData.chats=[];
                     if(!currentUserData.contacts)currentUserData.contacts=[];
                     if(!currentUserData.groups)currentUserData.groups=[];
-                    if(!currentUserData.channels)currentUserData.channels=[];
                     if(!currentUserData.stories)currentUserData.stories=[];
                 }
                 sedaProActivated=currentUserData.sedaProActivated||localStorage.getItem('seda_pro_activated')==='true';
@@ -1411,7 +1560,6 @@
                 await syncChatsWithContacts();
                 loadChats();
                 loadGroups();
-                loadChannels();
                 loadContacts();
                 renderStoriesBar();
                 startMessagesPolling();
@@ -1525,26 +1673,6 @@
             });
         }
 
-        function loadChannels(){
-            const channels=currentUserData?.channels||[];
-            const c=document.getElementById('channelsList');
-            if(!c)return;
-            if(!channels.length){c.innerHTML='<div class="empty-state">Нет каналов</div>';return;}
-            c.innerHTML='';
-            channels.forEach(ch=>{
-                const div=document.createElement('div');
-                div.className='channel-item';
-                div.innerHTML=`
-                    <div class="avatar-small" style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;">📢</div>
-                    <div class="info-small">
-                        <div class="name-row"><span class="item-name">${escapeHtml(ch.name)}</span></div>
-                        <div class="item-subtitle">${escapeHtml(ch.description||'Канал')}</div>
-                    </div>`;
-                div.onclick=()=>selectChannel(ch);
-                c.appendChild(div);
-            });
-        }
-
         function loadContacts(){
             const contacts=currentUserData?.contacts||[];
             const c=document.getElementById('contactsList');
@@ -1595,7 +1723,6 @@
             if(!chat)return;
             currentChat=chat;
             currentGroup=null;
-            currentChannel=null;
 
             if(chat.isSeda && chat.sedaChatId){
                 currentChatId=chat.sedaChatId;
@@ -1616,10 +1743,10 @@
             document.getElementById('chatStatus').innerHTML=sedaEnabledForCurrentChat?'🔮 SEDA Pro активен (ключ только на устройстве)':(chat.mood?escapeHtml(chat.mood):'🔒 Личный чат');
             document.getElementById('chatInputArea').style.display='flex';
             document.getElementById('groupInfoBtn').style.display='none';
-            document.getElementById('channelInfoBtn').style.display='none';
             document.getElementById('clearChatBtn').style.display='inline-block';
             document.getElementById('deleteChatBtn').style.display='inline-block';
 
+            // SEDA-кнопки
             const sm=document.getElementById('sedaModeBtn');
             const sk=document.getElementById('sedaKeyBtn');
             if(chat.isSeda){
@@ -1643,7 +1770,6 @@
         async function selectGroup(group){
             currentGroup=group;
             currentChat=null;
-            currentChannel=null;
             currentChatId=`group_${group.id}`;
             const savedKey=getSedaKey(currentChatId);
             if(savedKey&&sedaProActivated){sedaEnabledForCurrentChat=true;currentSedaKey=savedKey;}
@@ -1653,31 +1779,6 @@
             document.getElementById('chatStatus').innerHTML=sedaEnabledForCurrentChat?'🔮 SEDA Pro активен':`👥 ${group.memberCount||0} участников`;
             document.getElementById('chatInputArea').style.display='flex';
             document.getElementById('groupInfoBtn').style.display='inline-block';
-            document.getElementById('channelInfoBtn').style.display='none';
-            document.getElementById('clearChatBtn').style.display='inline-block';
-            document.getElementById('deleteChatBtn').style.display='none';
-            updateSedaUI();
-            if(window.innerWidth<=768&&window.matchMedia('(orientation:portrait)').matches){
-                document.getElementById('sidebar').classList.add('hide-on-mobile');
-                document.getElementById('chatScreen').classList.add('show-on-mobile');
-            }
-            loadMessages();
-        }
-
-        async function selectChannel(channel){
-            currentChannel=channel;
-            currentGroup=null;
-            currentChat=null;
-            currentChatId=`channel_${channel.id}`;
-            const savedKey=getSedaKey(currentChatId);
-            if(savedKey&&sedaProActivated){sedaEnabledForCurrentChat=true;currentSedaKey=savedKey;}
-            else{sedaEnabledForCurrentChat=false;currentSedaKey=null;}
-            document.getElementById('chatName').innerText=channel.name;
-            document.getElementById('chatAvatar').innerText='📢';
-            document.getElementById('chatStatus').innerHTML=sedaEnabledForCurrentChat?'🔮 SEDA Pro активен':`📢 Канал`;
-            document.getElementById('chatInputArea').style.display='flex';
-            document.getElementById('groupInfoBtn').style.display='none';
-            document.getElementById('channelInfoBtn').style.display='inline-block';
             document.getElementById('clearChatBtn').style.display='inline-block';
             document.getElementById('deleteChatBtn').style.display='none';
             updateSedaUI();
@@ -1707,6 +1808,7 @@
             }
         }
 
+        // Помечаем все входящие сообщения прочитанными
         async function markMessagesReadForChat(chat){
             try{
                 const chatId = chat.isSeda && chat.sedaChatId ? chat.sedaChatId : [currentUser.uid, chat.uid].sort().join('_');
@@ -1739,6 +1841,7 @@
                 msgs.forEach(msg=>renderMessage(msg,area));
                 area.scrollTop=area.scrollHeight;
                 bindChatLongPress();
+                // Помечаем прочитанными любые входящие, пришедшие во время открытого чата
                 markIncomingRead(msgs);
             });
         }
@@ -1777,6 +1880,7 @@
                 }else{displayText='[Зашифровано SEDA Pro]';div.classList.add('message-seda');}
             }
 
+            // Медиа
             let mediaSrc=null;
             if((msg.type==='photo'||msg.type==='video'||msg.type==='file'||msg.type==='audio') && msg.media){
                 if(msg.mediaEncrypted){
@@ -1796,7 +1900,7 @@
                 const replyText=replyEl?(replyEl.querySelector('.message-text-content')?.textContent||'[сообщение]'):'[сообщение]';
                 html+=`<div class="chat-msg-reply" onclick="scrollToMessage('${msg.replyTo}')">↩ ${escapeHtml(replyText.substring(0,40))}</div>`;
             }
-            if(!isSent && msg.senderName && (currentGroup || currentChannel)){
+            if(!isSent && msg.senderName && currentGroup){
                 html+=`<div style="font-size:10px;opacity:0.7;margin-bottom:3px;">${escapeHtml(msg.senderName)}</div>`;
             }
 
@@ -1839,6 +1943,8 @@
             }
             if(isEncrypted)html+='<div class="seda-badge-msg">🔮 SEDA Pro</div>';
 
+            // Статус прочтения: только для отправленных
+            // ✓ — отправлено (не прочитано), ✓✓ — прочитано
             let statusIcon='';
             if(isSent){
                 statusIcon = msg.read ? '✓✓' : '✓';
@@ -1900,6 +2006,7 @@
         async function updateChatLastMessage(previewText){
             try{
                 if(currentChat){
+                    // Обновляем свой список
                     let chats=currentUserData?.chats||[];
                     let idx=-1;
                     if(currentChat.isSeda&&currentChat.sedaChatId){
@@ -1915,7 +2022,8 @@
                         loadChats();
                     }
 
-                    if(!currentGroup && !currentChannel && currentChat.uid){
+                    // Обновляем у собеседника (только для обычных и SEDA-чатов, не для групп)
+                    if(!currentGroup && currentChat.uid){
                         const contactRef=doc(db,"users",currentChat.uid);
                         const contactDoc=await getDoc(contactRef);
                         if(contactDoc.exists()){
@@ -1932,6 +2040,7 @@
                                 u[cIdx]={...u[cIdx],lastMessage:previewText,lastMessageTime:new Date(),unread:true};
                                 await updateDoc(contactRef,{chats:u});
                             } else {
+                                // Если у собеседника ещё нет этого чата — создаём
                                 await updateDoc(contactRef,{chats:arrayUnion({
                                     uid:currentUser.uid,
                                     globalId:currentUserData.globalId,
@@ -2319,6 +2428,7 @@
             updateSedaUI();
             const ad=document.getElementById('autoDeleteValue');
             if(ad)ad.textContent=autoDeleteHours===0?'Выкл':autoDeleteHours===24?'24ч':autoDeleteHours===168?'7д':'30д';
+            updateThemeAutoUI();
         };
         window.closeSettings=function(){document.getElementById('settingsModal').classList.remove('active');};
 
@@ -2404,101 +2514,6 @@
             }catch(e){showToast('Ошибка создания','error');}
         };
 
-        // ==================== КАНАЛЫ ====================
-        window.showCreateChannelModal=function(){
-            document.getElementById('channelName').value='';
-            document.getElementById('channelDescription').value='';
-            document.getElementById('createChannelModal').classList.add('active');
-            document.getElementById('plusMenu').classList.remove('show');
-        };
-        window.closeCreateChannelModal=function(){document.getElementById('createChannelModal').classList.remove('active');};
-
-        window.createChannel=async function(){
-            const name=document.getElementById('channelName').value.trim();
-            const description=document.getElementById('channelDescription').value.trim();
-            if(!name){showToast('Введите название канала','error');return;}
-            try{
-                const ref=await addDoc(collection(db,"channels"),{
-                    name,
-                    description,
-                    createdAt:serverTimestamp(),
-                    createdBy:currentUser.uid,
-                    subscribers:[currentUser.uid],
-                    subscriberCount:1
-                });
-                const channelData={id:ref.id,name,description,createdBy:currentUser.uid,subscriberCount:1};
-                await updateDoc(doc(db,"users",currentUser.uid),{channels:arrayUnion(channelData)});
-                currentUserData.channels=[...(currentUserData.channels||[]),channelData];
-                closeCreateChannelModal();
-                loadChannels();
-                showToast(`✅ Канал "${name}" создан!`,'success');
-            }catch(e){showToast('Ошибка создания канала','error');}
-        };
-
-        window.showChannelInfo=async function(){
-            if(!currentChannel){showToast('Канал не выбран','error');return;}
-            try{
-                const ref=doc(db,"channels",currentChannel.id);
-                const d=await getDoc(ref);
-                if(!d.exists())return;
-                const ch=d.data();
-                document.getElementById('channelInfoTitle').innerText=ch.name;
-                document.getElementById('channelInfoContent').innerHTML=`
-                    <div style="text-align:center;margin-bottom:16px;">
-                        <div style="font-size:56px;">📢</div>
-                        <div style="font-weight:bold;font-size:18px;color:var(--text-primary);">${escapeHtml(ch.name)}</div>
-                        <div style="font-size:12px;color:var(--text-secondary);">${ch.subscriberCount||1} подписчиков</div>
-                    </div>
-                    <div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">${escapeHtml(ch.description||'Без описания')}</div>
-                `;
-                document.getElementById('channelInfoModal').classList.add('active');
-            }catch(e){showToast('Ошибка','error');}
-        };
-        window.closeChannelInfo=function(){document.getElementById('channelInfoModal').classList.remove('active');};
-
-        window.clearChannelChat=async function(){
-            if(!currentChannel||!confirm('Очистить историю канала?'))return;
-            try{
-                const mRef=collection(db,"messages",`channel_${currentChannel.id}`,"msgs");
-                const snap=await getDocs(mRef);
-                const batch=writeBatch(db);
-                snap.forEach(d=>batch.delete(d.ref));
-                await batch.commit();
-                deleteSedaKey(`channel_${currentChannel.id}`);
-                showToast('✅ Очищено','success');
-                closeChannelInfo();
-            }catch(e){showToast('Ошибка','error');}
-        };
-
-        window.leaveChannel=async function(){
-            if(!currentChannel||!confirm('Покинуть канал?'))return;
-            try{
-                const ref=doc(db,"channels",currentChannel.id);
-                const d=await getDoc(ref);
-                const ch=d.data();
-                const subs=(ch.subscribers||[]).filter(u=>u!==currentUser.uid);
-                await updateDoc(ref,{subscribers:subs,subscriberCount:subs.length});
-                const uc=(currentUserData.channels||[]).filter(c=>c.id!==currentChannel.id);
-                await updateDoc(doc(db,"users",currentUser.uid),{channels:uc});
-                currentUserData.channels=uc;
-                closeChannelInfo();
-                closeChat();
-                loadChannels();
-                showToast('Вы покинули канал','success');
-            }catch(e){showToast('Ошибка','error');}
-        };
-
-        window.deleteChannelFromList=async function(){
-            if(!currentChannel||!confirm('Удалить канал из списка?'))return;
-            const uc=(currentUserData.channels||[]).filter(c=>c.id!==currentChannel.id);
-            await updateDoc(doc(db,"users",currentUser.uid),{channels:uc});
-            currentUserData.channels=uc;
-            closeChannelInfo();
-            closeChat();
-            loadChannels();
-        };
-
-        // ==================== ИНФО ГРУППЫ ====================
         window.showGroupInfo=async function(){
             if(!currentGroup){showToast('Группа не выбрана','error');return;}
             try{
@@ -2578,8 +2593,7 @@
             const tabs=document.querySelectorAll('.tab');
             if(tab==='chats'){tabs[0]?.classList.add('active');document.getElementById('chatsPane').classList.add('active');loadChats();}
             else if(tab==='groups'){tabs[1]?.classList.add('active');document.getElementById('groupsPane').classList.add('active');loadGroups();}
-            else if(tab==='channels'){tabs[2]?.classList.add('active');document.getElementById('channelsPane').classList.add('active');loadChannels();}
-            else{tabs[3]?.classList.add('active');document.getElementById('contactsPane').classList.add('active');loadContacts();}
+            else{tabs[2]?.classList.add('active');document.getElementById('contactsPane').classList.add('active');loadContacts();}
         };
 
         window.closeChat=function(){
@@ -2589,9 +2603,9 @@
             }
             document.getElementById('chatInputArea').style.display='none';
             if(messagesListener)messagesListener();
-            currentChat=null;currentGroup=null;currentChannel=null;currentChatId=null;
+            currentChat=null;currentGroup=null;currentChatId=null;
             sedaEnabledForCurrentChat=false;currentSedaKey=null;replyToMessage=null;
-            ['groupInfoBtn','channelInfoBtn','clearChatBtn','deleteChatBtn','sedaModeBtn','sedaKeyBtn'].forEach(id=>{
+            ['groupInfoBtn','clearChatBtn','deleteChatBtn','sedaModeBtn','sedaKeyBtn'].forEach(id=>{
                 const el=document.getElementById(id);
                 if(el)el.style.display='none';
             });
@@ -2771,6 +2785,7 @@
                         document.getElementById('twoFactorScreen').classList.add('active');
                         document.getElementById('code1').focus();
                         hideLoading();
+                        // Код НЕ выводится в консоль
                     }
                 }catch(e){console.error(e);hideLoading();showAuthForm();}
             }else{
@@ -2814,4 +2829,4 @@
         },2500);
     </script>
 </body>
-</html>
+</html> 
