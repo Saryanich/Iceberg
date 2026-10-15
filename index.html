@@ -686,6 +686,14 @@
         </div>
     </div>
 
+    <!-- МОДАЛКА ВЫБОРА КОНТАКТА ДЛЯ КАНАЛА -->
+    <div id="contactPickerModal" class="modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);z-index:1000;align-items:center;justify-content:center;padding:20px;">
+        <div class="modal-content">
+            <div class="modal-header"><h3>Выберите контакт</h3><span class="close-modal" onclick="closeContactPicker()">&times;</span></div>
+            <div id="contactPickerList" style="max-height:300px;overflow-y:auto;"></div>
+        </div>
+    </div>
+
     <!-- QR -->
     <div id="scannerModal" class="modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);z-index:1000;align-items:center;justify-content:center;padding:20px;">
         <div class="modal-content">
@@ -784,10 +792,30 @@
         let replyToMessage=null, activeActionBar=null;
         let stickerPickerOpen=false, awaitingTwoFactor=false, isLoggingIn=false;
         let currentTheme='dark';
-        let autoDeleteHours=0, mediaRecorder=null, recordedChunks=[], isRecording=false;
+        let autoDeleteHours=0, autoDeleteInterval=null, mediaRecorder=null, recordedChunks=[], isRecording=false;
         let currentStories=[], storyViewerIndex=0;
         let sedaHandshakeListener=null;
         const processedHandshakes = new Set();
+
+        // ==================== АНТИ-СПАМ И ЗАЩИТА ОТ ДВОЙНОЙ ОТПРАВКИ ====================
+        let isSending = false;
+        let messageTimes = [];
+        let mediaTimes = [];
+        function checkRateLimit(arr, maxCount, windowMs) {
+            const now = Date.now();
+            while (arr.length && now - arr[0] > windowMs) arr.shift();
+            if (arr.length >= maxCount) {
+                showToast('⏱ Слишком быстро, подожди', 'error');
+                return false;
+            }
+            arr.push(now);
+            return true;
+        }
+
+        // ==================== БЕЗОПАСНОЕ ХЕШИРОВАНИЕ 2FA ====================
+        function hash2FACode(code, uid) {
+            return btoa(unescape(encodeURIComponent(code + '_' + uid + '_iceberg_salt')));
+        }
 
         // ==================== TOAST ====================
         function showToast(text,type='info',duration=2500){
@@ -926,9 +954,22 @@
             if(!pendingUser)return showMessage('twoFactorMessage','Ошибка',true);
             try{
                 const u=await getDoc(doc(db,"users",pendingUser.uid));
-                if(code===u.data()?.twoFactorCode){
+                const data=u.data();
+                const enteredHash = hash2FACode(code, pendingUser.uid);
+                const expires = data?.twoFactorCodeExpires;
+                if(expires && expires.toDate && expires.toDate() < new Date()){
+                    return showMessage('twoFactorMessage','❌ Код истёк',true);
+                }
+                if(enteredHash===data?.twoFactorCodeHash){
                     if(document.getElementById('trustDevice').checked)await addKnownDevice(pendingUser.uid);
-                    await updateDoc(doc(db,"users",pendingUser.uid),{twoFactorCode:null,online:true,lastSeen:serverTimestamp(),currentIP,currentDevice:deviceFingerprint});
+                    await updateDoc(doc(db,"users",pendingUser.uid),{
+                        twoFactorCodeHash:null,
+                        twoFactorCodeExpires:null,
+                        online:true,
+                        lastSeen:serverTimestamp(),
+                        currentIP,
+                        currentDevice:deviceFingerprint
+                    });
                     awaitingTwoFactor=false;
                     document.getElementById('twoFactorScreen').classList.remove('active');
                     ['code1','code2','code3','code4'].forEach(id=>document.getElementById(id).value='');
@@ -1039,6 +1080,8 @@
                     try { await deleteDoc(handshakeRef); } catch (e) {}
                     showToast('✅ SEDA-чат создан!', 'success');
                 }
+            }, (error) => {
+                console.error('SEDA handshake listener error:', error);
             });
 
             await openSedaChat(peerUid, sedaChatId);
@@ -1124,6 +1167,9 @@
                     }
                     showToast('🔮 Получен SEDA-чат', 'success');
                 }
+            }, (error) => {
+                console.error('SEDA handshake listener error:', error);
+                showToast('⚠️ Ошибка SEDA-соединения', 'error');
             });
         }
 
@@ -1164,6 +1210,54 @@
             },5000);
         }
 
+        // ==================== ОБЩАЯ ЛОГИКА ВХОДА ====================
+        async function handleLogin(user) {
+            try {
+                const ud = await getDoc(doc(db, "users", user.uid));
+                const data = ud.data();
+                if (!data) { await signOut(auth); showAuthForm(); return; }
+                if (data.accountLocked) {
+                    document.getElementById('loginMode').style.display = 'none';
+                    document.getElementById('blockedMode').style.display = 'block';
+                    document.getElementById('authForm').style.display = 'flex';
+                    hideLoading();
+                    return;
+                }
+                if (!data.icebergAccess) {
+                    await updateDoc(doc(db, "users", user.uid), { icebergAccess: true, icebergLastLogin: serverTimestamp() }).catch(() => {});
+                }
+                if (await isDeviceKnown(user.uid)) {
+                    await updateDoc(doc(db, "users", user.uid), {
+                        online: true, lastSeen: serverTimestamp(),
+                        currentIP, currentDevice: deviceFingerprint
+                    }).catch(() => {});
+                    currentUser = user;
+                    showLoading();
+                    await loadUserData(user);
+                    startBlockCheck(user.uid);
+                    showMessenger();
+                } else {
+                    awaitingTwoFactor = true;
+                    pendingUser = user;
+                    const code = Math.floor(1000 + Math.random() * 9000).toString();
+                    const codeHash = hash2FACode(code, user.uid);
+                    await updateDoc(doc(db, "users", user.uid), {
+                        twoFactorCodeHash: codeHash,
+                        twoFactorCodeExpires: new Date(Date.now() + 5 * 60000)
+                    });
+                    document.getElementById('newDeviceInfo').innerHTML =
+                        `<strong>🆕 Новое устройство</strong><br><strong>IP:</strong> ${currentIP || '...'}<br><strong>Требуется код</strong>`;
+                    document.getElementById('twoFactorScreen').classList.add('active');
+                    document.getElementById('code1').focus();
+                    hideLoading();
+                }
+            } catch (e) {
+                console.error(e);
+                hideLoading();
+                showAuthForm();
+            }
+        }
+
         window.login=async()=>{
             if(isLoggingIn)return;
             isLoggingIn=true;
@@ -1188,27 +1282,7 @@
                     isLoggingIn=false;
                     return;
                 }
-                const ref=doc(db,"users",uc.user.uid);
-                const snap=await getDoc(ref);
-                if(!snap.data()?.icebergAccess){
-                    await updateDoc(ref,{icebergAccess:true,icebergLastLogin:serverTimestamp()}).catch(()=>{});
-                }
-                if(await isDeviceKnown(uc.user.uid)){
-                    await updateDoc(ref,{online:true,lastSeen:serverTimestamp(),currentIP,currentDevice:deviceFingerprint}).catch(()=>{});
-                    currentUser=uc.user;
-                    showLoading();
-                    await loadUserData(uc.user);
-                    startBlockCheck(uc.user.uid);
-                    showMessenger();
-                }else{
-                    awaitingTwoFactor=true;
-                    pendingUser=uc.user;
-                    const code=Math.floor(1000+Math.random()*9000).toString();
-                    await updateDoc(ref,{twoFactorCode:code,twoFactorCodeExpires:new Date(Date.now()+5*60000)});
-                    document.getElementById('newDeviceInfo').innerHTML=`<strong>🆕 Новое устройство</strong><br><strong>IP:</strong> ${currentIP}<br><strong>Требуется код</strong>`;
-                    document.getElementById('twoFactorScreen').classList.add('active');
-                    document.getElementById('code1').focus();
-                }
+                await handleLogin(uc.user);
             }catch(e){
                 let m='Неверные данные';
                 if(e.code==='auth/wrong-password')m='Неверный пароль';
@@ -1234,6 +1308,11 @@
             if(messagesListener)messagesListener();
             if(sedaHandshakeListener)sedaHandshakeListener();
             if(messagesRefreshInterval)clearInterval(messagesRefreshInterval);
+            if(autoDeleteInterval)clearInterval(autoDeleteInterval);
+            if(isRecording && mediaRecorder){
+                try { mediaRecorder.stop(); } catch(e) {}
+                isRecording = false;
+            }
             if(currentUser)await updateDoc(doc(db,"users",currentUser.uid),{online:false,lastSeen:serverTimestamp()}).catch(()=>{});
             await signOut(auth);
         };
@@ -1498,7 +1577,7 @@
                 div.className=`chat-item ${chat.unread?'unread':''}`;
                 let avatarHtml='';
                 if(chat.avatar)avatarHtml=`<img src="${chat.avatar}">`;
-                else avatarHtml=(chat.nickname?.charAt(0)||'👤').toUpperCase();
+                else avatarHtml=escapeHtml((chat.nickname?.charAt(0)||'👤').toUpperCase());
                 const name=chat.nickname||chat.globalId?.substring(0,12)||'Пользователь';
                 const chatId=chat.isSeda&&chat.sedaChatId?chat.sedaChatId:[currentUser.uid,chat.uid].sort().join('_');
                 const hasKey=!!getSedaKey(chatId);
@@ -1581,7 +1660,7 @@
                 div.className='contact-item';
                 let av='';
                 if(contact.avatar)av=`<img src="${contact.avatar}">`;
-                else av=(contact.nickname?.charAt(0)||'👤').toUpperCase();
+                else av=escapeHtml((contact.nickname?.charAt(0)||'👤').toUpperCase());
                 const mood=contact.mood?`<span class="mood-badge">${escapeHtml(contact.mood)}</span>`:'';
                 div.innerHTML=`
                     <div class="avatar-small">${av}</div>
@@ -1707,7 +1786,6 @@
             document.getElementById('clearChatBtn').style.display=channel.isAdmin?'inline-block':'none';
             document.getElementById('deleteChatBtn').style.display='none';
 
-            // Поле ввода только для админов
             if(channel.isAdmin){
                 document.getElementById('chatInputArea').style.display='flex';
                 document.getElementById('messageInput').disabled=false;
@@ -1768,17 +1846,24 @@
             if(messagesListener)messagesListener();
             if(!currentChatId)return;
             const mRef=collection(db,"messages",currentChatId,"msgs");
-            messagesListener=onSnapshot(query(mRef,orderBy("timestamp","asc")),(snap)=>{
-                const area=document.getElementById('messagesArea');
-                if(snap.empty){area.innerHTML='<div class="empty-state">Нет сообщений. Напишите первое!</div>';return;}
-                area.innerHTML='';
-                const msgs=[];
-                snap.forEach(d=>msgs.push({id:d.id,...d.data()}));
-                msgs.forEach(msg=>renderMessage(msg,area));
-                area.scrollTop=area.scrollHeight;
-                bindChatLongPress();
-                markIncomingRead(msgs);
-            });
+            messagesListener=onSnapshot(
+                query(mRef,orderBy("timestamp","asc")),
+                (snap)=>{
+                    const area=document.getElementById('messagesArea');
+                    if(snap.empty){area.innerHTML='<div class="empty-state">Нет сообщений. Напишите первое!</div>';return;}
+                    area.innerHTML='';
+                    const msgs=[];
+                    snap.forEach(d=>msgs.push({id:d.id,...d.data()}));
+                    msgs.forEach(msg=>renderMessage(msg,area));
+                    area.scrollTop=area.scrollHeight;
+                    bindChatLongPress();
+                    markIncomingRead(msgs);
+                },
+                (error)=>{
+                    console.error('onSnapshot error:',error);
+                    showToast('⚠️ Соединение потеряно','error');
+                }
+            );
         }
 
         async function markIncomingRead(msgs){
@@ -1839,7 +1924,7 @@
             }
 
             if(msg.type==='sticker'){
-                html+=`<div class="chat-msg-sticker">${msg.text}</div>`;
+                html+=`<div class="chat-msg-sticker">${escapeHtml(msg.text)}</div>`;
             } else if(msg.type==='photo'&&mediaSrc){
                 html+=`<img class="chat-msg-photo" src="${mediaSrc}" onclick="window.open('${mediaSrc}','_blank')">`;
                 if(displayText && displayText!=='[Зашифровано SEDA Pro]' && displayText!=='') html+=`<div class="message-text-content" style="margin-top:4px;">${escapeHtml(displayText)}</div>`;
@@ -1889,23 +1974,26 @@
 
         // ==================== ОТПРАВКА СООБЩЕНИЙ ====================
         window.sendMessage=async()=>{
+            if(isSending)return;
             const input=document.getElementById('messageInput');
             const originalText=input.value.trim();
             if(!originalText||!currentChatId)return;
+            if(!checkRateLimit(messageTimes, 5, 3000))return;
 
-            // Проверка: канал — только админы
-            if(currentChannel && !currentChannel.isAdmin){
-                showToast('❌ Только администраторы могут писать в канал','error');
-                return;
-            }
-
+            isSending=true;
             input.value='';
             input.style.height='auto';
 
-            let textToSend=originalText;
-            let encrypted=false;
-
             try{
+                if(currentChannel && !currentChannel.isAdmin){
+                    showToast('❌ Только администраторы могут писать в канал','error');
+                    input.value=originalText;
+                    return;
+                }
+
+                let textToSend=originalText;
+                let encrypted=false;
+
                 if(sedaProActivated&&sedaEnabledForCurrentChat){
                     let keyStr=getSedaKey(currentChatId);
                     if(!keyStr){
@@ -1938,6 +2026,8 @@
                 console.error('Ошибка отправки:',e);
                 showToast('❌ Ошибка отправки','error');
                 input.value=originalText;
+            } finally {
+                isSending=false;
             }
         };
 
@@ -1997,11 +2087,15 @@
         }
 
         window.sendSticker=async function(sticker){
+            if(isSending)return;
             if(!currentChatId)return;
+            if(!checkRateLimit(messageTimes, 5, 3000))return;
             if(currentChannel && !currentChannel.isAdmin){showToast('❌ Только админы','error');return;}
             const sp=document.getElementById('stickerPicker');
             if(sp)sp.classList.remove('show');
             stickerPickerOpen=false;
+
+            isSending=true;
             try{
                 const message={
                     text:sticker,senderId:currentUser.uid,senderName:currentUserData.nickname,
@@ -2012,18 +2106,22 @@
                 cancelReply();
                 await updateChatLastMessage(sticker);
             }catch(e){showToast('Ошибка','error');}
+            finally { isSending=false; }
         };
 
         // ==================== МЕДИА ====================
         window.sendMediaFile=async function(input){
+            if(isSending)return;
             const file=input.files&&input.files[0];
             input.value='';
             if(!file||!currentChatId)return;
+            if(!checkRateLimit(mediaTimes, 3, 3000))return;
             if(currentChannel && !currentChannel.isAdmin){showToast('❌ Только админы','error');return;}
 
             const maxSize=5*1024*1024;
             if(file.size>maxSize){showToast('Файл слишком большой (макс 5 МБ)','error');return;}
 
+            isSending=true;
             try{
                 let mediaDataUrl;
                 let mediaType;
@@ -2081,7 +2179,7 @@
             }catch(e){
                 console.error('Ошибка отправки медиа:',e);
                 showToast('❌ Ошибка отправки','error');
-            }
+            } finally { isSending=false; }
         };
 
         // ==================== ГОЛОСОВЫЕ ====================
@@ -2095,6 +2193,7 @@
                 btn.textContent='🎤';
                 return;
             }
+            if(!checkRateLimit(mediaTimes, 3, 3000))return;
             try{
                 const stream=await navigator.mediaDevices.getUserMedia({audio:true});
                 recordedChunks=[];
@@ -2107,24 +2206,29 @@
                     if(blob.size>3*1024*1024){showToast('Голосовое слишком длинное','error');return;}
                     const reader=new FileReader();
                     reader.onload=async()=>{
-                        let dataUrl=reader.result;
-                        let mediaEncrypted=false;
-                        if(sedaProActivated&&sedaEnabledForCurrentChat){
-                            let keyStr=getSedaKey(currentChatId);
-                            if(!keyStr){const r=sedaProEncrypt('init');saveSedaKey(currentChatId,r.key);keyStr=r.key;}
-                            dataUrl=encryptWithKey(dataUrl,keyStr);
-                            mediaEncrypted=true;
+                        try {
+                            let dataUrl=reader.result;
+                            let mediaEncrypted=false;
+                            if(sedaProActivated&&sedaEnabledForCurrentChat){
+                                let keyStr=getSedaKey(currentChatId);
+                                if(!keyStr){const r=sedaProEncrypt('init');saveSedaKey(currentChatId,r.key);keyStr=r.key;}
+                                dataUrl=encryptWithKey(dataUrl,keyStr);
+                                mediaEncrypted=true;
+                            }
+                            const message={
+                                text:'',senderId:currentUser.uid,senderName:currentUserData.nickname,
+                                timestamp:serverTimestamp(),read:false,encrypted:false,
+                                mediaEncrypted:mediaEncrypted,type:'audio',media:dataUrl,
+                                fileName:'voice.webm',fileSize:blob.size,
+                                replyTo:replyToMessage||null,reactions:{}
+                            };
+                            await addDoc(collection(db,"messages",currentChatId,"msgs"),message);
+                            cancelReply();
+                            await updateChatLastMessage('🎤 Голосовое');
+                        } catch(e) {
+                            console.error('Voice send error:', e);
+                            showToast('❌ Ошибка отправки голосового','error');
                         }
-                        const message={
-                            text:'',senderId:currentUser.uid,senderName:currentUserData.nickname,
-                            timestamp:serverTimestamp(),read:false,encrypted:false,
-                            mediaEncrypted:mediaEncrypted,type:'audio',media:dataUrl,
-                            fileName:'voice.webm',fileSize:blob.size,
-                            replyTo:replyToMessage||null,reactions:{}
-                        };
-                        await addDoc(collection(db,"messages",currentChatId,"msgs"),message);
-                        cancelReply();
-                        await updateChatLastMessage('🎤 Голосовое');
                     };
                     reader.readAsDataURL(blob);
                 };
@@ -2339,11 +2443,13 @@
             await updateDoc(doc(db,"users",currentUser.uid),{autoDeleteHours:hours});
             document.getElementById('autoDeleteValue').textContent=hours===0?'Выкл':hours===24?'24ч':hours===168?'7д':'30д';
             closeAutoDelete();
+            applyAutoDelete();
             showToast('✅ Автоудаление: '+(hours===0?'выкл':hours+'ч'),'success');
         };
         function applyAutoDelete(){
+            if(autoDeleteInterval)clearInterval(autoDeleteInterval);
             if(autoDeleteHours>0){
-                setInterval(async()=>{
+                autoDeleteInterval=setInterval(async()=>{
                     if(!currentChatId)return;
                     try{
                         const mRef=collection(db,"messages",currentChatId,"msgs");
@@ -2410,7 +2516,7 @@
                 const d=document.createElement('div');
                 d.className='contact-checkbox';
                 d.style.cssText='display:flex;align-items:center;gap:10px;padding:8px;cursor:pointer;';
-                d.innerHTML=`<input type="checkbox" ${checked?'checked':''}><div class="avatar-small" style="width:34px;height:34px;font-size:14px;">${(contact.nickname?.charAt(0)||'👤').toUpperCase()}</div><div class="info-small"><div class="item-name">${escapeHtml(contact.nickname||contact.globalId?.substring(0,12))}</div></div>`;
+                d.innerHTML=`<input type="checkbox" ${checked?'checked':''}><div class="avatar-small" style="width:34px;height:34px;font-size:14px;">${escapeHtml((contact.nickname?.charAt(0)||'👤').toUpperCase())}</div><div class="info-small"><div class="item-name">${escapeHtml(contact.nickname||contact.globalId?.substring(0,12))}</div></div>`;
                 d.querySelector('input').onchange=(e)=>{if(e.target.checked)selectedSet.add(contact.uid);else selectedSet.delete(contact.uid);};
                 c.appendChild(d);
             });
@@ -2462,7 +2568,7 @@
                 let mh='<div class="member-list" style="max-height:300px;overflow-y:auto;margin:10px 0;">';
                 (g.members||[]).forEach(m=>{
                     mh+=`<div style="display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid var(--border);">
-                        <div class="avatar-small" style="width:36px;height:36px;font-size:14px;">${(m.nickname||'U').charAt(0).toUpperCase()}</div>
+                        <div class="avatar-small" style="width:36px;height:36px;font-size:14px;">${escapeHtml((m.nickname||'U').charAt(0).toUpperCase())}</div>
                         <div style="flex:1;"><div style="font-weight:500;color:var(--text-primary);font-size:13px;">${escapeHtml(m.nickname||m.globalId||'Пользователь')}</div>
                         <div style="font-size:10px;color:var(--text-muted);">${m.role==='admin'?'👑 Админ':'👤 Участник'}</div></div>
                     </div>`;
@@ -2541,7 +2647,6 @@
                     name,description,createdAt:serverTimestamp(),createdBy:currentUser.uid,
                     admins:[currentUser.uid],members:[currentUser.uid],memberCount:1
                 });
-                // Добавляем канал в список пользователя
                 const channelEntry={
                     id:ref.id,name,description,isAdmin:true,
                     memberCount:1,unread:false,lastMessage:'',lastMessageTime:null
@@ -2573,7 +2678,7 @@
                         if(!u)continue;
                         const isAdmin=(ch.admins||[]).includes(uid);
                         mh+=`<div style="display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid var(--border);">
-                            <div class="avatar-small" style="width:36px;height:36px;font-size:14px;">${(u.nickname||'U').charAt(0).toUpperCase()}</div>
+                            <div class="avatar-small" style="width:36px;height:36px;font-size:14px;">${escapeHtml((u.nickname||'U').charAt(0).toUpperCase())}</div>
                             <div style="flex:1;"><div style="font-weight:500;color:var(--text-primary);font-size:13px;">${escapeHtml(u.nickname||u.globalId||'Пользователь')}</div>
                             <div style="font-size:10px;color:var(--text-muted);">${isAdmin?'👑 Админ':'👤 Подписчик'}</div></div>
                             ${uid!==currentUser.uid?`<button class="action-btn danger" onclick="event.stopPropagation();removeChannelMember('${uid}')">✖</button>`:''}
@@ -2612,6 +2717,8 @@
             }catch(e){showToast('Ошибка','error');}
         };
 
+        // ==================== ВЫБОР КОНТАКТА ДЛЯ КАНАЛА (вместо prompt) ====================
+        let availableContactsForChannel = [];
         window.addChannelMember=async function(){
             if(!currentChannel)return;
             const contacts=currentUserData?.contacts||[];
@@ -2619,29 +2726,51 @@
             const d=await getDoc(ref);
             const ch=d.data();
             const existing=ch.members||[];
-            const available=contacts.filter(c=>!existing.includes(c.uid));
-            if(!available.length){showToast('Нет доступных контактов','error');return;}
-            // Простой выбор через confirm
-            let list='Выберите контакт:\n';
-            available.forEach((c,i)=>{list+=`${i+1}. ${c.nickname||c.globalId}\n`;});
-            const choice=prompt(list);
-            if(!choice)return;
-            const idx=parseInt(choice)-1;
-            if(idx<0||idx>=available.length){showToast('Неверный выбор','error');return;}
-            const contact=available[idx];
-            try{
-                await updateDoc(ref,{
-                    members:arrayUnion(contact.uid),
-                    memberCount:existing.length+1
+            availableContactsForChannel = contacts.filter(c=>!existing.includes(c.uid));
+            if(!availableContactsForChannel.length){showToast('Нет доступных контактов','error');return;}
+            const listEl = document.getElementById('contactPickerList');
+            listEl.innerHTML = '';
+            availableContactsForChannel.forEach((c, i) => {
+                const div = document.createElement('div');
+                div.className = 'contact-item';
+                div.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px;border-bottom:1px solid var(--border);cursor:pointer;';
+                let av = '';
+                if (c.avatar) av = `<img src="${c.avatar}">`;
+                else av = escapeHtml((c.nickname?.charAt(0) || '👤').toUpperCase());
+                div.innerHTML = `<div class="avatar-small">${av}</div>
+                    <div class="info-small"><div class="item-name">${escapeHtml(c.nickname || c.globalId || 'Пользователь')}</div>
+                    <div class="item-subtitle">${escapeHtml(c.globalId?.substring(0,12) || '')}</div></div>`;
+                div.onclick = () => selectChannelMember(i);
+                listEl.appendChild(div);
+            });
+            document.getElementById('contactPickerModal').style.display = 'flex';
+        };
+        window.closeContactPicker = function() {
+            document.getElementById('contactPickerModal').style.display = 'none';
+        };
+        window.selectChannelMember = async function(index) {
+            const contact = availableContactsForChannel[index];
+            if (!contact || !currentChannel) return;
+            closeContactPicker();
+            try {
+                const ref = doc(db, "channels", currentChannel.id);
+                const d = await getDoc(ref);
+                const ch = d.data();
+                const existing = ch.members || [];
+                await updateDoc(ref, {
+                    members: arrayUnion(contact.uid),
+                    memberCount: existing.length + 1
                 });
-                const uRef=doc(db,"users",contact.uid);
-                await updateDoc(uRef,{channels:arrayUnion({
-                    id:currentChannel.id,name:ch.name,description:ch.description||'',
-                    isAdmin:false,memberCount:existing.length+1,unread:false
-                })}).catch(()=>{});
-                showToast(`✅ ${contact.nickname||contact.globalId} добавлен`,'success');
+                const uRef = doc(db, "users", contact.uid);
+                await updateDoc(uRef, {
+                    channels: arrayUnion({
+                        id: currentChannel.id, name: ch.name, description: ch.description || '',
+                        isAdmin: false, memberCount: existing.length + 1, unread: false
+                    })
+                }).catch(() => {});
+                showToast(`✅ ${contact.nickname || contact.globalId} добавлен`, 'success');
                 showChannelManage();
-            }catch(e){showToast('Ошибка','error');}
+            } catch (e) { showToast('Ошибка', 'error'); }
         };
 
         // ==================== ВКЛАДКИ ====================
@@ -2778,7 +2907,7 @@
                 filtered.forEach(chat=>{
                     const div=document.createElement('div');
                     div.className='chat-item';
-                    div.innerHTML=`<div class="avatar-small">${(chat.nickname?.charAt(0)||'👤').toUpperCase()}</div><div class="info-small"><div class="item-name">${escapeHtml(chat.nickname||chat.globalId||'Пользователь')}</div></div>`;
+                    div.innerHTML=`<div class="avatar-small">${escapeHtml((chat.nickname?.charAt(0)||'👤').toUpperCase())}</div><div class="info-small"><div class="item-name">${escapeHtml(chat.nickname||chat.globalId||'Пользователь')}</div></div>`;
                     div.onclick=()=>selectChat(chat);
                     c.appendChild(div);
                 });
@@ -2791,7 +2920,7 @@
                 filtered.forEach(contact=>{
                     const div=document.createElement('div');
                     div.className='contact-item';
-                    div.innerHTML=`<div class="avatar-small">${(contact.nickname?.charAt(0)||'👤').toUpperCase()}</div><div class="info-small"><div class="item-name">${escapeHtml(contact.nickname||contact.globalId||'Пользователь')}</div></div>`;
+                    div.innerHTML=`<div class="avatar-small">${escapeHtml((contact.nickname?.charAt(0)||'👤').toUpperCase())}</div><div class="info-small"><div class="item-name">${escapeHtml(contact.nickname||contact.globalId||'Пользователь')}</div></div>`;
                     div.onclick=()=>openChatWithContact(contact);
                     c.appendChild(div);
                 });
@@ -2812,51 +2941,27 @@
         });
 
         // ==================== AUTH STATE ====================
-        onAuthStateChanged(auth,async(user)=>{
-            if(awaitingTwoFactor)return;
-            if(user){
-                try{
-                    const ud=await getDoc(doc(db,"users",user.uid));
-                    const data=ud.data();
-                    if(!data){await signOut(auth);showAuthForm();return;}
-                    if(data.accountLocked){
-                        document.getElementById('loginMode').style.display='none';
-                        document.getElementById('blockedMode').style.display='block';
-                        document.getElementById('authForm').style.display='flex';
-                        hideLoading();
-                        return;
-                    }
-                    if(!data.icebergAccess){
-                        await updateDoc(doc(db,"users",user.uid),{icebergAccess:true,icebergLastLogin:serverTimestamp()}).catch(()=>{});
-                    }
-                    if(await isDeviceKnown(user.uid)){
-                        currentUser=user;
-                        showLoading();
-                        await loadUserData(user);
-                        startBlockCheck(user.uid);
-                        showMessenger();
-                    }else{
-                        awaitingTwoFactor=true;
-                        pendingUser=user;
-                        const code=Math.floor(1000+Math.random()*9000).toString();
-                        await updateDoc(doc(db,"users",user.uid),{twoFactorCode:code,twoFactorCodeExpires:new Date(Date.now()+5*60000)});
-                        document.getElementById('newDeviceInfo').innerHTML=`<strong>🆕 Новое устройство</strong><br><strong>IP:</strong> ${currentIP||'...'}<br><strong>Требуется код</strong>`;
-                        document.getElementById('twoFactorScreen').classList.add('active');
-                        document.getElementById('code1').focus();
-                        hideLoading();
-                    }
-                }catch(e){console.error(e);hideLoading();showAuthForm();}
-            }else{
-                if(blockCheckInterval)clearInterval(blockCheckInterval);
-                if(messagesListener)messagesListener();
-                if(sedaHandshakeListener)sedaHandshakeListener();
-                if(messagesRefreshInterval)clearInterval(messagesRefreshInterval);
-                currentUser=null;currentUserData=null;
-                ['twoFactorScreen','sedaActivationScreen','sedaKeyScreen'].forEach(id=>document.getElementById(id)?.classList.remove('active'));
-                document.getElementById('authForm').style.display='flex';
-                document.getElementById('messengerApp').style.display='none';
-                document.getElementById('loginIdentifier').value='';
-                document.getElementById('loginPassword').value='';
+        onAuthStateChanged(auth, async (user) => {
+            if (awaitingTwoFactor) return;
+            if (user) {
+                await handleLogin(user);
+            } else {
+                if (blockCheckInterval) clearInterval(blockCheckInterval);
+                if (messagesListener) messagesListener();
+                if (sedaHandshakeListener) sedaHandshakeListener();
+                if (messagesRefreshInterval) clearInterval(messagesRefreshInterval);
+                if (autoDeleteInterval) clearInterval(autoDeleteInterval);
+                if (isRecording && mediaRecorder) {
+                    try { mediaRecorder.stop(); } catch (e) {}
+                    isRecording = false;
+                }
+                currentUser = null;
+                currentUserData = null;
+                ['twoFactorScreen', 'sedaActivationScreen', 'sedaKeyScreen'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+                document.getElementById('authForm').style.display = 'flex';
+                document.getElementById('messengerApp').style.display = 'none';
+                document.getElementById('loginIdentifier').value = '';
+                document.getElementById('loginPassword').value = '';
                 hideLoading();
             }
         });
