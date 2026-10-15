@@ -51,7 +51,7 @@ export async function getMessagingInstance() {
 export const APP_VERSION = "2.0.0";
 export const APP_NAME = "Айсберг";
 export const APP_LOGO = "https://i.ibb.co/8JY0bXs/IMG-0335.jpg";
-export const SEDA_ACTIVATION_CODE_HASH = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"; // SHA-256 от актуального кода (заменим ниже)
+export const SEDA_ACTIVATION_CODE = "2762263385798";
 
 export const STICKERS = [
     '🐱','🐶','🐼','🦊','🐻','🐨','🐸','🐷','🐵','🦁','🐯','🐮','🐰','🐹','🐭','🐿️','🦔','🦇','🐺','🦝',
