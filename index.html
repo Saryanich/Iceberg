@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>Айсберг — Защищённый мессенджер</title>
+
+    <!-- Favicon / PWA -->
+    <link rel="icon" type="image/jpeg" href="https://i.ibb.co/8JY0bXs/IMG-0335.jpg">
+    <link rel="apple-touch-icon" href="https://i.ibb.co/8JY0bXs/IMG-0335.jpg">
+    <link rel="manifest" href="manifest.json">
+
+    <!-- PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Айсберг">
+    <meta name="theme-color" content="#0A0F1E">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="description" content="Айсберг — защищённый мессенджер с E2E-шифрованием">
+
+    <!-- Стили -->
+    <link rel="stylesheet" href="css/style.css">
+
+    <!-- Внешние библиотеки -->
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js" defer></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
+</head>
+<body class="theme-dark">
+
+    <!-- Фон с частицами -->
+    <div id="particles-js"></div>
+
+    <!-- Toast-контейнер -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- ================================================================
+         ЭКРАН ЗАГРУЗКИ
+    ================================================================= -->
+    <div id="loadingScreen">
+        <img src="https://i.ibb.co/8JY0bXs/IMG-0335.jpg" alt="Айсберг" class="loading-logo">
+        <div class="loading-title">АЙСБЕРГ</div>
+        <div class="loading-bar-wrap"><div class="loading-bar"></div></div>
+    </div>
+
+    <!-- ================================================================
+         ЭКРАН 2FA
+    ================================================================= -->
+    <div id="twoFactorScreen">
+        <div class="auth-card">
+            <div style="text-align:center;margin-bottom:16px;">
+                <div style="font-size:40px;margin-bottom:8px;">🔐</div>
+                <h3 style="color:var(--text-primary);margin-bottom:6px;">Подтверждение входа</h3>
+                <p style="color:var(--text-secondary);font-size:12px;">Введите код из консоли разработчика</p>
+            </div>
+            <div class="device-info" id="newDeviceInfo">Обнаружено новое устройство</div>
+            <div class="code-input-container">
+                <input type="text" class="code-input" maxlength="1" id="code1" inputmode="numeric" autocomplete="one-time-code">
+                <input type="text" class="code-input" maxlength="1" id="code2" inputmode="numeric">
+                <input type="text" class="code-input" maxlength="1" id="code3" inputmode="numeric">
+                <input type="text" class="code-input" maxlength="1" id="code4" inputmode="numeric">
+            </div>
+            <div class="warning-box"><strong>⚠️ Внимание!</strong><br>Никогда не сообщайте код никому.</div>
+            <label class="checkbox-label">
+                <input type="checkbox" id="trustDevice">
+                <span>✅ Запомнить устройство</span>
+            </label>
+            <button class="btn btn-primary">Подтвердить</button>
+            <button class="btn btn-secondary" style="margin-top:8px;">Отмена</button>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         ЭКРАН АКТИВАЦИИ SEDA PRO
+    ================================================================= -->
+    <div id="sedaActivationScreen">
+        <div class="auth-card">
+            <div style="text-align:center;margin-bottom:16px;">
+                <div style="font-size:46px;margin-bottom:8px;">🔮</div>
+                <h3 style="color:#a78bfa;margin-bottom:6px;">SEDA Pro 3</h3>
+                <p style="color:var(--text-secondary);font-size:12px;">3-слойное шифрование сообщений и медиа</p>
+            </div>
+            <div class="device-info">
+                <h4 style="color:#a78bfa;margin-bottom:6px;">📞 Для активации</h4>
+                <p style="font-size:12px;">Напишите по номеру:</p>
+                <p style="font-size:18px;font-weight:bold;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:6px 0;">+7 (995) 009-19-35</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Код активации</label>
+                <input type="password" id="sedaActivationCode" placeholder="Введите код" inputmode="numeric">
+            </div>
+            <button class="btn btn-seda">🔓 Активировать SEDA Pro</button>
+            <button class="btn btn-secondary" style="margin-top:8px;">Отмена</button>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         ЭКРАН SEDA-КЛЮЧА
+    ================================================================= -->
+    <div id="sedaKeyScreen">
+        <div class="auth-card">
+            <div style="text-align:center;margin-bottom:16px;">
+                <div style="font-size:40px;margin-bottom:8px;">🔑</div>
+                <h3 style="color:var(--seda-accent);margin-bottom:6px;">Ключ SEDA Pro</h3>
+                <p style="color:var(--text-secondary);font-size:12px;">Ключ хранится только на вашем устройстве</p>
+            </div>
+            <div id="sedaKeyDisplay" style="background:#0f0f23;color:#aaffaa;padding:14px;border-radius:12px;font-family:'Courier New',monospace;font-size:10px;word-break:break-all;max-height:200px;overflow-y:auto;margin:12px 0;border:1px solid #2a3a5e;user-select:text;-webkit-user-select:text;"></div>
+            <button class="btn btn-seda">📋 Копировать ключ</button>
+            <button class="btn btn-secondary" style="margin-top:8px;">📥 Вставить ключ из буфера</button>
+            <button class="btn btn-secondary" style="margin-top:8px;">Закрыть</button>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         МОДАЛКА: ПРОФИЛЬ
+    ================================================================= -->
+    <div id="profileModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Мой профиль</h3>
+                <button class="close-modal" aria-label="Закрыть">&times;</button>
+            </div>
+            <div class="profile-avatar-wrap" id="avatarClicker">
+                <div class="profile-avatar" id="profileAvatarBig">U</div>
+                <div class="profile-avatar-edit">📷</div>
+            </div>
+            <input type="file" id="avatarUploadInput" class="file-input-hidden" accept="image/*">
+            <div class="form-group">
+                <label class="form-label">Имя</label>
+                <input type="text" id="profileFirstName" placeholder="Имя" maxlength="30">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Фамилия</label>
+                <input type="text" id="profileLastName" placeholder="Фамилия" maxlength="30">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Настроение / статус</label>
+                <input type="text" id="profileMood" placeholder="Например: 😊 На позитиве" maxlength="40">
+            </div>
+            <button class="btn btn-primary">💾 Сохранить</button>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         МОДАЛКА: ИСТОРИИ
+    ================================================================= -->
+    <div id="storiesModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Мои истории</h3>
+                <button class="close-modal" aria-label="Закрыть">&times;</button>
+            </div>
+            <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">До 5 фото · живут 24 часа</p>
+            <div id="myStoriesList" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;"></div>
+            <button class="btn btn-primary" id="addStoryBtn">➕ Добавить фото</button>
+            <input type="file" id="storyUploadInput" class="file-input-hidden" accept="image/*" multiple>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         МОДАЛКА: ПРОСМОТР ИСТОРИИ
+    ================================================================= -->
+    <div id="storyViewerModal" class="modal-overlay">
+        <div class="story-viewer-content">
+            <div class="story-progress" id="storyProgress"></div>
+            <img class="story-image" id="storyImage" src="" alt="История">
+            <div style="display:flex;justify-content:space-between;margin-top:12px;">
+                <button class="btn btn-secondary" id="prevStoryBtn" style="width:auto;padding:8px 16px;">← Назад</button>
+                <button class="btn btn-secondary" id="nextStoryBtn" style="width:auto;padding:8px 16px;">Вперёд →</button>
+            </div>
+            <button class="btn btn-danger" id="deleteStoryBtn" style="margin-top:8px;">🗑 Удалить историю</button>
+            <button class="btn btn-secondary" id="closeStoryViewerBtn" style="margin-top:8px;">Закрыть</button>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         МОДАЛКА: АВТОУДАЛЕНИЕ
+    ================================================================= -->
+    <div id="autoDeleteModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Автоудаление сообщений</h3>
+                <button class="close-modal" aria-label="Закрыть">&times;</button>
+            </div>
+            <div class="settings-row"><span class="settings-row-label">Выключено</span><span id="ad-0" class="settings-check"></span></div>
+            <div class="settings-row"><span class="settings-row-label">24 часа</span><span id="ad-24" class="settings-check"></span></div>
+            <div class="settings-row"><span class="settings-row-label">7 дней</span><span id="ad-168" class="settings-check"></span></div>
+            <div class="settings-row"><span class="settings-row-label">30 дней</span><span id="ad-720" class="settings-check"></span></div>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         МОДАЛКА: НАСТРОЙКИ
+    ================================================================= -->
+    <div id="settingsModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Настройки</h3>
+                <button class="close-modal" aria-label="Закрыть">&times;</button>
+            </div>
+            <div class="settings-section">
+                <div class="settings-title">🎨 Тема оформления</div>
+                <div class="theme-grid">
+                    <div class="theme-cell" data-theme="dark"><div class="theme-swatch" style="background:#0A0F1E;"></div><span>Тёмная</span></div>
+                    <div class="theme-cell" data-theme="light"><div class="theme-swatch" style="background:#F5F7FA;"></div><span>Светлая</span></div>
+                    <div class="theme-cell" data-theme="rose"><div class="theme-swatch" style="background:#FFF5F7;"></div><span>Роза</span></div>
+                    <div class="theme-cell" data-theme="blue"><div class="theme-swatch" style="background:#F0F9FF;"></div><span>Голубая</span></div>
+                </div>
+            </div>
+            <div class="settings-section">
+                <div class="settings-title">🔮 SEDA Pro 3</div>
+                <div class="settings-row">
+                    <span class="settings-row-label">Статус</span>
+                    <span id="sedaStatusBadge" class="settings-row-value">Не активирован</span>
+                </div>
+                <button class="btn btn-seda fullwidth-btn" id="openSedaActivation">🔓 Активировать</button>
+                <div class="device-info" style="margin-top:10px;">
+                    <p style="font-size:12px;">📞 +7 (995) 009-19-35</p>
+                </div>
+            </div>
+            <div class="settings-section">
+                <div class="settings-title">💬 Чаты</div>
+                <div class="settings-row" data-action="autodelete">
+                    <span class="settings-row-label">⏱ Автоудаление</span>
+                    <span class="settings-row-value" id="autoDeleteValue">Выкл</span>
+                </div>
+                <div class="settings-row" data-action="clear-chats">
+                    <span class="settings-row-label" style="color:var(--danger);">🗑 Удалить все чаты</span>
+                </div>
+                <div class="settings-row" data-action="clear-messages">
+                    <span class="settings-row-label" style="color:var(--danger);">🧹 Очистить все сообщения</span>
+                </div>
+            </div>
+            <button class="btn btn-secondary close-settings-btn">Закрыть</button>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         МОДАЛКА: ПОИСК
+    ================================================================= -->
+    <div id="searchModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Поиск по Global ID</h3>
+                <button class="close-modal" aria-label="Закрыть">&times;</button>
+            </div>
+            <input type="text" id="searchGlobalIdInput" placeholder="Введите Global ID">
+            <button class="btn btn-primary" id="searchGlobalIdBtn" style="margin-top:10px;">Найти</button>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         МОДАЛКА: СОЗДАНИЕ ГРУППЫ
+    ================================================================= -->
+    <div id="createGroupModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Создание группы</h3>
+                <button class="close-modal" aria-label="Закрыть">&times;</button>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Название</label>
+                <input type="text" id="groupName" placeholder="Название группы">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Участники</label>
+                <div id="contactsForGroup" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;padding:5px;"></div>
+            </div>
+            <button class="btn btn-primary" id="createGroupBtn">Создать</button>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         МОДАЛКА: СОЗДАНИЕ КАНАЛА
+    ================================================================= -->
+    <div id="createChannelModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📢 Создание канала</h3>
+                <button class="close-modal" aria-label="Закрыть">&times;</button>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Название канала</label>
+                <input type="text" id="channelName" placeholder="Название канала">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Описание</label>
+                <input type="text" id="channelDescription" placeholder="О чём канал?" maxlength="200">
+            </div>
+            <div class="warning-box">Только администраторы могут публиковать сообщения.</div>
+            <button class="btn btn-primary" id="createChannelBtn">Создать канал</button>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         МОДАЛКА: ИНФО ГРУППЫ
+    ================================================================= -->
+    <div id="groupInfoModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="groupInfoTitle">Группа</h3>
+                <button class="close-modal" aria-label="Закрыть">&times;</button>
+            </div>
+            <div id="groupInfoContent"></div>
+            <button class="btn btn-warning fullwidth-btn" id="clearGroupBtn">🗑 Очистить</button>
+            <button class="btn btn-danger fullwidth-btn" id="leaveGroupBtn">🚪 Выйти</button>
+            <button class="btn btn-secondary fullwidth-btn" id="deleteGroupFromListBtn">❌ Удалить из списка</button>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         МОДАЛКА: УПРАВЛЕНИЕ КАНАЛОМ
+    ================================================================= -->
+    <div id="channelManageModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="channelManageTitle">Управление каналом</h3>
+                <button class="close-modal" aria-label="Закрыть">&times;</button>
+            </div>
+            <div id="channelManageContent"></div>
+            <button class="btn btn-secondary fullwidth-btn" id="closeChannelManageBtn">Закрыть</button>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         МОДАЛКА: ВЫБОР КОНТАКТА
+    ================================================================= -->
+    <div id="contactPickerModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Выберите контакт</h3>
+                <button class="close-modal" aria-label="Закрыть">&times;</button>
+            </div>
+            <div id="contactPickerList" style="max-height:300px;overflow-y:auto;"></div>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         МОДАЛКА: QR-СКАНЕР
+    ================================================================= -->
+    <div id="scannerModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Сканирование QR</h3>
+                <button class="close-modal" aria-label="Закрыть">&times;</button>
+            </div>
+            <div id="qr-reader" style="width:100%;"></div>
+            <button class="btn btn-secondary" id="closeScannerBtn" style="margin-top:10px;">Отмена</button>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         ОСНОВНОЙ КОНТЕЙНЕР
+    ================================================================= -->
+    <div class="app-container">
+
+        <!-- ЭКРАН АВТОРИЗАЦИИ -->
+        <div id="authForm" style="display:none;height:100vh;align-items:center;justify-content:center;">
+            <div class="auth-card">
+                <div class="logo-area">
+                    <img src="https://i.ibb.co/8JY0bXs/IMG-0335.jpg" alt="Айсберг" class="logo-img">
+                    <div class="logo-title">Айсберг</div>
+                    <div style="font-size:10px;color:var(--accent);margin-top:5px;letter-spacing:1px;">🔒 ЗАЩИЩЁННЫЙ МЕССЕНДЖЕР</div>
+                </div>
+
+                <div id="loginMode">
+                    <div class="form-group">
+                        <label class="form-label">Global ID или Email</label>
+                        <input type="text" id="loginIdentifier" placeholder="Global ID или email" autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Пароль</label>
+                        <input type="password" id="loginPassword" placeholder="Пароль" autocomplete="current-password">
+                    </div>
+                    <button class="btn btn-primary" id="btnLogin">Войти</button>
+                    <div class="divider">
+                        <div class="divider-line"></div>
+                        <div class="divider-text">или</div>
+                        <div class="divider-line"></div>
+                    </div>
+                    <button class="btn btn-secondary" id="btnGlobalId">Создать в Global ID</button>
+                    <div class="disclaimer-block" id="disclaimerBlock">
+                        <strong>📄 Политика конфиденциальности и условия использования</strong><br>
+                        Используя Айсберг, вы соглашаетесь с политикой конфиденциальности, условиями обработки данных и правилами сервиса. Нажмите, чтобы ознакомиться с документами.
+                    </div>
+                </div>
+
+                <div id="blockedMode" style="display:none;">
+                    <div style="text-align:center;margin-bottom:16px;">
+                        <div style="font-size:40px;margin-bottom:8px;">🚫</div>
+                        <h3 style="color:var(--danger);margin-bottom:6px;">Доступ запрещён</h3>
+                    </div>
+                    <div class="warning-box"><strong>🔒 Аккаунт заблокирован</strong><br>Разблокируйте в Global ID.</div>
+                    <button class="btn btn-secondary">Назад</button>
+                </div>
+
+                <div id="authMessage" class="message"></div>
+            </div>
+        </div>
+
+        <!-- ЭКРАН МЕССЕНДЖЕРА -->
+        <div id="messengerApp" style="display:none;" class="messenger-container">
+
+            <!-- САЙДБАР -->
+            <div id="sidebar" class="sidebar">
+                <div class="user-profile">
+                    <div class="user-info" id="userInfoClicker">
+                        <div class="user-avatar" id="userAvatar">U</div>
+                        <div class="user-details">
+                            <h4 id="userName"></h4>
+                            <p id="userMood">Нажмите, чтобы изменить профиль</p>
+                        </div>
+                    </div>
+                    <button class="logout-btn" title="Настройки" id="openSettingsBtn">⚙️</button>
+                    <button class="logout-btn" title="Выйти" id="logoutBtn">🚪</button>
+                </div>
+
+                <div class="stories-bar" id="storiesBar"></div>
+
+                <div class="search-area">
+                    <input type="text" class="search-input" placeholder="Поиск..." id="searchInput">
+                    <button class="plus-btn" id="plusBtn">+</button>
+                </div>
+
+                <div class="tabs-container">
+                    <div class="tab active">Чаты</div>
+                    <div class="tab">Каналы</div>
+                    <div class="tab">Группы</div>
+                    <div class="tab">Контакты</div>
+                </div>
+
+                <div class="tab-content">
+                    <div id="chatsPane" class="tab-pane active"><div class="chats-list" id="chatsList"></div></div>
+                    <div id="channelsPane" class="tab-pane"><div class="channels-list" id="channelsList"></div></div>
+                    <div id="groupsPane" class="tab-pane"><div class="groups-list" id="groupsList"></div></div>
+                    <div id="contactsPane" class="tab-pane"><div class="contacts-list" id="contactsList"></div></div>
+                </div>
+
+                <div class="footer-bar">
+                    <span>© 2026 IT Global</span>
+                    <a href="https://saryanich.github.io/TLC-services/" target="_blank" rel="noopener">📄 Документы</a>
+                </div>
+            </div>
+
+            <!-- ЭКРАН ЧАТА -->
+            <div id="chatScreen" class="chat-screen">
+                <div class="chat-header">
+                    <button class="back-btn">←</button>
+                    <div class="chat-avatar" id="chatAvatar">🧊</div>
+                    <div class="chat-info">
+                        <h3 id="chatName">Выберите чат</h3>
+                        <p id="chatStatus">Защищённое соединение</p>
+                    </div>
+                    <div class="header-buttons">
+                        <button id="sedaModeBtn" class="btn-icon seda" style="display:none;">🔮 SEDA чат</button>
+                        <button id="sedaKeyBtn" class="btn-icon" style="display:none;background:#ff8c00;color:white;">🔑</button>
+                        <button id="groupInfoBtn" class="btn-icon" style="display:none;">ℹ️</button>
+                        <button id="channelManageBtn" class="btn-icon" style="display:none;">⚙️</button>
+                        <button id="clearChatBtn" class="btn-icon warning" style="display:none;">🗑</button>
+                        <button id="deleteChatBtn" class="btn-icon danger" style="display:none;">❌</button>
+                    </div>
+                </div>
+
+                <div class="messages-area" id="messagesArea">
+                    <div class="empty-state">Выберите чат для начала общения</div>
+                </div>
+
+                <div class="chat-input-area" id="chatInputArea" style="display:none;">
+                    <div id="replyPreview" class="reply-preview hidden">
+                        <span id="replyPreviewText"></span>
+                        <span class="reply-preview-close">✕</span>
+                    </div>
+                    <div class="chat-input-bar">
+                        <button class="chat-icon-btn" id="stickerBtn" aria-label="Стикеры">😀</button>
+                        <button class="chat-icon-btn" id="attachBtn" aria-label="Прикрепить">📎</button>
+                        <input type="file" id="chatMediaInput" class="file-input-hidden" accept="*/*">
+                        <button class="chat-icon-btn" id="voiceBtn" aria-label="Голосовое">🎤</button>
+                        <textarea class="chat-input" id="messageInput" placeholder="Сообщение..." rows="1"></textarea>
+                        <button class="chat-send" id="chatSend" aria-label="Отправить">➤</button>
+                        <div class="sticker-picker" id="stickerPicker"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ПЛЮС-МЕНЮ -->
+    <div id="plusMenu" class="plus-menu">
+        <div class="plus-menu-item">👥 Создать группу</div>
+        <div class="plus-menu-item">📢 Создать канал</div>
+        <div class="plus-menu-item">🔍 Найти по Global ID</div>
+        <div class="plus-menu-item">📷 Сканировать QR</div>
+        <div class="plus-menu-item">📸 Мои истории</div>
+    </div>
+
+    <!-- СКРИПТЫ -->
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
