@@ -5,9 +5,14 @@
 //  • Окно чата (сообщения, медиа, стикеры, реакции)
 //  • SEDA-чаты (создание, E2E-обмен ключами)
 //  • Профиль, настройки, темы
-//  • Истории
 //  • Индикатор "печатает" и онлайн-статус
-//  • Редактирование / пересылка / закрепление сообщений
+//
+//  ИСПРАВЛЕНО:
+//  • chats всегда приводится к массиву (Array.isArray)
+//  • Защита от дублей SEDA-чатов при handshake
+//  • Защита от повторной подписки на onSnapshot
+//  • Защита от дублей сообщений при отправке
+//  • Автофикс битого chats в Firestore
 // ===================================================================
 
 import { db, auth, STICKERS, REACTION_EMOJIS, MAX_MEDIA_SIZE, MAX_PHOTO_DIMENSION, MAX_STORIES, STORY_LIFETIME, RATE_LIMIT, AUTO_DELETE_OPTIONS, THEMES } from './config.js';
@@ -27,7 +32,7 @@ import * as DB from './db.js';
 import { authState } from './auth.js';
 
 // ===================================================================
-// СОСТОЯНИЕ UI
+// СОСТОЯНИЕ
 // ===================================================================
 export const uiState = {
     currentChat: null,
@@ -61,7 +66,23 @@ export const uiState = {
 };
 
 // ===================================================================
-// TOAST-УВЕДОМЛЕНИЯ
+// УТИЛИТА: гарантированный массив
+// ===================================================================
+function ensureArray(val) {
+    if (Array.isArray(val)) return val;
+    if (val && typeof val === 'object') {
+        try {
+            const arr = Object.values(val);
+            return arr.filter(x => x !== null && x !== undefined);
+        } catch {
+            return [];
+        }
+    }
+    return [];
+}
+
+// ===================================================================
+// TOAST
 // ===================================================================
 export function showToast(text, type = 'info', duration = 2500) {
     const c = document.getElementById('toastContainer');
@@ -173,7 +194,7 @@ export function loadTheme() {
 }
 
 // ===================================================================
-// ПРОФИЛЬ — отрисовка
+// ПРОФИЛЬ
 // ===================================================================
 export function renderUserProfile() {
     const d = authState.userData;
@@ -194,22 +215,36 @@ export function renderUserProfile() {
 }
 
 // ===================================================================
-// ЗАГРУЗКА СПИСКОВ (с кэшем)
+// ЗАГРУЗКА СПИСКА ЧАТОВ
 // ===================================================================
 export async function loadChats(forceRefresh = false) {
-    const uid = authState.user.uid;
+    const uid = authState.user?.uid;
     const c = document.getElementById('chatsList');
-    if (!c) return;
+    if (!c || !uid) return;
 
-    let chats = authState.userData?.chats || [];
+    let chats = ensureArray(authState.userData?.chats);
 
-    // Если кэш пуст — обновляем
-    if (!chats.length || forceRefresh) {
-        const cached = await DB.Lists.getChats(uid);
-        if (cached && !forceRefresh) chats = cached;
+    // Автофикс в Firestore, если был не-массив
+    if (!Array.isArray(authState.userData?.chats)) {
+        console.warn('[loadChats] chats не массив, привожу к массиву');
+        if (authState.userData) authState.userData.chats = chats;
+        try {
+            await updateDoc(doc(db, 'users', uid), { chats });
+            await DB.Lists.setChats(uid, chats);
+        } catch (e) {
+            console.warn('[loadChats] fix chats failed:', e.message);
+        }
     }
 
-    chats = chats.filter(x => !x.isChannel);
+    if (!chats.length || forceRefresh) {
+        const cached = await DB.Lists.getChats(uid);
+        const cachedArr = ensureArray(cached);
+        if (cachedArr.length && !forceRefresh) {
+            chats = cachedArr;
+        }
+    }
+
+    chats = chats.filter(x => x && !x.isChannel);
 
     if (!chats.length) {
         c.innerHTML = '<div class="empty-state">Нет чатов</div>';
@@ -259,19 +294,14 @@ function renderChatItem(chat) {
         nameRow.appendChild(mb);
     }
 
-    // SEDA-бейдж
     const chatId = chat.isSeda && chat.sedaChatId
         ? chat.sedaChatId
         : [authState.user.uid, chat.uid].sort().join('_');
-    if (chat.isSeda || DB.getSedaKey) {
-        DB.getSedaKey(chatId).then(key => {
-            if (key || chat.isSeda) {
-                const b = document.createElement('span');
-                b.style.cssText = 'background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:1px 6px;border-radius:8px;font-size:9px;';
-                b.textContent = '🔮 SEDA';
-                nameRow.appendChild(b);
-            }
-        });
+    if (chat.isSeda) {
+        const b = document.createElement('span');
+        b.style.cssText = 'background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:1px 6px;border-radius:8px;font-size:9px;';
+        b.textContent = '🔮 SEDA';
+        nameRow.appendChild(b);
     }
 
     const sub = document.createElement('div');
@@ -305,7 +335,7 @@ function renderChatItem(chat) {
 }
 
 export async function loadContacts() {
-    const contacts = authState.userData?.contacts || [];
+    const contacts = ensureArray(authState.userData?.contacts);
     const c = document.getElementById('contactsList');
     if (!c) return;
     if (!contacts.length) {
@@ -362,7 +392,7 @@ function renderContactItem(contact) {
 }
 
 export async function loadGroups() {
-    const groups = authState.userData?.groups || [];
+    const groups = ensureArray(authState.userData?.groups);
     const c = document.getElementById('groupsList');
     if (!c) return;
     if (!groups.length) {
@@ -400,7 +430,7 @@ export async function loadGroups() {
 }
 
 export async function loadChannels() {
-    const channels = authState.userData?.channels || [];
+    const channels = ensureArray(authState.userData?.channels);
     const c = document.getElementById('channelsList');
     if (!c) return;
     if (!channels.length) {
@@ -621,7 +651,7 @@ function closeCurrentSubscriptions() {
 // ===================================================================
 async function markChatRead(chat) {
     if (!chat) return;
-    const chats = authState.userData?.chats || [];
+    let chats = ensureArray(authState.userData?.chats);
     let idx = chat.isSeda && chat.sedaChatId
         ? chats.findIndex(c => c.sedaChatId === chat.sedaChatId)
         : chats.findIndex(c => c.uid === chat.uid && !c.isGroup && !c.isSeda);
@@ -645,7 +675,7 @@ export async function loadMessages() {
 
     const area = document.getElementById('messagesArea');
 
-    // 1) Сначала показываем кэш (мгновенно)
+    // 1) Сначала показываем кэш
     const cached = await DB.getCachedMessages(uiState.currentChatId);
     if (cached && cached.length) {
         area.innerHTML = '';
@@ -741,7 +771,6 @@ function renderMessage(msg) {
         }
     }
 
-    // Reply
     if (msg.replyTo) {
         const r = document.createElement('div');
         r.className = 'chat-msg-reply';
@@ -750,7 +779,6 @@ function renderMessage(msg) {
         div.appendChild(r);
     }
 
-    // Имя отправителя (в группах / каналах)
     if (!isSent && msg.senderName && (uiState.currentGroup || uiState.currentChannel)) {
         const sn = document.createElement('div');
         sn.style.cssText = 'font-size:10px;opacity:0.7;margin-bottom:3px;';
@@ -758,7 +786,6 @@ function renderMessage(msg) {
         div.appendChild(sn);
     }
 
-    // Контент
     if (msg.type === 'sticker') {
         const s = document.createElement('div');
         s.className = 'chat-msg-sticker';
@@ -810,7 +837,6 @@ function renderMessage(msg) {
         div.appendChild(t);
     }
 
-    // Кнопка вставки ключа
     if (isEncrypted && !isDecrypted) {
         const btn = document.createElement('button');
         btn.className = 'seda-decrypt-btn';
@@ -826,7 +852,6 @@ function renderMessage(msg) {
         div.appendChild(lock);
     }
 
-    // Реакции
     if (msg.reactions && Object.keys(msg.reactions).length) {
         const rw = document.createElement('div');
         rw.className = 'chat-msg-reactions';
@@ -849,7 +874,6 @@ function renderMessage(msg) {
         div.appendChild(badge);
     }
 
-    // Время + статус
     const time = document.createElement('div');
     time.className = 'message-time';
     time.textContent = formatTime(msg.timestamp?.toDate?.());
@@ -866,7 +890,7 @@ function renderMessage(msg) {
 }
 
 // ===================================================================
-// ОТПРАВКА СООБЩЕНИЙ
+// ОТПРАВКА СООБЩЕНИЙ (с защитой от дублей)
 // ===================================================================
 export async function sendMessage() {
     if (uiState.isSending) return;
@@ -887,7 +911,6 @@ export async function sendMessage() {
     input.style.height = 'auto';
 
     try {
-        // Редактирование
         if (uiState.editingMessage) {
             const editId = uiState.editingMessage;
             uiState.editingMessage = null;
@@ -949,7 +972,7 @@ async function updateChatLastMessage(previewText) {
         const chatIdAtSend = uiState.currentChatId;
 
         if (uiState.currentChat) {
-            let chats = authState.userData?.chats || [];
+            let chats = ensureArray(authState.userData?.chats);
             let idx = uiState.currentChat.isSeda && uiState.currentChat.sedaChatId
                 ? chats.findIndex(c => c.sedaChatId === uiState.currentChat.sedaChatId)
                 : chats.findIndex(c => c.uid === uiState.currentChat.uid && !c.isGroup && !c.isSeda);
@@ -961,13 +984,12 @@ async function updateChatLastMessage(previewText) {
                 loadChats();
             }
 
-            // Обновляем у собеседника
             if (!uiState.currentGroup && !uiState.currentChannel && uiState.currentChat.uid) {
                 const cRef = doc(db, 'users', uiState.currentChat.uid);
                 const cDoc = await getDoc(cRef);
                 if (cDoc.exists()) {
                     const cd = cDoc.data();
-                    const cChats = cd.chats || [];
+                    const cChats = ensureArray(cd.chats);
                     let cIdx = uiState.currentChat.isSeda && uiState.currentChat.sedaChatId
                         ? cChats.findIndex(c => c.sedaChatId === uiState.currentChat.sedaChatId)
                         : cChats.findIndex(c => c.uid === authState.user.uid && !c.isGroup && !c.isSeda);
@@ -976,21 +998,20 @@ async function updateChatLastMessage(previewText) {
                         u[cIdx] = { ...u[cIdx], lastMessage: previewText, lastMessageTime: new Date(), unread: true };
                         await updateDoc(cRef, { chats: u });
                     } else {
-                        await updateDoc(cRef, {
-                            chats: arrayUnion({
-                                uid: authState.user.uid,
-                                globalId: authState.userData.globalId,
-                                nickname: authState.userData.nickname,
-                                avatar: authState.userData.avatar || null,
-                                mood: authState.userData.mood || null,
-                                isGroup: false,
-                                isSeda: uiState.currentChat.isSeda || false,
-                                sedaChatId: uiState.currentChat.sedaChatId || null,
-                                unread: true,
-                                lastMessage: previewText,
-                                lastMessageTime: new Date()
-                            })
-                        });
+                        const newChat = {
+                            uid: authState.user.uid,
+                            globalId: authState.userData.globalId,
+                            nickname: authState.userData.nickname,
+                            avatar: authState.userData.avatar || null,
+                            mood: authState.userData.mood || null,
+                            isGroup: false,
+                            isSeda: uiState.currentChat.isSeda || false,
+                            sedaChatId: uiState.currentChat.sedaChatId || null,
+                            unread: true,
+                            lastMessage: previewText,
+                            lastMessageTime: new Date()
+                        };
+                        await updateDoc(cRef, { chats: [...cChats, newChat] });
                     }
                 }
             }
@@ -1268,7 +1289,7 @@ function spawnReactionBurst(targetEl, emoji) {
 }
 
 // ===================================================================
-// ДОЛГОЕ НАЖАТИЕ → ACTION BAR
+// ДОЛГОЕ НАЖАТИЕ
 // ===================================================================
 export function bindChatLongPress() {
     const area = document.getElementById('messagesArea');
@@ -1448,10 +1469,10 @@ export async function forwardMessage(id, msgData) {
     const target = prompt('Введите Global ID получателя:');
     if (!target) return;
     try {
-        const q = query(collection(db, 'users'), where('globalId', '==', target));
-        const s = await getDocs(q);
-        if (s.empty) { showToast('Получатель не найден', 'error'); return; }
-        const targetUid = s.docs[0].id;
+        const ref = doc(db, 'global_ids', target);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) { showToast('Получатель не найден', 'error'); return; }
+        const targetUid = snap.data().uid;
         const targetChatId = [authState.user.uid, targetUid].sort().join('_');
         await addDoc(collection(db, 'messages', targetChatId, 'msgs'), {
             ...msgData,
@@ -1512,7 +1533,7 @@ export function scrollToMessage(id) {
 }
 
 // ===================================================================
-// SEDA — создание чата и обмен ключами
+// SEDA — создание чата
 // ===================================================================
 export async function startSedaChat() {
     if (!authState.sedaProActivated) {
@@ -1536,17 +1557,14 @@ export async function startSedaChat() {
 
     showToast('🔮 Создание SEDA-чата...', 'info');
 
-    // 1) Генерируем ECDH-пару
     const keyPair = await generateECDHKeyPair();
     const pubBase64 = await exportPublicKey(keyPair);
     const privJwk = await exportPrivateKey(keyPair);
     await DB.saveECDHKeys(sedaChatId, pubBase64, privJwk);
 
-    // 2) Генерируем SEDA-ключ
     const sedaResult = sedaEncrypt('init_' + Date.now());
     const sedaKey = sedaResult.key;
 
-    // 3) Публикуем handshake
     const handshakeRef = doc(db, 'seda_handshakes', sedaChatId);
     await setDoc(handshakeRef, {
         initiator: authState.user.uid,
@@ -1558,52 +1576,57 @@ export async function startSedaChat() {
         expiresAt: Date.now() + 5 * 60 * 1000
     });
 
-    // 4) Ждём ответ собеседника
     let unsub = null;
+    let resolved = false;
     unsub = onSnapshot(handshakeRef, async (snap) => {
+        if (resolved) return;
         if (!snap.exists()) return;
         const data = snap.data();
         if (data.peerPublicKey && data.encryptedSedaKey) {
-            // 5) Дешифруем SEDA-ключ через ECDH+AES
+            resolved = true;
+            if (unsub) unsub();
+
             const peerPub = await importPublicKey(data.peerPublicKey);
             const priv = await DB.getECDHKeys(sedaChatId);
-            const sharedKey = await deriveSharedKey(
-                await importPrivateKeyFromJwk(priv.privateKey),
-                peerPub
+            if (!priv) return;
+
+            const privateKey = await crypto.subtle.importKey(
+                'jwk', priv.privateKey,
+                { name: 'ECDH', namedCurve: 'P-256' },
+                true, ['deriveKey', 'deriveBits']
             );
+            const sharedKey = await deriveSharedKey(privateKey, peerPub);
             const decryptedSedaKey = await aesDecrypt(data.encryptedSedaKey, sharedKey);
             if (decryptedSedaKey) {
                 await DB.saveSedaKey(sedaChatId, decryptedSedaKey);
-                if (unsub) unsub();
                 await deleteDoc(handshakeRef).catch(() => {});
                 showToast('✅ SEDA-чат установлен!', 'success');
             }
         }
     });
 
-    // Локально сохраняем наш SEDA-ключ (собеседник его не знает, пока не зашифруем)
     await DB.saveSedaKey(sedaChatId, sedaKey);
 
-    // Открываем SEDA-чат с ожиданием
+    // Через 5 минут — очистка handshake, если никто не ответил
+    setTimeout(async () => {
+        try {
+            const s = await getDoc(handshakeRef);
+            if (s.exists() && !s.data().peerPublicKey) {
+                await deleteDoc(handshakeRef);
+            }
+        } catch {}
+    }, 5 * 60 * 1000);
+
     await openSedaChat(peerUid, sedaChatId);
 }
 
-// Импорт приватного ECDH-ключа из JWK (утилита, чтобы не тянуть из crypto.js)
-async function importPrivateKeyFromJwk(jwk) {
-    return await crypto.subtle.importKey(
-        'jwk', jwk,
-        { name: 'ECDH', namedCurve: 'P-256' },
-        true, ['deriveKey', 'deriveBits']
-    );
-}
-
 async function openSedaChat(peerUid, sedaChatId) {
-    const contact = (authState.userData.contacts || []).find(c => c.uid === peerUid)
-        || (authState.userData.chats || []).find(c => c.uid === peerUid && !c.isGroup);
+    const contact = ensureArray(authState.userData.contacts).find(c => c.uid === peerUid)
+        || ensureArray(authState.userData.chats).find(c => c.uid === peerUid && !c.isGroup);
 
     if (!contact) { showToast('Контакт не найден', 'error'); return; }
 
-    let chats = authState.userData.chats || [];
+    let chats = ensureArray(authState.userData.chats);
     let sedaChat = chats.find(c => c.sedaChatId === sedaChatId);
 
     if (!sedaChat) {
@@ -1620,7 +1643,7 @@ async function openSedaChat(peerUid, sedaChatId) {
             lastMessage: '🔮 SEDA-чат',
             lastMessageTime: new Date()
         };
-        chats.push(sedaChat);
+        chats = [...chats, sedaChat];
         authState.userData.chats = chats;
         await updateDoc(doc(db, 'users', authState.user.uid), { chats }).catch(() => {});
         await DB.Lists.setChats(authState.user.uid, chats);
@@ -1632,77 +1655,84 @@ async function openSedaChat(peerUid, sedaChatId) {
     loadChats();
 }
 
-// Слушаем входящие handshake'и (когда с нами хотят создать SEDA-чат)
+// ===================================================================
+// SEDA — слушатель входящих handshake (с защитой от дублей)
+// ===================================================================
 export function startSedaHandshakeListener() {
     if (uiState.sedaHandshakeUnsub) uiState.sedaHandshakeUnsub();
+    if (!authState.user) return;
+
     const q = query(collection(db, 'seda_handshakes'), where('peer', '==', authState.user.uid));
     uiState.sedaHandshakeUnsub = onSnapshot(q, async (snap) => {
         for (const d of snap.docs) {
+            // Защита от повторной обработки
             if (uiState.processedHandshakes.has(d.id)) continue;
             const data = d.data();
             if (!data.initiatorPublicKey) continue;
+            if (data.peerPublicKey) continue; // уже обработан
 
             uiState.processedHandshakes.add(d.id);
 
-            // 1) Генерируем свою ECDH-пару
-            const keyPair = await generateECDHKeyPair();
-            const myPub = await exportPublicKey(keyPair);
-            const myPrivJwk = await exportPrivateKey(keyPair);
-            await DB.saveECDHKeys(d.id, myPub, myPrivJwk);
+            try {
+                const keyPair = await generateECDHKeyPair();
+                const myPub = await exportPublicKey(keyPair);
+                const myPrivJwk = await exportPrivateKey(keyPair);
+                await DB.saveECDHKeys(d.id, myPub, myPrivJwk);
 
-            // 2) Деривируем общий AES-ключ
-            const peerPub = await importPublicKey(data.initiatorPublicKey);
-            const sharedKey = await deriveSharedKey(keyPair.privateKey, peerPub);
+                const peerPub = await importPublicKey(data.initiatorPublicKey);
+                const sharedKey = await deriveSharedKey(keyPair.privateKey, peerPub);
 
-            // 3) Генерируем свой SEDA-ключ и шифруем его
-            const sedaResult = sedaEncrypt('init_' + Date.now());
-            const mySedaKey = sedaResult.key;
-            const encryptedMyKey = await aesEncrypt(mySedaKey, sharedKey);
+                const sedaResult = sedaEncrypt('init_' + Date.now());
+                const mySedaKey = sedaResult.key;
+                const encryptedMyKey = await aesEncrypt(mySedaKey, sharedKey);
 
-            // 4) Отвечаем
-            await updateDoc(d.ref, {
-                peerPublicKey: myPub,
-                encryptedSedaKey: encryptedMyKey,
-                respondedAt: Date.now()
-            });
+                await updateDoc(d.ref, {
+                    peerPublicKey: myPub,
+                    encryptedSedaKey: encryptedMyKey,
+                    respondedAt: Date.now()
+                });
 
-            // 5) Расшифровываем SEDA-ключ инициатора (он был в encryptedSedaKey инициатора, но её ещё нет)
-            // Для инициатора: он получит наш ключ и расшифрует его, мы уже сохранили свой.
-            await DB.saveSedaKey(d.id, mySedaKey);
+                await DB.saveSedaKey(d.id, mySedaKey);
 
-            // 6) Уведомляем UI
-            setTimeout(async () => {
-                try { await deleteDoc(d.ref); } catch {}
-            }, 5000);
+                setTimeout(async () => {
+                    try { await deleteDoc(d.ref); } catch {}
+                }, 5000);
 
-            const initiatorUid = data.initiator;
-            const contact = (authState.userData.contacts || []).find(c => c.uid === initiatorUid);
-            if (contact) {
-                let chats = authState.userData.chats || [];
-                if (!chats.find(c => c.sedaChatId === d.id)) {
-                    chats.push({
-                        uid: initiatorUid,
-                        globalId: contact.globalId || '',
-                        nickname: contact.nickname || '',
-                        avatar: contact.avatar || null,
-                        isGroup: false,
-                        isSeda: true,
-                        sedaChatId: d.id,
-                        unread: true,
-                        lastMessage: '🔮 SEDA-чат создан',
-                        lastMessageTime: new Date()
-                    });
-                    authState.userData.chats = chats;
-                    await updateDoc(doc(db, 'users', authState.user.uid), { chats }).catch(() => {});
-                    loadChats();
+                // Добавляем SEDA-чат себе (с защитой от дублей)
+                const initiatorUid = data.initiator;
+                const contact = ensureArray(authState.userData.contacts).find(c => c.uid === initiatorUid);
+                if (contact) {
+                    let chats = ensureArray(authState.userData.chats);
+                    if (!chats.find(c => c.sedaChatId === d.id)) {
+                        chats = [...chats, {
+                            uid: initiatorUid,
+                            globalId: contact.globalId || '',
+                            nickname: contact.nickname || '',
+                            avatar: contact.avatar || null,
+                            isGroup: false,
+                            isSeda: true,
+                            sedaChatId: d.id,
+                            unread: true,
+                            lastMessage: '🔮 SEDA-чат создан',
+                            lastMessageTime: new Date()
+                        }];
+                        authState.userData.chats = chats;
+                        await updateDoc(doc(db, 'users', authState.user.uid), { chats }).catch(() => {});
+                        loadChats();
+                    }
                 }
+                showToast('🔮 Получен SEDA-чат', 'success');
+            } catch (e) {
+                console.error('[SEDA handshake]', e);
+                uiState.processedHandshakes.delete(d.id);
             }
-            showToast('🔮 Получен SEDA-чат', 'success');
         }
     }, (err) => console.error('[SEDA handshake]', err));
 }
 
-// Показать текущий SEDA-ключ
+// ===================================================================
+// SEDA — ключи
+// ===================================================================
 export async function showCurrentSedaKey() {
     if (!uiState.sedaEnabledForCurrentChat || !uiState.currentChatId) {
         showToast('Откройте SEDA-чат', 'error');
@@ -1741,7 +1771,7 @@ export function copySedaKeyToClipboard() {
 }
 
 // ===================================================================
-// ОБНОВЛЕНИЕ UI SEDA
+// SEDA — UI
 // ===================================================================
 export function updateSedaUI() {
     const sm = document.getElementById('sedaModeBtn');
@@ -1764,7 +1794,7 @@ export function updateSedaUI() {
 }
 
 // ===================================================================
-// МЕТА-СЛУШАТЕЛЬ ЧАТА (typing, online)
+// МЕТА-СЛУШАТЕЛЬ (typing, online)
 // ===================================================================
 function startChatMetaListener(chat) {
     if (uiState.chatMetaUnsub) uiState.chatMetaUnsub();
@@ -1789,7 +1819,6 @@ function startChatMetaListener(chat) {
     });
 }
 
-// Отправка статуса "печатает"
 export async function notifyTyping() {
     if (!uiState.currentChat || !uiState.currentChat.uid) return;
     if (uiState.typingTimeout) clearTimeout(uiState.typingTimeout);
@@ -1808,7 +1837,7 @@ export async function notifyTyping() {
 }
 
 // ===================================================================
-// ОЧИСТКА / УДАЛЕНИЕ ЧАТОВ
+// ОЧИСТКА / УДАЛЕНИЕ
 // ===================================================================
 export async function clearChatById(uid, sedaChatId) {
     const chatId = sedaChatId ? sedaChatId : [authState.user.uid, uid].sort().join('_');
@@ -1829,7 +1858,7 @@ export async function clearChatById(uid, sedaChatId) {
 
 export async function deleteChatById(uid, sedaChatId) {
     if (!confirm('Удалить чат?')) return;
-    const chats = (authState.userData.chats || []).filter(c => {
+    let chats = ensureArray(authState.userData.chats).filter(c => {
         if (sedaChatId && c.sedaChatId === sedaChatId) return false;
         if (!sedaChatId && c.uid === uid && !c.isGroup && !c.isSeda) return false;
         return true;
@@ -1860,7 +1889,7 @@ export async function deleteCurrentChat() {
 // ===================================================================
 export async function openChatWithContact(contact) {
     if (!contact || !contact.uid) return;
-    let chats = authState.userData?.chats || [];
+    let chats = ensureArray(authState.userData?.chats);
     let chat = chats.find(c => c.uid === contact.uid && !c.isGroup && !c.isSeda);
     if (!chat) {
         chat = {
@@ -1875,7 +1904,7 @@ export async function openChatWithContact(contact) {
             lastMessage: '',
             lastMessageTime: null
         };
-        chats.push(chat);
+        chats = [...chats, chat];
         try {
             await updateDoc(doc(db, 'users', authState.user.uid), { chats });
             authState.userData.chats = chats;
