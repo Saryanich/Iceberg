@@ -1,12 +1,11 @@
 // ===================================================================
-// js/auth.js — Авторизация
+// js/auth.js — Авторизация (Айсберг)
 //
-//  • Вход по email или Global ID
-//  • 2FA через SHA-256
-//  • Активация SEDA Pro 3
-//  • Моментальный автовход (sync из localStorage → boot → sync с Firestore)
-//  • ФИКС: ожидание auth.currentUser перед запросами к Firestore
-//  • ФИКС: необязательные update'ы не ломают вход
+//  • Вход по email или Global ID (через global_ids)
+//  • 2FA через SHA-256 (совместимо с Global ID)
+//  • Пишет twoFactorCodePlain + pendingDeviceInfo → Global ID видит код
+//  • Моментальный автовход из localStorage
+//  • Единое поле trustedDevices (как в Global ID)
 // ===================================================================
 
 import {
@@ -21,7 +20,7 @@ import {
 
 import {
     doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs,
-    serverTimestamp, arrayUnion
+    serverTimestamp, arrayUnion, limit
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 import { hash2FACode, sha256Hex } from './crypto.js';
@@ -42,16 +41,14 @@ export const authState = {
 };
 
 // ===================================================================
-// ЛОКАЛЬНЫЙ КЭШ ПРОФИЛЯ ДЛЯ МГНОВЕННОГО АВТОВХОДА
+// ЛОКАЛЬНЫЙ КЭШ ПРОФИЛЯ
 // ===================================================================
 const AUTH_CACHE_KEY = 'iceberg_auth_cache_v1';
 
 function saveAuthCache(uid, data) {
     try {
         localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify({
-            uid,
-            data,
-            savedAt: Date.now()
+            uid, data, savedAt: Date.now()
         }));
     } catch {}
 }
@@ -76,12 +73,10 @@ function clearAuthCache() {
 // ИНФОРМАЦИЯ ОБ УСТРОЙСТВЕ
 // ===================================================================
 export async function collectDeviceInfo() {
-    // Сначала быстро собираем fingerprint (без сети)
     const n = navigator;
     const raw = `${n.userAgent}|${n.language}|${screen.width}x${screen.height}|${n.platform}|${n.hardwareConcurrency || 0}`;
     authState.deviceFingerprint = await sha256Hex(raw);
 
-    // IP — асинхронно, не блокирует
     fetch('https://api.ipify.org?format=json')
         .then(r => r.json())
         .then(d => { authState.currentIP = d.ip; })
@@ -93,11 +88,9 @@ export async function collectDeviceInfo() {
     };
 }
 
-// Быстрая синхронная версия (для моментального автовхода)
 function collectDeviceInfoSync() {
     const n = navigator;
     const raw = `${n.userAgent}|${n.language}|${screen.width}x${screen.height}|${n.platform}|${n.hardwareConcurrency || 0}`;
-    // Простой синхронный хэш (FNV-1a) — не криптостойкий, но уникальный
     let h = 2166136261;
     for (let i = 0; i < raw.length; i++) {
         h ^= raw.charCodeAt(i);
@@ -108,7 +101,7 @@ function collectDeviceInfoSync() {
 }
 
 // ===================================================================
-// ЖДЁМ УСТАНОВКИ auth.currentUser (защита от гонки)
+// ОЖИДАНИЕ auth.currentUser
 // ===================================================================
 function waitForAuthReady(timeoutMs = 3000) {
     if (auth.currentUser) return Promise.resolve(auth.currentUser);
@@ -130,16 +123,15 @@ function waitForAuthReady(timeoutMs = 3000) {
 }
 
 // ===================================================================
-// ПРОВЕРКИ (устройство, блокировка)
+// ПРОВЕРКИ
 // ===================================================================
 async function isDeviceKnown(uid) {
     try {
         const d = await getDoc(doc(db, 'users', uid));
-        const devices = d.data()?.knownDevices || [];
+        const devices = d.data()?.trustedDevices || [];
         return devices.some(x => x.fingerprint === authState.deviceFingerprint);
     } catch (e) {
         console.warn('[auth] isDeviceKnown error:', e.message);
-        // При ошибке — считаем устройство известным, чтобы не мучить 2FA на каждом входе
         return true;
     }
 }
@@ -157,7 +149,7 @@ async function isAccountLocked(uid) {
 async function addKnownDevice(uid) {
     try {
         await updateDoc(doc(db, 'users', uid), {
-            knownDevices: arrayUnion({
+            trustedDevices: arrayUnion({
                 fingerprint: authState.deviceFingerprint,
                 ip: authState.currentIP || 'unknown',
                 userAgent: navigator.userAgent,
@@ -171,19 +163,28 @@ async function addKnownDevice(uid) {
 }
 
 // ===================================================================
-// 2FA
+// 2FA — генерация (пишет поля, которые читает Global ID)
 // ===================================================================
 async function generate2FACode(uid) {
     const code = Math.floor(1000 + Math.random() * 9000).toString();
     const hash = await hash2FACode(code, uid);
+
     try {
         await updateDoc(doc(db, 'users', uid), {
             twoFactorCodeHash: hash,
-            twoFactorCodeExpires: new Date(Date.now() + 5 * 60 * 1000)
+            twoFactorCodePlain: code,
+            twoFactorCodeExpires: new Date(Date.now() + 5 * 60 * 1000),
+            pendingDeviceInfo: {
+                ip: authState.currentIP || 'unknown',
+                userAgent: navigator.userAgent,
+                requestedAt: new Date()
+            }
         });
     } catch (e) {
         console.warn('[auth] generate2FACode error:', e.message);
     }
+
+    console.log('%c[2FA] Код подтверждения:', 'color:#64B5F6;font-weight:bold', code);
     return code;
 }
 
@@ -209,10 +210,8 @@ export async function handleAuthLogin(user, callbacks = {}) {
     const { onSuccess, onNeed2FA, onLocked, onError } = callbacks;
 
     try {
-        // ФИКС: ждём, пока Firebase реально установит currentUser
         await waitForAuthReady();
 
-        // Быстрый путь: если есть локальный кэш — сразу показываем UI
         const cached = loadAuthCache();
         if (cached && cached.uid === user.uid && cached.data) {
             authState.user = user;
@@ -220,13 +219,10 @@ export async function handleAuthLogin(user, callbacks = {}) {
             authState.sedaProActivated = cached.data.sedaProActivated || false;
             authState.restoredFromCache = true;
             onSuccess?.(user, cached.data);
-
-            // Параллельно синхронизируем с сервером
             syncUserFromServer(user.uid).catch(() => {});
             return;
         }
 
-        // Медленный путь: нет кэша — тянем из Firestore
         const ud = await getDoc(doc(db, 'users', user.uid));
         const data = ud.data();
 
@@ -241,7 +237,6 @@ export async function handleAuthLogin(user, callbacks = {}) {
             return;
         }
 
-        // Активируем доступ, если ещё не было
         if (!data.icebergAccess) {
             updateDoc(doc(db, 'users', user.uid), {
                 icebergAccess: true,
@@ -249,10 +244,8 @@ export async function handleAuthLogin(user, callbacks = {}) {
             }).catch(() => {});
         }
 
-        // Проверяем устройство
         const known = await isDeviceKnown(user.uid);
         if (known) {
-            // Обновляем метаданные в фоне — не блокируем вход
             updateDoc(doc(db, 'users', user.uid), {
                 online: true,
                 lastSeen: serverTimestamp(),
@@ -267,17 +260,14 @@ export async function handleAuthLogin(user, callbacks = {}) {
             saveAuthCache(user.uid, data);
             onSuccess?.(user, data);
         } else {
-            // Новое устройство → 2FA
             authState.awaitingTwoFactor = true;
             authState.pendingUser = user;
             const code = await generate2FACode(user.uid);
-            console.log('%c[2FA] Код подтверждения:', 'color:#64B5F6;font-weight:bold', code);
             onNeed2FA?.(code);
         }
     } catch (e) {
         console.error('[AUTH] handleAuthLogin error:', e);
 
-        // Fallback: если Firestore недоступен, но кэш есть — пускаем по кэшу
         const cached = loadAuthCache();
         if (cached && cached.uid === user.uid && cached.data) {
             authState.user = user;
@@ -293,7 +283,7 @@ export async function handleAuthLogin(user, callbacks = {}) {
 }
 
 // ===================================================================
-// ФОНОВАЯ СИНХРОНИЗАЦИЯ ПОСЛЕ АВТОВХОДА
+// Фоновая синхронизация
 // ===================================================================
 async function syncUserFromServer(uid) {
     try {
@@ -301,7 +291,6 @@ async function syncUserFromServer(uid) {
         if (!ud.exists()) return;
         const data = ud.data();
 
-        // Если аккаунт заблокирован — выкидываем
         if (data.accountLocked) {
             await signOut(auth);
             window.dispatchEvent(new CustomEvent('iceberg:force-logout', {
@@ -318,7 +307,6 @@ async function syncUserFromServer(uid) {
             detail: { data }
         }));
 
-        // Обновляем online в фоне
         updateDoc(doc(db, 'users', uid), {
             online: true,
             lastSeen: serverTimestamp(),
@@ -345,7 +333,9 @@ export async function verify2FA(code, trustDevice = false) {
     try {
         await updateDoc(doc(db, 'users', user.uid), {
             twoFactorCodeHash: null,
+            twoFactorCodePlain: null,
             twoFactorCodeExpires: null,
+            pendingDeviceInfo: null,
             online: true,
             lastSeen: serverTimestamp(),
             currentIP: authState.currentIP || 'unknown',
@@ -382,17 +372,46 @@ export async function login(identifier, password) {
     authState.loggingIn = true;
 
     try {
-        // Синхронный fingerprint — мгновенно
         collectDeviceInfoSync();
-        // IP — в фоне
         collectDeviceInfo().catch(() => {});
 
         let email = identifier.trim();
+
+        // Вход по Global ID → ищем email через global_ids
         if (!email.includes('@')) {
-            const q = query(collection(db, 'users'), where('globalId', '==', email));
-            const s = await getDocs(q);
-            if (s.empty) throw new Error('Global ID не найден');
-            email = s.docs[0].data().email;
+            let foundEmail = null;
+
+            // Способ 1: публичная коллекция global_ids
+            try {
+                const gidDoc = await getDoc(doc(db, 'global_ids', email));
+                if (gidDoc.exists()) {
+                    foundEmail = gidDoc.data().email;
+                }
+            } catch (e) {
+                console.warn('[auth] global_ids lookup failed:', e.message);
+            }
+
+            // Способ 2 (fallback): users с limit 1
+            if (!foundEmail) {
+                try {
+                    const q = query(
+                        collection(db, 'users'),
+                        where('globalId', '==', email),
+                        limit(1)
+                    );
+                    const snap = await getDocs(q);
+                    if (!snap.empty) {
+                        foundEmail = snap.docs[0].data().email;
+                    }
+                } catch (e) {
+                    console.warn('[auth] users fallback lookup failed:', e.message);
+                }
+            }
+
+            if (!foundEmail) {
+                throw new Error('Global ID не найден');
+            }
+            email = foundEmail;
         }
 
         const cred = await signInWithEmailAndPassword(auth, email, password);
@@ -412,17 +431,18 @@ export async function login(identifier, password) {
 }
 
 // ===================================================================
-// ГАРАНТИЯ ПРОФИЛЯ (если Firebase Auth есть, а Firestore-документа нет)
+// ГАРАНТИЯ ПРОФИЛЯ
 // ===================================================================
 export async function ensureProfile(user, profileData = {}) {
     const ref = doc(db, 'users', user.uid);
     const d = await getDoc(ref);
     if (d.exists()) return d.data();
 
+    const globalId = profileData.globalId || '';
     const initial = {
         uid: user.uid,
         email: user.email,
-        globalId: profileData.globalId || '',
+        globalId: globalId,
         nickname: profileData.nickname || user.email.split('@')[0],
         firstName: profileData.firstName || '',
         lastName: profileData.lastName || '',
@@ -433,7 +453,7 @@ export async function ensureProfile(user, profileData = {}) {
         groups: [],
         channels: [],
         stories: [],
-        knownDevices: [],
+        trustedDevices: [],
         accountLocked: false,
         icebergAccess: true,
         sedaProActivated: false,
@@ -441,6 +461,20 @@ export async function ensureProfile(user, profileData = {}) {
         createdAt: serverTimestamp()
     };
     await setDoc(ref, initial);
+
+    // Заодно создаём запись в global_ids
+    if (globalId) {
+        try {
+            await setDoc(doc(db, 'global_ids', globalId), {
+                uid: user.uid,
+                email: user.email,
+                createdAt: serverTimestamp()
+            });
+        } catch (e) {
+            console.warn('[auth] global_ids create failed:', e.message);
+        }
+    }
+
     return initial;
 }
 
@@ -499,15 +533,11 @@ export function subscribeAuthState(handler) {
 
 // ===================================================================
 // МОМЕНТАЛЬНЫЙ АВТОВХОД
-// Вызывается в app.js ДО того, как сработает onAuthStateChanged.
-// Возвращает данные из localStorage, если пользователь уже заходил.
 // ===================================================================
 export function tryInstantRestore() {
     const cached = loadAuthCache();
     if (!cached) return null;
 
-    // Проверяем, что Firebase Auth тоже помнит пользователя
-    // (иначе localStorage может остаться от другого аккаунта)
     const fbUser = auth.currentUser;
     if (!fbUser || fbUser.uid !== cached.uid) return null;
 
