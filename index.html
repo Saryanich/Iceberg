@@ -35,15 +35,19 @@
     <!-- Toast-контейнер -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <!-- ================================================================
-         ЭКРАН ЗАГРУЗКИ
-    ================================================================= -->
-    <div id="loadingScreen">
+    <!-- ЭКРАН ЗАГРУЗКИ -->
+<div id="loadingScreen">
+    <div class="loading-logo-wrap">
+        <div class="loading-ring"></div>
         <img src="https://i.ibb.co/8JY0bXs/IMG-0335.jpg" alt="Айсберг" class="loading-logo">
-        <div class="loading-title">АЙСБЕРГ</div>
-        <div class="loading-bar-wrap"><div class="loading-bar"></div></div>
     </div>
-
+    <div class="loading-title">АЙСБЕРГ</div>
+    <div class="loading-subtitle">защищённый мессенджер</div>
+    <div class="loading-bar-wrap">
+        <div class="loading-bar" id="loadingBar"></div>
+    </div>
+    <div class="loading-percent" id="loadingPercent">0</div>
+</div>
     <!-- ================================================================
          ЭКРАН 2FA
     ================================================================= -->
