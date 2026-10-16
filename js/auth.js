@@ -6,6 +6,7 @@
 //  • Пишет twoFactorCodePlain + pendingDeviceInfo → Global ID видит код
 //  • Моментальный автовход из localStorage
 //  • Единое поле trustedDevices (как в Global ID)
+//  • Anti-brute-force, rate limit, валидация
 // ===================================================================
 
 import {
@@ -26,6 +27,17 @@ import {
 import { hash2FACode, sha256Hex } from './crypto.js';
 
 // ===================================================================
+// КОНСТАНТЫ
+// ===================================================================
+const AUTH_CACHE_KEY = 'iceberg_auth_cache_v1';
+const BRUTE_FORCE_KEY = 'iceberg_bruteforce_v1';
+const RATE_LIMIT_KEY = 'iceberg_ratelimit_v1';
+
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOGIN_LOCKOUT_MS = 5 * 60 * 1000;
+const CACHE_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
+
+// ===================================================================
 // СОСТОЯНИЕ
 // ===================================================================
 export const authState = {
@@ -41,10 +53,93 @@ export const authState = {
 };
 
 // ===================================================================
-// ЛОКАЛЬНЫЙ КЭШ ПРОФИЛЯ
+// ANTI-BRUTE-FORCE
 // ===================================================================
-const AUTH_CACHE_KEY = 'iceberg_auth_cache_v1';
+function getBruteForceState() {
+    try {
+        const raw = localStorage.getItem(BRUTE_FORCE_KEY);
+        if (!raw) return { attempts: 0, lockedUntil: 0 };
+        return JSON.parse(raw);
+    } catch {
+        return { attempts: 0, lockedUntil: 0 };
+    }
+}
 
+function saveBruteForceState(state) {
+    try {
+        localStorage.setItem(BRUTE_FORCE_KEY, JSON.stringify(state));
+    } catch {}
+}
+
+function isLockedOut() {
+    const s = getBruteForceState();
+    if (s.lockedUntil && s.lockedUntil > Date.now()) {
+        const left = Math.ceil((s.lockedUntil - Date.now()) / 1000);
+        return { locked: true, secondsLeft: left };
+    }
+    if (s.lockedUntil && s.lockedUntil <= Date.now()) {
+        saveBruteForceState({ attempts: 0, lockedUntil: 0 });
+    }
+    return { locked: false };
+}
+
+function recordFailedAttempt() {
+    const s = getBruteForceState();
+    s.attempts = (s.attempts || 0) + 1;
+    if (s.attempts >= MAX_LOGIN_ATTEMPTS) {
+        s.lockedUntil = Date.now() + LOGIN_LOCKOUT_MS;
+    }
+    saveBruteForceState(s);
+    return s;
+}
+
+function resetFailedAttempts() {
+    saveBruteForceState({ attempts: 0, lockedUntil: 0 });
+}
+
+// ===================================================================
+// RATE LIMIT
+// ===================================================================
+function checkRateLimit(key, maxCount, windowMs) {
+    try {
+        const raw = localStorage.getItem(RATE_LIMIT_KEY);
+        const all = raw ? JSON.parse(raw) : {};
+        const now = Date.now();
+        const arr = (all[key] || []).filter(t => now - t < windowMs);
+        if (arr.length >= maxCount) return false;
+        arr.push(now);
+        all[key] = arr;
+        localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(all));
+        return true;
+    } catch {
+        return true;
+    }
+}
+
+// ===================================================================
+// ВАЛИДАЦИЯ
+// ===================================================================
+function isValidEmail(email) {
+    return typeof email === 'string'
+        && email.length >= 5
+        && email.length <= 254
+        && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isValidGlobalId(gid) {
+    return typeof gid === 'string'
+        && gid.length === 22
+        && /^[0-9a-zA-Z]+$/.test(gid);
+}
+
+function sanitizeIdentifier(raw) {
+    if (typeof raw !== 'string') return '';
+    return raw.trim().replace(/\s+/g, '');
+}
+
+// ===================================================================
+// КЭШ ПРОФИЛЯ
+// ===================================================================
 function saveAuthCache(uid, data) {
     try {
         localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify({
@@ -59,6 +154,10 @@ function loadAuthCache() {
         if (!raw) return null;
         const parsed = JSON.parse(raw);
         if (!parsed.uid || !parsed.data) return null;
+        if (parsed.savedAt && (Date.now() - parsed.savedAt) > CACHE_MAX_AGE) {
+            localStorage.removeItem(AUTH_CACHE_KEY);
+            return null;
+        }
         return parsed;
     } catch {
         return null;
@@ -101,7 +200,7 @@ function collectDeviceInfoSync() {
 }
 
 // ===================================================================
-// ОЖИДАНИЕ auth.currentUser
+// ОЖИДАНИЕ AUTH
 // ===================================================================
 function waitForAuthReady(timeoutMs = 3000) {
     if (auth.currentUser) return Promise.resolve(auth.currentUser);
@@ -163,7 +262,7 @@ async function addKnownDevice(uid) {
 }
 
 // ===================================================================
-// 2FA — генерация (пишет поля, которые читает Global ID)
+// 2FA
 // ===================================================================
 async function generate2FACode(uid) {
     const code = Math.floor(1000 + Math.random() * 9000).toString();
@@ -283,7 +382,7 @@ export async function handleAuthLogin(user, callbacks = {}) {
 }
 
 // ===================================================================
-// Фоновая синхронизация
+// СИНХРОНИЗАЦИЯ
 // ===================================================================
 async function syncUserFromServer(uid) {
     try {
@@ -323,8 +422,16 @@ async function syncUserFromServer(uid) {
 // ===================================================================
 export async function verify2FA(code, trustDevice = false) {
     if (!authState.pendingUser) throw new Error('Нет ожидающего пользователя');
-    const user = authState.pendingUser;
 
+    if (!/^\d{4}$/.test(code)) {
+        return { success: false, error: 'Код должен быть из 4 цифр' };
+    }
+
+    if (!checkRateLimit('2fa', 5, 5 * 60 * 1000)) {
+        return { success: false, error: 'Слишком много попыток. Подождите 5 минут' };
+    }
+
+    const user = authState.pendingUser;
     const ok = await verify2FACode(user.uid, code);
     if (!ok) return { success: false, error: 'Неверный или истёкший код' };
 
@@ -355,6 +462,7 @@ export async function verify2FA(code, trustDevice = false) {
 
     if (authState.userData) saveAuthCache(user.uid, authState.userData);
 
+    resetFailedAttempts();
     return { success: true, user, data: authState.userData };
 }
 
@@ -365,25 +473,52 @@ export async function cancel2FA() {
 }
 
 // ===================================================================
-// ВХОД ПО EMAIL / GLOBAL ID
+// ВХОД
 // ===================================================================
 export async function login(identifier, password) {
     if (authState.loggingIn) throw new Error('Вход уже выполняется');
+
+    const lock = isLockedOut();
+    if (lock.locked) {
+        return {
+            success: false,
+            error: `Слишком много неудачных попыток. Подожди ${lock.secondsLeft} сек.`
+        };
+    }
+
+    if (!checkRateLimit('login', 10, 60 * 1000)) {
+        return { success: false, error: 'Слишком часто. Подожди минуту' };
+    }
+
+    const cleanIdentifier = sanitizeIdentifier(identifier);
+    if (!cleanIdentifier || !password) {
+        return { success: false, error: 'Заполните все поля' };
+    }
+    if (password.length < 6) {
+        return { success: false, error: 'Пароль минимум 6 символов' };
+    }
+    if (password.length > 200) {
+        return { success: false, error: 'Пароль слишком длинный' };
+    }
+
     authState.loggingIn = true;
 
     try {
         collectDeviceInfoSync();
         collectDeviceInfo().catch(() => {});
 
-        let email = identifier.trim();
+        let email = cleanIdentifier;
 
-        // Вход по Global ID → ищем email через global_ids
-        if (!email.includes('@')) {
+        if (!cleanIdentifier.includes('@')) {
+            if (!isValidGlobalId(cleanIdentifier)) {
+                recordFailedAttempt();
+                return { success: false, error: 'Неверный формат Global ID' };
+            }
+
             let foundEmail = null;
 
-            // Способ 1: публичная коллекция global_ids
             try {
-                const gidDoc = await getDoc(doc(db, 'global_ids', email));
+                const gidDoc = await getDoc(doc(db, 'global_ids', cleanIdentifier));
                 if (gidDoc.exists()) {
                     foundEmail = gidDoc.data().email;
                 }
@@ -391,12 +526,11 @@ export async function login(identifier, password) {
                 console.warn('[auth] global_ids lookup failed:', e.message);
             }
 
-            // Способ 2 (fallback): users с limit 1
             if (!foundEmail) {
                 try {
                     const q = query(
                         collection(db, 'users'),
-                        where('globalId', '==', email),
+                        where('globalId', '==', cleanIdentifier),
                         limit(1)
                     );
                     const snap = await getDocs(q);
@@ -409,21 +543,41 @@ export async function login(identifier, password) {
             }
 
             if (!foundEmail) {
-                throw new Error('Global ID не найден');
+                recordFailedAttempt();
+                return { success: false, error: 'Global ID не найден' };
             }
             email = foundEmail;
+        } else {
+            if (!isValidEmail(cleanIdentifier)) {
+                recordFailedAttempt();
+                return { success: false, error: 'Неверный формат email' };
+            }
         }
 
         const cred = await signInWithEmailAndPassword(auth, email, password);
+        resetFailedAttempts();
         return { success: true, user: cred.user };
     } catch (e) {
         let msg = 'Ошибка входа';
-        if (e.code === 'auth/wrong-password') msg = 'Неверный пароль';
-        else if (e.code === 'auth/user-not-found') msg = 'Пользователь не найден';
-        else if (e.code === 'auth/too-many-requests') msg = 'Слишком много попыток. Попробуйте позже';
-        else if (e.code === 'auth/invalid-email') msg = 'Неверный email';
-        else if (e.code === 'auth/invalid-credential') msg = 'Неверные данные';
-        else if (e.message) msg = e.message;
+        if (e.code === 'auth/wrong-password') {
+            msg = 'Неверный пароль';
+            recordFailedAttempt();
+        } else if (e.code === 'auth/user-not-found') {
+            msg = 'Пользователь не найден';
+            recordFailedAttempt();
+        } else if (e.code === 'auth/too-many-requests') {
+            msg = 'Слишком много попыток. Попробуйте позже';
+        } else if (e.code === 'auth/invalid-email') {
+            msg = 'Неверный email';
+            recordFailedAttempt();
+        } else if (e.code === 'auth/invalid-credential') {
+            msg = 'Неверные данные';
+            recordFailedAttempt();
+        } else if (e.code === 'auth/network-request-failed') {
+            msg = 'Проверьте интернет';
+        } else if (e.message) {
+            msg = e.message;
+        }
         return { success: false, error: msg };
     } finally {
         authState.loggingIn = false;
@@ -462,7 +616,6 @@ export async function ensureProfile(user, profileData = {}) {
     };
     await setDoc(ref, initial);
 
-    // Заодно создаём запись в global_ids
     if (globalId) {
         try {
             await setDoc(doc(db, 'global_ids', globalId), {
@@ -479,9 +632,20 @@ export async function ensureProfile(user, profileData = {}) {
 }
 
 // ===================================================================
-// АКТИВАЦИЯ SEDA PRO
+// SEDA
 // ===================================================================
 export async function activateSedaPro(inputCode) {
+    if (!inputCode || typeof inputCode !== 'string') {
+        return { success: false, error: 'Введите код' };
+    }
+    if (inputCode.length > 50) {
+        return { success: false, error: 'Неверный код' };
+    }
+
+    if (!checkRateLimit('sedaActivate', 5, 60 * 1000)) {
+        return { success: false, error: 'Слишком много попыток. Подожди минуту' };
+    }
+
     if (inputCode !== SEDA_ACTIVATION_CODE) {
         return { success: false, error: 'Неверный код активации' };
     }
@@ -516,6 +680,7 @@ export async function logout() {
             }).catch(() => {});
         }
     } catch {}
+
     clearAuthCache();
     await signOut(auth);
     authState.user = null;
@@ -525,7 +690,7 @@ export async function logout() {
 }
 
 // ===================================================================
-// ПОДПИСКА НА СОСТОЯНИЕ
+// ПОДПИСКА
 // ===================================================================
 export function subscribeAuthState(handler) {
     return onAuthStateChanged(auth, handler);
@@ -539,7 +704,12 @@ export function tryInstantRestore() {
     if (!cached) return null;
 
     const fbUser = auth.currentUser;
-    if (!fbUser || fbUser.uid !== cached.uid) return null;
+    if (!fbUser || fbUser.uid !== cached.uid) {
+        if (fbUser && cached.uid !== fbUser.uid) {
+            clearAuthCache();
+        }
+        return null;
+    }
 
     collectDeviceInfoSync();
 
