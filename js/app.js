@@ -1,534 +1,1105 @@
 // ===================================================================
-// js/auth.js — Авторизация (Айсберг)
-//
-//  • Вход по email или Global ID
-//  • 2FA через SHA-256 (совместимо с Global ID)
-//  • Пишет twoFactorCodePlain + pendingDeviceInfo → Global ID видит код
-//  • Моментальный автовход из localStorage
-//  • Единое поле trustedDevices (как в Global ID)
-//  • ФИКС: необязательные update'ы не ломают вход
+// js/app.js — Точка входа, связка всех модулей
 // ===================================================================
+
+import { APP_LOGO, STICKERS } from './config.js';
 
 import {
-    auth, db, SEDA_ACTIVATION_CODE
-} from './config.js';
+    authState,
+    handleAuthLogin,
+    verify2FA,
+    cancel2FA,
+    login,
+    activateSedaPro,
+    logout,
+    subscribeAuthState,
+    startBlockCheck,
+    stopBlockCheck,
+    collectDeviceInfo,
+    tryInstantRestore
+} from './auth.js';
+
+import * as DB from './db.js';
 
 import {
-    signInWithEmailAndPassword,
-    signOut,
-    onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    uiState,
+    showToast,
+    setTheme,
+    loadTheme,
+    renderUserProfile,
+    loadChats,
+    loadContacts,
+    loadGroups,
+    loadChannels,
+    selectChat,
+    selectGroup,
+    selectChannel,
+    closeChat,
+    loadMessages,
+    sendMessage,
+    sendSticker,
+    sendMediaFile,
+    toggleVoiceRecording,
+    toggleReaction,
+    bindChatLongPress,
+    startReply,
+    startEdit,
+    cancelReply,
+    deleteMessage,
+    scrollToMessage,
+    startSedaChat,
+    startSedaHandshakeListener,
+    showCurrentSedaKey,
+    copySedaKeyToClipboard,
+    pasteSedaKeyFromClipboard,
+    updateSedaUI,
+    openChatWithContact,
+    clearChatById,
+    deleteChatById,
+    clearCurrentChat,
+    deleteCurrentChat,
+    setAutoDelete,
+    openAutoDelete,
+    closeAutoDelete,
+    switchTab,
+    initStickerPicker,
+    notifyTyping
+} from './ui.js';
 
 import {
-    doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs,
-    serverTimestamp, arrayUnion
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-import { hash2FACode, sha256Hex } from './crypto.js';
-
-// ===================================================================
-// СОСТОЯНИЕ
-// ===================================================================
-export const authState = {
-    user: null,
-    userData: null,
-    pendingUser: null,
-    awaitingTwoFactor: false,
-    deviceFingerprint: null,
-    currentIP: null,
-    loggingIn: false,
-    sedaProActivated: false,
-    restoredFromCache: false
-};
+    registerServiceWorkers,
+    initPushNotifications,
+    cleanupPush,
+    refreshTokenForUser
+} from './push.js';
 
 // ===================================================================
-// ЛОКАЛЬНЫЙ КЭШ ПРОФИЛЯ (для мгновенного автовхода)
+// PARTICLES
 // ===================================================================
-const AUTH_CACHE_KEY = 'iceberg_auth_cache_v1';
-
-function saveAuthCache(uid, data) {
-    try {
-        localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify({
-            uid, data, savedAt: Date.now()
-        }));
-    } catch {}
-}
-
-function loadAuthCache() {
-    try {
-        const raw = localStorage.getItem(AUTH_CACHE_KEY);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (!parsed.uid || !parsed.data) return null;
-        return parsed;
-    } catch {
-        return null;
-    }
-}
-
-function clearAuthCache() {
-    try { localStorage.removeItem(AUTH_CACHE_KEY); } catch {}
-}
-
-// ===================================================================
-// ИНФОРМАЦИЯ ОБ УСТРОЙСТВЕ
-// ===================================================================
-export async function collectDeviceInfo() {
-    const n = navigator;
-    const raw = `${n.userAgent}|${n.language}|${screen.width}x${screen.height}|${n.platform}|${n.hardwareConcurrency || 0}`;
-    authState.deviceFingerprint = await sha256Hex(raw);
-
-    fetch('https://api.ipify.org?format=json')
-        .then(r => r.json())
-        .then(d => { authState.currentIP = d.ip; })
-        .catch(() => { authState.currentIP = 'unknown'; });
-
-    return {
-        ip: authState.currentIP || 'unknown',
-        fingerprint: authState.deviceFingerprint
-    };
-}
-
-function collectDeviceInfoSync() {
-    const n = navigator;
-    const raw = `${n.userAgent}|${n.language}|${screen.width}x${screen.height}|${n.platform}|${n.hardwareConcurrency || 0}`;
-    let h = 2166136261;
-    for (let i = 0; i < raw.length; i++) {
-        h ^= raw.charCodeAt(i);
-        h = Math.imul(h, 16777619);
-    }
-    authState.deviceFingerprint = 'fp_' + (h >>> 0).toString(16);
-    return authState.deviceFingerprint;
-}
-
-// ===================================================================
-// ЖДЁМ auth.currentUser (защита от гонки)
-// ===================================================================
-function waitForAuthReady(timeoutMs = 3000) {
-    if (auth.currentUser) return Promise.resolve(auth.currentUser);
-    return new Promise((resolve) => {
-        let done = false;
-        const unsub = onAuthStateChanged(auth, (u) => {
-            if (done) return;
-            done = true;
-            unsub();
-            resolve(u);
-        });
-        setTimeout(() => {
-            if (done) return;
-            done = true;
-            try { unsub(); } catch {}
-            resolve(auth.currentUser);
-        }, timeoutMs);
+function initParticles() {
+    if (typeof particlesJS === 'undefined') return;
+    particlesJS('particles-js', {
+        particles: {
+            number: { value: 60, density: { enable: true, value_area: 800 } },
+            color: { value: '#64B5F6' },
+            opacity: { value: 0.4, random: true },
+            size: { value: 3, random: true },
+            line_linked: {
+                enable: true, color: '#64B5F6', opacity: 0.3, distance: 150
+            },
+            move: {
+                enable: true, speed: 1.2, direction: 'none', random: true, out_mode: 'out'
+            }
+        },
+        interactivity: {
+            detect_on: 'canvas',
+            events: {
+                onhover: { enable: true, mode: 'grab' },
+                onclick: { enable: true, mode: 'push' }
+            },
+            modes: {
+                grab: { distance: 140, line_linked: { opacity: 0.5 } },
+                push: { particles_nb: 3 }
+            }
+        }
     });
 }
 
 // ===================================================================
-// ПРОВЕРКИ
+// ЭКРАНЫ
 // ===================================================================
-async function isDeviceKnown(uid) {
-    try {
-        const d = await getDoc(doc(db, 'users', uid));
-        const devices = d.data()?.trustedDevices || [];
-        return devices.some(x => x.fingerprint === authState.deviceFingerprint);
-    } catch (e) {
-        console.warn('[auth] isDeviceKnown error:', e.message);
-        return true;
-    }
+function showLoading() {
+    document.getElementById('loadingScreen')?.classList.remove('hidden');
 }
 
-async function isAccountLocked(uid) {
-    try {
-        const d = await getDoc(doc(db, 'users', uid));
-        return d.data()?.accountLocked === true;
-    } catch (e) {
-        console.warn('[auth] isAccountLocked error:', e.message);
-        return false;
-    }
+function hideLoading() {
+    document.getElementById('loadingScreen')?.classList.add('hidden');
 }
 
-async function addKnownDevice(uid) {
-    try {
-        await updateDoc(doc(db, 'users', uid), {
-            trustedDevices: arrayUnion({
-                fingerprint: authState.deviceFingerprint,
-                ip: authState.currentIP || 'unknown',
-                userAgent: navigator.userAgent,
-                addedAt: new Date(),
-                lastUsed: new Date()
-            })
-        });
-    } catch (e) {
-        console.warn('[auth] addKnownDevice error:', e.message);
-    }
+function showAuthScreen() {
+    document.getElementById('authForm').style.display = 'flex';
+    document.getElementById('messengerApp').style.display = 'none';
+}
+
+function showMessengerScreen() {
+    document.getElementById('authForm').style.display = 'none';
+    document.getElementById('messengerApp').style.display = 'flex';
 }
 
 // ===================================================================
-// 2FA — генерация кода (пишет поля, которые читает Global ID)
+// КРАСИВЫЙ ЭКРАН ЗАГРУЗКИ
 // ===================================================================
-async function generate2FACode(uid) {
-    const code = Math.floor(1000 + Math.random() * 9000).toString();
-    const hash = await hash2FACode(code, uid);
+function animateLoadingProgress(durationMs = 5000) {
+    const bar = document.getElementById('loadingBar');
+    const percent = document.getElementById('loadingPercent');
+    if (!bar || !percent) return;
 
-    try {
-        await updateDoc(doc(db, 'users', uid), {
-            twoFactorCodeHash: hash,
-            twoFactorCodePlain: code,
-            twoFactorCodeExpires: new Date(Date.now() + 5 * 60 * 1000),
-            pendingDeviceInfo: {
-                ip: authState.currentIP || 'unknown',
-                userAgent: navigator.userAgent,
-                requestedAt: new Date()
+    const start = Date.now();
+    const tick = () => {
+        const elapsed = Date.now() - start;
+        const progress = Math.min(elapsed / durationMs, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const value = Math.round(eased * 100);
+        bar.style.width = value + '%';
+        percent.textContent = value;
+        if (progress < 1) {
+            requestAnimationFrame(tick);
+        }
+    };
+    tick();
+}
+
+// ===================================================================
+// 2FA ЭКРАН
+// ===================================================================
+function show2FAScreen() {
+    document.getElementById('twoFactorScreen').classList.add('active');
+    document.getElementById('code1')?.focus();
+    document.getElementById('newDeviceInfo').textContent =
+        `🆕 Новое устройство · IP: ${authState.currentIP || '...'}`;
+}
+
+function hide2FAScreen() {
+    document.getElementById('twoFactorScreen').classList.remove('active');
+    ['code1', 'code2', 'code3', 'code4'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    document.getElementById('trustDevice').checked = false;
+}
+
+// ===================================================================
+// ВХОД
+// ===================================================================
+async function handleLoginClick() {
+    const id = document.getElementById('loginIdentifier').value.trim();
+    const pw = document.getElementById('loginPassword').value;
+    const msg = document.getElementById('authMessage');
+
+    if (!id || !pw) {
+        msg.textContent = 'Заполните поля';
+        msg.className = 'message message-error';
+        msg.style.display = 'block';
+        return;
+    }
+
+    msg.textContent = 'Вход...';
+    msg.className = 'message message-success';
+    msg.style.display = 'block';
+
+    const res = await login(id, pw);
+    if (!res.success) {
+        msg.textContent = res.error;
+        msg.className = 'message message-error';
+        msg.style.display = 'block';
+    }
+}
+
+// ===================================================================
+// 2FA — ВВОД
+// ===================================================================
+function setup2FAInputs() {
+    for (let i = 1; i <= 4; i++) {
+        const el = document.getElementById(`code${i}`);
+        if (!el) continue;
+        el.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/[^0-9]/g, '');
+            if (e.target.value.length === 1 && i < 4) {
+                document.getElementById(`code${i + 1}`)?.focus();
             }
         });
-    } catch (e) {
-        console.warn('[auth] generate2FACode error:', e.message);
+        el.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && !el.value && i > 1) {
+                document.getElementById(`code${i - 1}`)?.focus();
+            }
+            if (e.key === 'Enter') handle2FAVerify();
+        });
     }
-
-    // В консоль — на случай если Global ID недоступен
-    console.log('%c[2FA] Код подтверждения:', 'color:#64B5F6;font-weight:bold', code);
-    return code;
 }
 
-async function verify2FACode(uid, code) {
+async function handle2FAVerify() {
+    const code = ['code1', 'code2', 'code3', 'code4']
+        .map(id => document.getElementById(id).value).join('');
+
+    if (code.length !== 4) {
+        showToast('Введите 4 цифры', 'error');
+        return;
+    }
+
+    const trust = document.getElementById('trustDevice').checked;
+    const res = await verify2FA(code, trust);
+
+    if (!res.success) {
+        showToast(res.error || 'Неверный код', 'error');
+        return;
+    }
+
+    hide2FAScreen();
+    await bootMessenger(res.user, res.data);
+    hideLoading();
+    showMessengerScreen();
+}
+
+async function handle2FACancel() {
+    await cancel2FA();
+    hide2FAScreen();
+    showAuthScreen();
+}
+
+// ===================================================================
+// ЗАПУСК МЕССЕНДЖЕРА
+// ===================================================================
+async function bootMessenger(user, userData) {
     try {
-        const d = await getDoc(doc(db, 'users', uid));
-        const data = d.data();
-        if (!data?.twoFactorCodeHash) return false;
-        const exp = data.twoFactorCodeExpires?.toDate?.();
-        if (exp && exp < new Date()) return false;
-        const entered = await hash2FACode(code, uid);
-        return entered === data.twoFactorCodeHash;
+        authState.user = user;
+        if (userData) authState.userData = userData;
+
+        loadTheme();
+        initStickerPicker();
+        renderUserProfile();
+        updateSedaUI();
+
+        uiState.autoDeleteHours = authState.userData?.autoDeleteHours || 0;
+
+        loadChats();
+        loadGroups();
+        loadChannels();
+        loadContacts();
+
+        startSedaHandshakeListener();
+
+        startBlockCheck(user.uid, () => {
+            showToast('⚠️ Аккаунт заблокирован', 'error', 5000);
+            showAuthScreen();
+        });
+
+        setTimeout(() => {
+            initPushNotifications().catch(e => console.warn('[Push] init error:', e));
+            refreshTokenForUser(user.uid).catch(() => {});
+        }, 1500);
+
+        localStorage.setItem('iceberg_authenticated', 'true');
     } catch (e) {
-        console.warn('[auth] verify2FACode error:', e.message);
-        return false;
+        console.error('[bootMessenger] Ошибка:', e);
+        showToast('Ошибка загрузки', 'error');
     }
 }
 
 // ===================================================================
-// ОСНОВНОЙ ВХОД
+// AUTH STATE
 // ===================================================================
-export async function handleAuthLogin(user, callbacks = {}) {
-    const { onSuccess, onNeed2FA, onLocked, onError } = callbacks;
+function setupAuthState() {
+    subscribeAuthState(async (user) => {
+        if (authState.awaitingTwoFactor) return;
 
-    try {
-        await waitForAuthReady();
+        if (user) {
+            if (authState.restoredFromCache && authState.user?.uid === user.uid) {
+                return;
+            }
 
-        // Быстрый путь: кэш
-        const cached = loadAuthCache();
-        if (cached && cached.uid === user.uid && cached.data) {
-            authState.user = user;
-            authState.userData = cached.data;
-            authState.sedaProActivated = cached.data.sedaProActivated || false;
-            authState.restoredFromCache = true;
-            onSuccess?.(user, cached.data);
-            syncUserFromServer(user.uid).catch(() => {});
-            return;
-        }
+            await collectDeviceInfo().catch(() => {});
 
-        const ud = await getDoc(doc(db, 'users', user.uid));
-        const data = ud.data();
-
-        if (!data) {
-            await signOut(auth);
-            onError?.('Профиль не найден');
-            return;
-        }
-
-        if (data.account =Locked) {
-            onLock sed?.();
-           .d return;
-        }
-
-        if (!dataocs.icebergAccess) {
-            updateDoc(doc(db, 'users', user.uid), {
-                icebergAccess: true,
-                icebergLastLogin: serverTimestamp()
-            }).catch(() => {});
-        }
-
-        const known = await isDeviceKnown(user.uid);
-        if (known) {
-            updateDoc(doc(db, 'users', user.uid), {
-                online: true,
-                lastSeen: serverTimestamp(),
-                currentIP: authState.currentIP || 'unknown',
-                currentDevice: authState.deviceFingerprint
-            }).catch(e => console.warn('[auth] online update skip:', e.message));
-
-            authState.user = user;
-            authState.userData = data;
-            authState.sedaProActivated = data.sedaProActivated || false;
-
-            saveAuthCache(user.uid, data);
-            onSuccess?.(user, data);
+            await handleAuthLogin(user, {
+                onSuccess: async (u, data) => {
+                    await bootMessenger(u, data);
+                },
+                onNeed2FA: () => {
+                    showAuthScreen();
+                    show2FAScreen();
+                },
+                onLocked: () => {
+                    document.getElementById('loginMode').style.display = 'none';
+                    document.getElementById('blockedMode').style.display = 'block';
+                    showAuthScreen();
+                },
+                onError: (msg) => {
+                    showAuthScreen();
+                    if (msg) showToast(msg, 'error');
+                }
+            });
         } else {
-            // Новое устройство → 2FA
-            authState.awaitingTwoFactor = true;
-            authState.pendingUser = user;
-            const code = await generate2FACode(user.uid);
-            onNeed2FA?.(code);
+            cleanupPush();
+            stopBlockCheck();
+            localStorage.removeItem('iceberg_authenticated');
+            showAuthScreen();
+            document.getElementById('loginIdentifier').value = '';
+            document.getElementById('loginPassword').value = '';
         }
-    } catch (e) {
-        console.error('[AUTH] handleAuthLogin error:', e);
-
-        const cached = loadAuthCache();
-        if (cached && cached.uid === user.uid && cached.data) {
-            authState.user = user;
-            authState.userData = cached.data;
-            authState.sedaProActivated = cached.data.sedaProActivated || false;
-            authState.restoredFromCache = true;
-            onSuccess?.(user, cached.data);
-            return;
-        }
-
-        onError?.(e.message || 'Ошибка входа');
-    }
+    });
 }
 
 // ===================================================================
-// Фоновая синхронизация после автовхода
+// СОБЫТИЯ ОТ auth.js
 // ===================================================================
-async function syncUserFromServer(uid) {
-    try {
-        const ud = await getDoc(doc(db, 'users', uid));
-        if (!ud.exists()) return;
-        const data = ud.data();
-
-        if (data.accountLocked) {
-            await signOut(auth);
-            window.dispatchEvent(new CustomEvent('iceberg:force-logout', {
-                detail: { reason: 'locked' }
-            }));
-            return;
-        }
-
+function setupAuthSyncEvents() {
+    window.addEventListener('iceberg:user-data-updated', (e) => {
+        const data = e.detail?.data;
+        if (!data) return;
         authState.userData = data;
         authState.sedaProActivated = data.sedaProActivated || false;
-        saveAuthCache(uid, data);
+        renderUserProfile();
+        updateSedaUI();
+        loadChats();
+        loadGroups();
+        loadChannels();
+        loadContacts();
+    });
 
-        window.dispatchEvent(new CustomEvent('iceberg:user-data-updated', {
-            detail: { data }
-        }));
-
-        updateDoc(doc(db, 'users', uid), {
-            online: true,
-            lastSeen: serverTimestamp(),
-            currentIP: authState.currentIP || 'unknown',
-            currentDevice: authState.deviceFingerprint
-        }).catch(() => {});
-    } catch (e) {
-        console.warn('[auth] syncUserFromServer error:', e.message);
-    }
+    window.addEventListener('iceberg:force-logout', (e) => {
+        const reason = e.detail?.reason;
+        localStorage.removeItem('iceberg_authenticated');
+        showAuthScreen();
+        showToast(
+            reason === 'locked' ? '🔒 Аккаунт заблокирован' : 'Вы вышли из аккаунта',
+            'error'
+        );
+    });
 }
 
 // ===================================================================
-// ПОДТВЕРЖДЕНИЕ 2FA
+// ПРИВЯЗКА UI-СОБЫТИЙ
 // ===================================================================
-export async function verify2FA(code, trustDevice = false) {
-    if (!authState.pendingUser) throw new Error('Нет ожидающего пользователя');
-    const user = authState.pendingUser;
+function bindUIEvents() {
+    document.getElementById('loginPassword')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleLoginClick();
+    });
 
-    const ok = await verify2FACode(user.uid, code);
-    if (!ok) return { success: false, error: 'Неверный или истёкший код' };
+    document.getElementById('btnLogin').onclick = handleLoginClick;
 
-    if (trustDevice) await addKnownDevice(user.uid);
-
-    try {
-        await updateDoc(doc(db, 'users', user.uid), {
-            twoFactorCodeHash: null,
-            twoFactorCodePlain: null,
-            twoFactorCodeExpires: null,
-            pendingDeviceInfo: null,
-            online: true,
-            lastSeen: serverTimestamp(),
-            currentIP: authState.currentIP || 'unknown',
-            currentDevice: authState.deviceFingerprint
-        });
-    } catch (e) {
-        console.warn('[auth] verify2FA update error:', e.message);
-    }
-
-    authState.awaitingTwoFactor = false;
-    authState.user = user;
-    authState.pendingUser = null;
-
-    const ud = await getDoc(doc(db, 'users', user.uid));
-    authState.userData = ud.data();
-    authState.sedaProActivated = authState.userData?.sedaProActivated || false;
-
-    if (authState.userData) saveAuthCache(user.uid, authState.userData);
-
-    return { success: true, user, data: authState.userData };
-}
-
-export async function cancel2FA() {
-    authState.awaitingTwoFactor = false;
-    authState.pendingUser = null;
-    try { await signOut(auth); } catch {}
-}
-
-// ===================================================================
-// ВХОД ПО EMAIL / GLOBAL ID
-// ===================================================================
-export async function login(identifier, password) {
-    if (authState.loggingIn) throw new Error('Вход уже выполняется');
-    authState.loggingIn = true;
-
-    try {
-        collectDeviceInfoSync();
-        collectDeviceInfo().catch(() => {});
-
-        let email = identifier.trim();
-        if (!email.includes('@')) {
-            const q = query(collection(db, 'users'), where('globalId', '==', email));
-            const s = await getDocs(q);
-            if (s.empty) throw new Error('Global ID не найден');
-            email[0].data().email;
-        }
-
-        const cred = await signInWithEmailAndPassword(auth, email, password);
-        return { success: true, user: cred.user };
-    } catch (e) {
-        let msg = 'Ошибка входа';
-        if (e.code === 'auth/wrong-password') msg = 'Неверный пароль';
-        else if (e.code === 'auth/user-not-found') msg = 'Пользователь не найден';
-        else if (e.code === 'auth/too-many-requests') msg = 'Слишком много попыток. Попробуйте позже';
-        else if (e.code === 'auth/invalid-email') msg = 'Неверный email';
-        else if (e.code === 'auth/invalid-credential') msg = 'Неверные данные';
-        else if (e.message) msg = e.message;
-        return { success: false, error: msg };
-    } finally {
-        authState.loggingIn = false;
-    }
-}
-
-// ===================================================================
-// ГАРАНТИЯ ПРОФИЛЯ
-// ===================================================================
-export async function ensureProfile(user, profileData = {}) {
-    const ref = doc(db, 'users', user.uid);
-    const d = await getDoc(ref);
-    if (d.exists()) return d.data();
-
-    const initial = {
-        uid: user.uid,
-        email: user.email,
-        globalId: profileData.globalId || '',
-        nickname: profileData.nickname || user.email.split('@')[0],
-        firstName: profileData.firstName || '',
-        lastName: profileData.lastName || '',
-        mood: '',
-        avatar: null,
-        chats: [],
-        contacts: [],
-        groups: [],
-        channels: [],
-        stories: [],
-        trustedDevices: [],
-        accountLocked: false,
-        icebergAccess: true,
-        sedaProActivated: false,
-        autoDeleteHours: 0,
-        createdAt: serverTimestamp()
+    document.querySelector('#blockedMode .btn-secondary').onclick = () => {
+        document.getElementById('loginMode').style.display = 'block';
+        document.getElementById('blockedMode').style.display = 'none';
     };
-    await setDoc(ref, initial);
-    return initial;
-}
 
-// ===================================================================
-// АКТИВАЦИЯ SEDA PRO
-// ===================================================================
-export async function activateSedaPro(inputCode) {
-    if (inputCode !== SEDA_ACTIVATION_CODE) {
-        return { success: false, error: 'Неверный код активации' };
-    }
-    if (!authState.user) {
-        return { success: false, error: 'Нужно войти в аккаунт' };
-    }
-    try {
-        await updateDoc(doc(db, 'users', authState.user.uid), {
-            sedaProActivated: true,
-            sedaProActivatedAt: serverTimestamp()
-        });
-        authState.sedaProActivated = true;
-        if (authState.userData) {
-            authState.userData.sedaProActivated = true;
-            saveAuthCache(authState.user.uid, authState.userData);
+    document.getElementById('btnGlobalId').onclick = () => {
+        localStorage.setItem('iceberg_referrer', location.href);
+        localStorage.setItem('iceberg_app', 'true');
+        location.href = 'https://saryanich.github.io/Global-ID/';
+    };
+
+    document.getElementById('disclaimerBlock').onclick = () => {
+        window.open('https://saryanich.github.io/TLC-services/', '_blank');
+    };
+
+    document.querySelector('#twoFactorScreen .btn-primary').onclick = handle2FAVerify;
+    document.querySelector('#twoFactorScreen .btn-secondary').onclick = handle2FACancel;
+
+    document.getElementById('userInfoClicker').onclick = () => {
+        const d = authState.userData;
+        if (!d) return;
+        document.getElementById('profileFirstName').value = d.firstName || '';
+        document.getElementById('profileLastName').value = d.lastName || '';
+        document.getElementById('profileMood').value = d.mood || '';
+        const av = document.getElementById('profileAvatarBig');
+        av.innerHTML = '';
+        if (d.avatar) {
+            const img = document.createElement('img');
+            img.src = d.avatar;
+            av.appendChild(img);
+        } else {
+            av.textContent = (d.nickname || 'U').charAt(0).toUpperCase();
         }
-        return { success: true };
-    } catch (e) {
-        return { success: false, error: 'Ошибка сохранения' };
-    }
-}
+        document.getElementById('profileModal').classList.add('active');
+    };
 
-// ===================================================================
-// ВЫХОД
-// ===================================================================
-export async function logout() {
-    try {
-        if (authState.user) {
-            updateDoc(doc(db, 'users', authState.user.uid), {
-                online: false,
-                lastSeen: serverTimestamp()
-            }).catch(() => {});
+    document.getElementById('avatarClicker').onclick = () => {
+        document.getElementById('avatarUploadInput').click();
+    };
+
+    document.getElementById('avatarUploadInput').onchange = async function () {
+        const file = this.files?.[0];
+        this.value = '';
+        if (!file) return;
+        try {
+            const { compressImage } = await import('./ui.js');
+            const dataUrl = await compressImage(file, 1024 * 1024);
+            authState.userData.avatar = dataUrl;
+
+            const av = document.getElementById('profileAvatarBig');
+            av.innerHTML = '';
+            const img = document.createElement('img');
+            img.src = dataUrl;
+            av.appendChild(img);
+
+            const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+            const { db } = await import('./config.js');
+            await updateDoc(doc(db, 'users', authState.user.uid), { avatar: dataUrl });
+            await DB.setCachedProfile(authState.user.uid, authState.userData);
+            renderUserProfile();
+            showToast('✅ Аватар обновлён', 'success');
+        } catch (e) {
+            showToast('Ошибка загрузки', 'error');
         }
-    } catch {}
-    clearAuthCache();
-    await signOut(auth);
-    authState.user = null;
-    authState.userData = null;
-    authState.sedaProActivated = false;
-    authState.restoredFromCache = false;
-}
+    };
 
-// ===================================================================
-// ПОДПИСКА НА СОСТОЯНИЕ
-// ===================================================================
-export function subscribeAuthState(handler) {
-    return onAuthStateChanged(auth, handler);
-}
+    document.querySelector('#profileModal .btn-primary').onclick = async () => {
+        const fn = document.getElementById('profileFirstName').value.trim();
+        const ln = document.getElementById('profileLastName').value.trim();
+        const mood = document.getElementById('profileMood').value.trim();
+        const nick = (fn || ln) ? `${fn} ${ln}`.trim() : (authState.userData.nickname || 'Пользователь');
+        try {
+            const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+            const { db } = await import('./config.js');
+            await updateDoc(doc(db, 'users', authState.user.uid), {
+                firstName: fn, lastName: ln, mood, nickname: nick,
+                avatar: authState.userData.avatar || null
+            });
+            authState.userData.firstName = fn;
+            authState.userData.lastName = ln;
+            authState.userData.mood = mood;
+            authState.userData.nickname = nick;
+            await DB.setCachedProfile(authState.user.uid, authState.userData);
+            renderUserProfile();
+            showToast('✅ Профиль сохранён', 'success');
+            setTimeout(() => {
+                document.getElementById('profileModal').classList.remove('active');
+            }, 600);
+        } catch (e) {
+            showToast('Ошибка сохранения', 'error');
+        }
+    };
 
-// ===================================================================
-// МОМЕНТАЛЬНЫЙ АВТОВХОД
-// ===================================================================
-export function tryInstantRestore() {
-    const cached = loadAuthCache();
-    if (!cached) return null;
+    document.getElementById('openSettingsBtn').onclick = () => {
+        document.getElementById('settingsModal').classList.add('active');
+        updateSedaUI();
+        const ad = document.getElementById('autoDeleteValue');
+        if (ad) {
+            ad.textContent = uiState.autoDeleteHours === 0 ? 'Выкл'
+                : uiState.autoDeleteHours === 24 ? '24ч'
+                : uiState.autoDeleteHours === 168 ? '7д' : '30д';
+        }
+        const sb = document.getElementById('sedaStatusBadge');
+        if (sb) {
+            sb.textContent = authState.sedaProActivated ? '✓ Активирован' : 'Не активирован';
+            sb.style.color = authState.sedaProActivated ? 'var(--success)' : 'var(--warning)';
+        }
+    };
 
-    const fbUser = auth.currentUser;
-    if (!fbUser || fbUser.uid !== cached.uid) return null;
+    document.querySelector('#settingsModal .close-modal').onclick = () => {
+        document.getElementById('settingsModal').classList.remove('active');
+    };
+    document.querySelector('#settingsModal .close-settings-btn').onclick = () => {
+        document.getElementById('settingsModal').classList.remove('active');
+    };
 
-    collectDeviceInfoSync();
+    document.querySelectorAll('.theme-cell').forEach(el => {
+        el.onclick = () => setTheme(el.dataset.theme);
+    });
 
-    authState.user = fbUser;
-    authState.userData = cached.data;
-    authState.sedaProActivated = cached.data.sedaProActivated || false;
-    authState.restoredFromCache = true;
-
-    return cached.data;
-}
-
-// ===================================================================
-// ФОНОВАЯ ПРОВЕРКА БЛОКИРОВКИ
-// ===================================================================
-let blockCheckInterval = null;
-
-export function startBlockCheck(uid, onBlocked, intervalMs = 30000) {
-    stopBlockCheck();
-    blockCheckInterval = setInterval(async () => {
-        if (!authState.user || authState.user.uid !== uid) return;
-        if (await isAccountLocked(uid)) {
-            stopBlockCheck();
-            onBlocked?.();
+    document.getElementById('logoutBtn').onclick = async () => {
+        if (confirm('Выйти из аккаунта?')) {
+            localStorage.removeItem('iceberg_authenticated');
             await logout();
         }
-    }, intervalMs);
+    };
+
+    document.querySelectorAll('.tab').forEach((tab, i) => {
+        const names = ['chats', 'channels', 'groups', 'contacts'];
+        tab.onclick = () => switchTab(names[i]);
+    });
+
+    document.getElementById('searchInput')?.addEventListener('input', (e) => {
+        const term = e.target.value.toLowerCase().trim();
+        const active = document.querySelector('.tab-pane.active');
+        if (!active) return;
+
+        if (active.id === 'chatsPane') {
+            const filtered = (authState.userData.chats || [])
+                .filter(c => !c.isChannel)
+                .filter(c => (c.nickname || c.globalId || '').toLowerCase().includes(term));
+            renderFilteredList('chatsList', filtered, 'chat');
+        } else if (active.id === 'contactsPane') {
+            const filtered = (authState.userData.contacts || [])
+                .filter(c => (c.nickname || c.globalId || '').toLowerCase().includes(term));
+            renderFilteredList('contactsList', filtered, 'contact');
+        }
+    });
+
+    document.getElementById('plusBtn').onclick = (e) => {
+        e.stopPropagation();
+        document.getElementById('plusMenu').classList.toggle('show');
+    };
+    document.addEventListener('click', () => {
+        document.getElementById('plusMenu').classList.remove('show');
+    });
+
+    document.querySelectorAll('.plus-menu-item').forEach((el, i) => {
+        const actions = [
+            showCreateGroupModal,
+            showCreateChannelModal,
+            showSearchModal,
+            openScanner,
+            openStories
+        ];
+        el.onclick = () => actions[i]?.();
+    });
+
+    document.querySelectorAll('.close-modal').forEach(el => {
+        el.onclick = () => {
+            const modal = el.closest('.modal-overlay');
+            if (modal) modal.classList.remove('active');
+        };
+    });
+
+    document.querySelector('.back-btn').onclick = closeChat;
+    document.getElementById('sedaModeBtn').onclick = startSedaChat;
+    document.getElementById('sedaKeyBtn').onclick = showCurrentSedaKey;
+    document.getElementById('clearChatBtn').onclick = clearCurrentChat;
+    document.getElementById('deleteChatBtn').onclick = deleteCurrentChat;
+    document.getElementById('groupInfoBtn').onclick = showGroupInfo;
+    document.getElementById('channelManageBtn').onclick = () => showToast('В разработке', 'info');
+
+    document.getElementById('chatSend').onclick = sendMessage;
+    document.getElementById('messageInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    document.getElementById('messageInput').addEventListener('input', (e) => {
+        e.target.style.height = 'auto';
+        e.target.style.height = Math.min(e.target.scrollHeight, 90) + 'px';
+        notifyTyping();
+    });
+
+    document.getElementById('stickerBtn').onclick = () => {
+        const sp = document.getElementById('stickerPicker');
+        uiState.stickerPickerOpen = !uiState.stickerPickerOpen;
+        sp.classList.toggle('show', uiState.stickerPickerOpen);
+    };
+    document.getElementById('attachBtn').onclick = () => {
+        document.getElementById('chatMediaInput').click();
+    };
+    document.getElementById('chatMediaInput').onchange = function () { sendMediaFile(this); };
+    document.getElementById('voiceBtn').onclick = toggleVoiceRecording;
+
+    document.querySelector('.reply-preview-close').onclick = cancelReply;
+
+    document.getElementById('openSedaActivation').onclick = () => {
+        document.getElementById('settingsModal').classList.remove('active');
+        document.getElementById('sedaActivationScreen').classList.add('active');
+    };
+    document.querySelector('#sedaActivationScreen .btn-seda').onclick = async () => {
+        const code = document.getElementById('sedaActivationCode').value.trim();
+        if (!code) { showToast('Введите код', 'error'); return; }
+        const res = await activateSedaPro(code);
+        if (res.success) {
+            showToast('✅ SEDA Pro активирован!', 'success');
+            document.getElementById('sedaActivationScreen').classList.remove('active');
+            document.getElementById('sedaActivationCode').value = '';
+            updateSedaUI();
+        } else {
+            showToast(res.error || 'Ошибка', 'error');
+        }
+    };
+    document.querySelector('#sedaActivationScreen .btn-secondary').onclick = () => {
+        document.getElementById('sedaActivationScreen').classList.remove('active');
+        document.getElementById('sedaActivationCode').value = '';
+    };
+
+    document.querySelector('#sedaKeyScreen .btn-seda').onclick = copySedaKeyToClipboard;
+    const keyBtns = document.querySelectorAll('#sedaKeyScreen .btn-secondary');
+    keyBtns[0].onclick = pasteSedaKeyFromClipboard;
+    keyBtns[1].onclick = () => {
+        document.getElementById('sedaKeyScreen').classList.remove('active');
+    };
+
+    document.querySelectorAll('#autoDeleteModal .settings-row').forEach((row, i) => {
+        const hours = [0, 24, 168, 720][i];
+        row.onclick = () => setAutoDelete(hours);
+    });
+
+    document.querySelectorAll('#settingsModal .settings-row[data-action]').forEach(row => {
+        const action = row.dataset.action;
+        if (action === 'autodelete') row.onclick = openAutoDelete;
+        else if (action === 'clear-chats') row.onclick = clearAllChats;
+        else if (action === 'clear-messages') row.onclick = clearAllMessages;
+    });
+
+    window.addEventListener('iceberg:notification-click', (e) => {
+        const chatId = e.detail?.chatId;
+        if (!chatId) return;
+        const chat = (authState.userData?.chats || []).find(c =>
+            c.uid === e.detail.senderId || c.sedaChatId === chatId
+        );
+        if (chat) selectChat(chat);
+    });
+
+    window.addEventListener('resize', () => {
+        if (window.matchMedia('(orientation:landscape)').matches) {
+            document.getElementById('sidebar')?.classList.remove('hide-on-mobile');
+            document.getElementById('chatScreen')?.classList.remove('show-on-mobile');
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            cancelReply();
+            if (uiState.stickerPickerOpen) {
+                document.getElementById('stickerPicker')?.classList.remove('show');
+                uiState.stickerPickerOpen = false;
+            }
+        }
+    });
+
+    document.getElementById('searchGlobalIdBtn').onclick = searchByGlobalId;
+    document.getElementById('closeScannerBtn').onclick = () => {
+        document.getElementById('scannerModal').classList.remove('active');
+    };
+    document.getElementById('createGroupBtn').onclick = createGroupFromModal;
+    document.getElementById('createChannelBtn').onclick = createChannelFromModal;
+    document.getElementById('clearGroupBtn').onclick = () => showToast('В разработке', 'info');
+    document.getElementById('leaveGroupBtn').onclick = () => showToast('В разработке', 'info');
+    document.getElementById('deleteGroupFromListBtn').onclick = () => showToast('В разработке', 'info');
+    document.getElementById('closeChannelManageBtn').onclick = () => {
+        document.getElementById('channelManageModal').classList.remove('active');
+    };
 }
 
-export function stopBlockCheck() {
-    if (blockCheckInterval) {
-        clearInterval(blockCheckInterval);
-        blockCheckInterval = null;
+function renderFilteredList(containerId, list, type) {
+    const c = document.getElementById(containerId);
+    if (!c) return;
+    if (!list.length) {
+        c.innerHTML = '<div class="empty-state">Ничего не найдено</div>';
+        return;
+    }
+    c.innerHTML = '';
+    for (const item of list) {
+        const div = document.createElement('div');
+        div.className = type === 'chat' ? 'chat-item' : 'contact-item';
+        const av = document.createElement('div');
+        av.className = 'avatar-small';
+        av.textContent = (item.nickname?.charAt(0) || '👤').toUpperCase();
+        const info = document.createElement('div');
+        info.className = 'info-small';
+        const n = document.createElement('div');
+        n.className = 'item-name';
+        n.textContent = item.nickname || item.globalId?.substring(0, 12) || 'Пользователь';
+        info.appendChild(n);
+        div.appendChild(av);
+        div.appendChild(info);
+        div.onclick = () => type === 'chat' ? selectChat(item) : openChatWithContact(item);
+        c.appendChild(div);
     }
 }
+
+// ===================================================================
+// ЗАГЛУШКИ
+// ===================================================================
+function showCreateGroupModal() {
+    uiState.selectedContactsForGroup.clear();
+    document.getElementById('groupName').value = '';
+    renderContactsForGroup('contactsForGroup', uiState.selectedContactsForGroup);
+    document.getElementById('createGroupModal').classList.add('active');
+    document.getElementById('plusMenu').classList.remove('show');
+}
+
+function renderContactsForGroup(containerId, selectedSet) {
+    const c = document.getElementById(containerId);
+    if (!c) return;
+    const contacts = authState.userData.contacts || [];
+    c.innerHTML = '';
+    for (const contact of contacts) {
+        const d = document.createElement('div');
+        d.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px;cursor:pointer;';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = selectedSet.has(contact.uid);
+        cb.onchange = () => cb.checked ? selectedSet.add(contact.uid) : selectedSet.delete(contact.uid);
+        const av = document.createElement('div');
+        av.className = 'avatar-small';
+        av.style.cssText = 'width:34px;height:34px;font-size:14px;';
+        av.textContent = (contact.nickname?.charAt(0) || '👤').toUpperCase();
+        const nm = document.createElement('span');
+        nm.textContent = contact.nickname || contact.globalId?.substring(0, 12);
+        d.appendChild(cb);
+        d.appendChild(av);
+        d.appendChild(nm);
+        c.appendChild(d);
+    }
+}
+
+function showCreateChannelModal() {
+    document.getElementById('channelName').value = '';
+    document.getElementById('channelDescription').value = '';
+    document.getElementById('createChannelModal').classList.add('active');
+    document.getElementById('plusMenu').classList.remove('show');
+}
+
+function showSearchModal() {
+    document.getElementById('searchModal').classList.add('active');
+    document.getElementById('plusMenu').classList.remove('show');
+}
+
+function openScanner() {
+    document.getElementById('scannerModal').classList.add('active');
+    document.getElementById('plusMenu').classList.remove('show');
+    if (typeof Html5Qrcode === 'undefined') {
+        showToast('QR-сканер не загружен', 'error');
+        return;
+    }
+    try {
+        const h = new Html5Qrcode('qr-reader');
+        h.start(
+            { facingMode: 'environment' },
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            (text) => {
+                h.stop().catch(() => {});
+                document.getElementById('scannerModal').classList.remove('active');
+                document.getElementById('searchGlobalIdInput').value = text.replace('Global ID: ', '');
+                searchByGlobalId();
+            },
+            () => {}
+        ).catch(e => console.warn('[QR]', e));
+    } catch (e) {
+        console.warn('[QR]', e);
+    }
+}
+
+function openStories() {
+    document.getElementById('plusMenu').classList.remove('show');
+    document.getElementById('storiesModal').classList.add('active');
+}
+
+async function searchByGlobalId() {
+    const gid = document.getElementById('searchGlobalIdInput').value.trim();
+    if (!gid) return showToast('Введите Global ID', 'error');
+    try {
+        const { collection, query, where, getDocs, doc, updateDoc, arrayUnion, limit } =
+            await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+        const { db } = await import('./config.js');
+        const q = query(collection(db, 'users'), where('globalId', '==', gid), limit(1));
+        const snap = await getDocs(q);
+        if (snap.empty) return showToast('Не найден', 'error');
+        const u = snap.docs[0];
+        const ud = u.data();
+        if (u.id === authState.user.uid) return showToast('Это вы', 'error');
+
+        const contact = {
+            uid: u.id, globalId: ud.globalId, nickname: ud.nickname,
+            email: ud.email, avatar: ud.avatar || null, mood: ud.mood || null
+        };
+        if (!(authState.userData.contacts || []).some(c => c.uid === contact.uid)) {
+            await updateDoc(doc(db, 'users', authState.user.uid), { contacts: arrayUnion(contact) });
+            authState.userData.contacts = [...(authState.userData.contacts || []), contact];
+            await DB.Lists.setContacts(authState.user.uid, authState.userData.contacts);
+        }
+        document.getElementById('searchModal').classList.remove('active');
+        loadContacts();
+        loadChats();
+        showToast(`✅ ${contact.nickname || contact.globalId} добавлен`, 'success');
+        await openChatWithContact(contact);
+    } catch (e) {
+        showToast('Ошибка поиска', 'error');
+    }
+}
+
+async function createGroupFromModal() {
+    const name = document.getElementById('groupName').value.trim();
+    if (!name) return showToast('Введите название', 'error');
+    try {
+        const { addDoc, collection, doc, updateDoc, getDoc, arrayUnion, serverTimestamp } =
+            await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+        const { db } = await import('./config.js');
+
+        const members = [
+            { uid: authState.user.uid, globalId: authState.userData.globalId, nickname: authState.userData.nickname, role: 'admin' },
+            ...Array.from(uiState.selectedContactsForGroup).map(uid => {
+                const c = (authState.userData.contacts || []).find(x => x.uid === uid);
+                return c ? { uid: c.uid, globalId: c.globalId, nickname: c.nickname, role: 'member' } : null;
+            }).filter(Boolean)
+        ];
+
+        const ref = await addDoc(collection(db, 'groups'), {
+            name, createdAt: serverTimestamp(), createdBy: authState.user.uid,
+            members, memberCount: members.length
+        });
+
+        for (const m of members) {
+            const uRef = doc(db, 'users', m.uid);
+            await updateDoc(uRef, {
+                groups: arrayUnion({ id: ref.id, name, memberCount: members.length, role: m.role })
+            }).catch(() => {});
+        }
+
+        document.getElementById('createGroupModal').classList.remove('active');
+        showToast(`✅ Группа "${name}" создана!`, 'success');
+
+        const ud = await getDoc(doc(db, 'users', authState.user.uid));
+        authState.userData.groups = ud.data().groups || [];
+        loadGroups();
+    } catch (e) {
+        showToast('Ошибка создания', 'error');
+    }
+}
+
+async function createChannelFromModal() {
+    const name = document.getElementById('channelName').value.trim();
+    const description = document.getElementById('channelDescription').value.trim();
+    if (!name) return showToast('Введите название', 'error');
+    try {
+        const { addDoc, collection, doc, updateDoc, arrayUnion, serverTimestamp } =
+            await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+        const { db } = await import('./config.js');
+
+        const ref = await addDoc(collection(db, 'channels'), {
+            name, description, createdAt: serverTimestamp(), createdBy: authState.user.uid,
+            admins: [authState.user.uid], members: [authState.user.uid], memberCount: 1
+        });
+
+        const channelEntry = {
+            id: ref.id, name, description, isAdmin: true,
+            memberCount: 1, unread: false, lastMessage: '', lastMessageTime: null
+        };
+
+        await updateDoc(doc(db, 'users', authState.user.uid), {
+            channels: arrayUnion(channelEntry)
+        });
+
+        authState.userData.channels = [...(authState.userData.channels || []), channelEntry];
+
+        document.getElementById('createChannelModal').classList.remove('active');
+        loadChannels();
+        switchTab('channels');
+        showToast(`✅ Канал "${name}" создан!`, 'success');
+    } catch (e) {
+        showToast('Ошибка создания', 'error');
+    }
+}
+
+async function showGroupInfo() {
+    if (!uiState.currentGroup) return;
+    try {
+        const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+        const { db } = await import('./config.js');
+        const d = await getDoc(doc(db, 'groups', uiState.currentGroup.id));
+        if (!d.exists()) return;
+        const g = d.data();
+
+        document.getElementById('groupInfoTitle').textContent = g.name;
+        const content = document.getElementById('groupInfoContent');
+        content.innerHTML = '';
+
+        const header = document.createElement('div');
+        header.style.cssText = 'text-align:center;margin-bottom:16px;';
+        const emoji = document.createElement('div');
+        emoji.style.fontSize = '56px';
+        emoji.textContent = '👥';
+        const nameEl = document.createElement('div');
+        nameEl.style.cssText = 'font-weight:bold;font-size:18px;color:var(--text-primary);';
+        nameEl.textContent = g.name;
+        const countEl = document.createElement('div');
+        countEl.style.cssText = 'font-size:12px;color:var(--text-secondary);';
+        countEl.textContent = `${g.memberCount || g.members?.length || 0} участников`;
+        header.appendChild(emoji);
+        header.appendChild(nameEl);
+        header.appendChild(countEl);
+        content.appendChild(header);
+
+        for (const m of (g.members || [])) {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid var(--border);';
+            const av = document.createElement('div');
+            av.className = 'avatar-small';
+            av.style.cssText = 'width:36px;height:36px;font-size:14px;';
+            av.textContent = (m.nickname || 'U').charAt(0).toUpperCase();
+            const info = document.createElement('div');
+            info.style.cssText = 'flex:1;';
+            const n = document.createElement('div');
+            n.style.cssText = 'font-weight:500;color:var(--text-primary);font-size:13px;';
+            n.textContent = m.nickname || m.globalId || 'Пользователь';
+            const r = document.createElement('div');
+            r.style.cssText = 'font-size:10px;color:var(--text-muted);';
+            r.textContent = m.role === 'admin' ? '👑 Админ' : '👤 Участник';
+            info.appendChild(n);
+            info.appendChild(r);
+            row.appendChild(av);
+            row.appendChild(info);
+            content.appendChild(row);
+        }
+        document.getElementById('groupInfoModal').classList.add('active');
+    } catch (e) {
+        showToast('Ошибка', 'error');
+    }
+}
+
+async function clearAllChats() {
+    if (!confirm('Удалить все чаты из списка?')) return;
+    const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+    const { db } = await import('./config.js');
+    await updateDoc(doc(db, 'users', authState.user.uid), { chats: [] });
+    authState.userData.chats = [];
+    await DB.Lists.setChats(authState.user.uid, []);
+    loadChats();
+    document.getElementById('settingsModal').classList.remove('active');
+    showToast('✅ Чаты удалены', 'success');
+}
+
+async function clearAllMessages() {
+    if (!confirm('ОЧИСТИТЬ ВСЕ СООБЩЕНИЯ? Это нельзя отменить!')) return;
+    try {
+        const { collection, getDocs, writeBatch } =
+            await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+        const { db } = await import('./config.js');
+        const chats = authState.userData.chats || [];
+        for (const chat of chats) {
+            if (chat.isGroup) continue;
+            const chatId = chat.isSeda && chat.sedaChatId
+                ? chat.sedaChatId
+                : [authState.user.uid, chat.uid].sort().join('_');
+            const mRef = collection(db, 'messages', chatId, 'msgs');
+            const snap = await getDocs(mRef);
+            const batch = writeBatch(db);
+            snap.forEach(d => batch.delete(d.ref));
+            await batch.commit();
+            await DB.deleteSedaKey(chatId);
+            await DB.clearCachedMessages(chatId);
+        }
+        showToast('✅ Очищено', 'success');
+        if (uiState.currentChatId) loadMessages();
+    } catch (e) {
+        showToast('Ошибка', 'error');
+    }
+}
+
+// ===================================================================
+// ЖДЁМ FIREBASE AUTH И РОУТИМ
+// ===================================================================
+async function waitForFirebaseAuthAndRoute() {
+    return new Promise((resolve) => {
+        let done = false;
+
+        const timeout = setTimeout(() => {
+            if (done) return;
+            done = true;
+            try { unsub(); } catch {}
+            hideLoading();
+            showAuthScreen();
+            resolve();
+        }, 2000);
+
+        const unsub = subscribeAuthState(async (user) => {
+            if (done) return;
+            done = true;
+            clearTimeout(timeout);
+            try { unsub(); } catch {}
+
+            if (user) {
+                try {
+                    await collectDeviceInfo();
+                    await handleAuthLogin(user, {
+                        onSuccess: async (u, data) => {
+                            await bootMessenger(u, data);
+                            hideLoading();
+                            showMessengerScreen();
+                            resolve();
+                        },
+                        onNeed2FA: () => {
+                            hideLoading();
+                            showAuthScreen();
+                            show2FAScreen();
+                            resolve();
+                        },
+                        onLocked: () => {
+                            hideLoading();
+                            document.getElementById('loginMode').style.display = 'none';
+                            document.getElementById('blockedMode').style.display = 'block';
+                            showAuthScreen();
+                            resolve();
+                        },
+                        onError: (msg) => {
+                            hideLoading();
+                            showAuthScreen();
+                            if (msg) showToast(msg, 'error');
+                            resolve();
+                        }
+                    });
+                } catch (e) {
+                    console.warn('[waitForFirebaseAuthAndRoute] error:', e);
+                    hideLoading();
+                    showAuthScreen();
+                    resolve();
+                }
+            } else {
+                hideLoading();
+                showAuthScreen();
+                resolve();
+            }
+        });
+    });
+}
+
+// ===================================================================
+// ИНИЦИАЛИЗАЦИЯ
+// ===================================================================
+async function init() {
+    animateLoadingProgress(5000);
+
+    loadTheme();
+    initParticles();
+
+    registerServiceWorkers().catch(e => console.warn('[SW]', e));
+
+    bindUIEvents();
+    setup2FAInputs();
+    setupAuthSyncEvents();
+    setupAuthState();
+
+    const LOADING_DURATION = 5000;
+    const loadingStart = Date.now();
+
+    const restored = tryInstantRestore();
+    let autoLoginSuccess = false;
+
+    if (restored && authState.user) {
+        try {
+            await bootMessenger(authState.user, restored);
+            autoLoginSuccess = true;
+        } catch (e) {
+            console.warn('[init] bootMessenger failed:', e);
+        }
+    }
+
+    const elapsed = Date.now() - loadingStart;
+    const remaining = Math.max(0, LOADING_DURATION - elapsed);
+
+    setTimeout(async () => {
+        const bar = document.getElementById('loadingBar');
+        const percent = document.getElementById('loadingPercent');
+        if (bar) bar.style.width = '100%';
+        if (percent) percent.textContent = '100';
+
+        setTimeout(async () => {
+            if (autoLoginSuccess) {
+                hideLoading();
+                showMessengerScreen();
+            } else {
+                await waitForFirebaseAuthAndRoute();
+            }
+        }, 300);
+    }, remaining);
+
+    if (localStorage.getItem('iceberg_app') === 'true') {
+        localStorage.removeItem('iceberg_app');
+        localStorage.removeItem('iceberg_referrer');
+        setTimeout(() => {
+            const msg = document.getElementById('authMessage');
+            if (msg) {
+                msg.textContent = '✅ Аккаунт создан! Войдите';
+                msg.className = 'message message-success';
+                msg.style.display = 'block';
+            }
+        }, 5500);
+    }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
+
+window.__iceberg = {
+    authState, uiState, DB,
+    logout, login, activateSedaPro
+};
