@@ -149,7 +149,6 @@ body.theme-blue {
     pointer-events: none;
 }
 
-/* Анимированный айсберг */
 .loading-logo-wrap {
     position: relative;
     width: 160px;
@@ -190,7 +189,6 @@ body.theme-blue {
     z-index: 1;
 }
 
-/* Кольцо вокруг логотипа */
 .loading-ring {
     position: absolute;
     inset: -18px;
@@ -206,7 +204,6 @@ body.theme-blue {
     to { transform: rotate(360deg); }
 }
 
-/* Заголовок */
 .loading-title {
     margin-top: 10px;
     font-size: 38px;
@@ -235,20 +232,19 @@ body.theme-blue {
 }
 
 @keyframes fadeInOut {
-    0181%, 100% { opacity: 0.5;, }
+    0%, 100% { opacity: 0.5; }
     50% { opacity: 1; }
- }
+}
 
-/* Прогресс-бар */
-.load246ing-bar-wrap {
-    width: 240px,;
+.loading-bar-wrap {
+    width: 240px;
     height: 4px;
-    background .: rgba(100, 181, 246, .12);
+    background: rgba(100, 181, 246, .12);
     border-radius: 4px;
     margin-top: 40px;
     overflow: hidden;
     position: relative;
-    box-shadow: 0 0 20px rgba(100, 1) inset;
+    box-shadow: 0 0 20px rgba(100, 181, 246, .1) inset;
 }
 
 .loading-bar {
@@ -257,25 +253,15 @@ body.theme-blue {
     background: linear-gradient(90deg, #64B5F6, #a78bfa, #64B5F6);
     background-size: 200% auto;
     border-radius: 4px;
-    animation: loadingBarGrow 5s cubic-bezier(.4, 0, .2, 1) forwards,
-               shimmerBar 1.5s linear infinite;
+    animation: shimmerBar 1.5s linear infinite;
     box-shadow: 0 0 12px rgba(100, 181, 246, .6);
-}
-
-@keyframes loadingBarGrow {
-    0% { width: 0%; }
-    20% { width: 25%; }
-    45% { width: 55%; }
-    70% { width: 78%; }
-    90% { width: 92%; }
-    100% { width: 100%; }
+    transition: width .3s ease;
 }
 
 @keyframes shimmerBar {
     to { background-position: 200% center; }
 }
 
-/* Процент */
 .loading-percent {
     margin-top: 14px;
     font-size: 13px;
@@ -291,29 +277,6 @@ body.theme-blue {
     opacity: .6;
 }
 
-/* Плавающие снежинки на фоне */
-.snowflake {
-    position: absolute;
-    top: -20px;
-    font-size: 14px;
-    color: rgba(100, 181, 246, .4);
-    animation: snowFall linear infinite;
-    pointer-events: none;
-    user-select: none;
-}
-
-@keyframes snowFall {
-    0% {
-        transform: translateY(-20px) translateX(0) rotate(0deg);
-        opacity: 0;
-    }
-    10% { opacity: 1; }
-    90% { opacity: 1; }
-    100% {
-        transform: translateY(105vh) translateX(40px) rotate(360deg);
-        opacity: 0;
-    }
-}
 /* ==================== МОДАЛКИ ==================== */
 #twoFactorScreen,
 #sedaActivationScreen,
@@ -555,7 +518,7 @@ input::placeholder, textarea::placeholder {
     letter-spacing: 1px;
 }
 
-/* ==================== СООБЩЕНИЯ ОБ ОШИБКАХ ==================== */
+/* ==================== СООБЩЕНИЯ ==================== */
 .message {
     font-size: 13px;
     text-align: center;
@@ -579,7 +542,7 @@ input::placeholder, textarea::placeholder {
     border: 1px solid rgba(229, 57, 53, .3);
 }
 
-/* ==================== 2FA КОД ==================== */
+/* ==================== 2FA ==================== */
 .code-input-container {
     display: flex;
     gap: 10px;
@@ -762,7 +725,6 @@ input::placeholder, textarea::placeholder {
     font-weight: bold;
 }
 
-/* ==================== ТЕМЫ-СЕТКА ==================== */
 .theme-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -815,7 +777,7 @@ input::placeholder, textarea::placeholder {
 
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
-/* ==================== STORY VIEWER ==================== */
+/* ==================== STORY ==================== */
 .story-viewer-content {
     max-width: 100%;
     width: 420px;
@@ -903,7 +865,6 @@ input::placeholder, textarea::placeholder {
    ЧАСТЬ 2: МЕССЕНДЖЕР
    =================================================================== */
 
-/* ==================== КОНТЕЙНЕР ==================== */
 .app-container {
     flex: 1;
     display: flex;
@@ -924,7 +885,6 @@ input::placeholder, textarea::placeholder {
     animation: fadeIn .4s;
 }
 
-/* ==================== АДАПТИВ ==================== */
 @media (orientation: landscape) {
     .sidebar {
         width: 340px;
@@ -967,7 +927,6 @@ input::placeholder, textarea::placeholder {
     .back-btn { display: block !important; }
 }
 
-/* ==================== САЙДБАР ==================== */
 .sidebar {
     display: flex;
     flex-direction: column;
@@ -1047,7 +1006,6 @@ input::placeholder, textarea::placeholder {
 
 .logout-btn:hover { background: var(--hover); }
 
-/* ==================== ИСТОРИИ ==================== */
 .stories-bar {
     display: flex;
     gap: 10px;
@@ -1112,7 +1070,6 @@ input::placeholder, textarea::placeholder {
     text-overflow: ellipsis;
 }
 
-/* ==================== ПОИСК ==================== */
 .search-area {
     padding: 10px 12px;
     border-bottom: 1px solid var(--border);
@@ -1152,7 +1109,6 @@ input::placeholder, textarea::placeholder {
 
 .plus-btn:hover { transform: rotate(90deg); }
 
-/* ==================== ВКЛАДКИ ==================== */
 .tabs-container {
     display: flex;
     border-bottom: 1px solid var(--border);
@@ -1196,7 +1152,6 @@ input::placeholder, textarea::placeholder {
 
 .tab-pane.active { display: flex; flex-direction: column; }
 
-/* ==================== СПИСКИ ==================== */
 .chats-list,
 .contacts-list,
 .groups-list,
@@ -1325,7 +1280,6 @@ input::placeholder, textarea::placeholder {
 .action-btn.danger:hover { background: var(--danger); }
 .action-btn.warning:hover { background: var(--warning); }
 
-/* ==================== ФУТЕР САЙДБАРА ==================== */
 .footer-bar {
     text-align: center;
     padding: 8px;
@@ -1346,7 +1300,6 @@ input::placeholder, textarea::placeholder {
 
 .footer-bar a:hover { text-decoration: underline; }
 
-/* ==================== ЭКРАН ЧАТА ==================== */
 .chat-screen {
     display: flex;
     flex-direction: column;
@@ -1463,7 +1416,6 @@ input::placeholder, textarea::placeholder {
     50% { box-shadow: 0 4px 20px rgba(0, 184, 148, .9); }
 }
 
-/* ==================== СООБЩЕНИЯ ==================== */
 .messages-area {
     flex: 1;
     overflow-y: auto;
@@ -1554,7 +1506,6 @@ input::placeholder, textarea::placeholder {
 
 .seda-decrypt-btn:hover { background: rgba(100, 181, 246, .3); }
 
-/* ==================== МЕДИА В СООБЩЕНИЯХ ==================== */
 .chat-msg-sticker {
     font-size: 2.6rem;
     text-align: center;
@@ -1627,7 +1578,6 @@ input::placeholder, textarea::placeholder {
     opacity: .7;
 }
 
-/* ==================== REPLY PREVIEW В СООБЩЕНИИ ==================== */
 .chat-msg-reply {
     padding: .35rem .65rem;
     margin-bottom: 5px;
@@ -1644,7 +1594,6 @@ input::placeholder, textarea::placeholder {
     background: rgba(255, 255, 255, .12);
 }
 
-/* ==================== РЕАКЦИИ ==================== */
 .chat-msg-reactions {
     display: flex;
     flex-wrap: wrap;
@@ -1679,7 +1628,6 @@ input::placeholder, textarea::placeholder {
     color: white;
 }
 
-/* ==================== ПОЛЕ ВВОДА ==================== */
 .chat-input-area {
     padding: 10px 14px;
     border-top: 1px solid var(--border);
@@ -1779,7 +1727,6 @@ input::placeholder, textarea::placeholder {
     50% { box-shadow: 0 0 0 8px rgba(229, 57, 53, 0); }
 }
 
-/* ==================== СТИКЕРЫ ==================== */
 .sticker-picker {
     position: absolute;
     bottom: 100%;
@@ -1825,7 +1772,6 @@ input::placeholder, textarea::placeholder {
     transform: scale(1.2);
 }
 
-/* ==================== REPLY PREVIEW (над полем ввода) ==================== */
 .reply-preview {
     padding: 9px 13px;
     background: var(--bg-surface);
@@ -1857,7 +1803,6 @@ input::placeholder, textarea::placeholder {
 
 .reply-preview-close:hover { color: var(--danger); }
 
-/* ==================== EMPTY STATE ==================== */
 .empty-state {
     text-align: center;
     color: var(--text-muted);
@@ -1875,7 +1820,6 @@ input::placeholder, textarea::placeholder {
     opacity: .3;
 }
 
-/* ==================== ПЛЮС-МЕНЮ ==================== */
 .plus-menu {
     display: none;
     position: absolute;
@@ -1918,7 +1862,6 @@ input::placeholder, textarea::placeholder {
 
 .plus-menu-item:hover { background: var(--hover); }
 
-/* ==================== ACTION BAR НА СООБЩЕНИИ ==================== */
 .msg-action-bar {
     position: fixed;
     display: flex;
@@ -1992,13 +1935,11 @@ input::placeholder, textarea::placeholder {
     color: #f87171;
 }
 
-/* Долгое нажатие — подсветка */
 .pressing {
     opacity: .6;
     transform: scale(.97) !important;
 }
 
-/* ==================== АНИМАЦИЯ BURST РЕАКЦИЙ ==================== */
 .reaction-burst {
     position: fixed;
     pointer-events: none;
@@ -2018,7 +1959,6 @@ input::placeholder, textarea::placeholder {
     }
 }
 
-/* ==================== SEDA KEY DISPLAY ==================== */
 #sedaKeyDisplay {
     background: #0f0f23;
     color: #aaffaa;
@@ -2035,7 +1975,6 @@ input::placeholder, textarea::placeholder {
     -webkit-user-select: text;
 }
 
-/* ==================== СПЕЦИАЛЬНЫЕ ЭЛЕМЕНТЫ ==================== */
 .city-select {
     width: 100%;
     padding: 11px 14px;
@@ -2048,14 +1987,12 @@ input::placeholder, textarea::placeholder {
     font-family: inherit;
 }
 
-/* ==================== ГРУППЫ / КАНАЛЫ: УЧАСТНИКИ ==================== */
 .member-list {
     max-height: 300px;
     overflow-y: auto;
     margin: 10px 0;
 }
 
-/* ==================== SAFE AREA (iPhone) ==================== */
 @supports (padding: env(safe-area-inset-bottom)) {
     .chat-input-area {
         padding-bottom: calc(10px + env(safe-area-inset-bottom));
