@@ -169,10 +169,17 @@ async function handleLoginClick() {
     msg.style.display = 'block';
 
     const res = await login(id, pw);
+    
     if (!res.success) {
         msg.textContent = res.error;
         msg.className = 'message message-error';
         msg.style.display = 'block';
+    } else {
+        setTimeout(() => {
+            if (msg.textContent === 'Вход...') {
+                msg.style.display = 'none';
+            }
+        }, 2000);
     }
 }
 
@@ -271,24 +278,39 @@ function setupAuthState() {
 
             await collectDeviceInfo().catch(() => {});
 
-            await handleAuthLogin(user, {
-                onSuccess: async (u, data) => {
-                    await bootMessenger(u, data);
-                },
-                onNeed2FA: () => {
-                    showAuthScreen();
-                    show2FAScreen();
-                },
-                onLocked: () => {
-                    document.getElementById('loginMode').style.display = 'none';
-                    document.getElementById('blockedMode').style.display = 'block';
-                    showAuthScreen();
-                },
-                onError: (msg) => {
-                    showAuthScreen();
-                    if (msg) showToast(msg, 'error');
-                }
-            });
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout')), 10000)
+            );
+
+            try {
+                await Promise.race([
+                    handleAuthLogin(user, {
+                        onSuccess: async (u, data) => {
+                            await bootMessenger(u, data);
+                        },
+                        onNeed2FA: () => {
+                            document.getElementById('authMessage').style.display = 'none';
+                            showAuthScreen();
+                            show2FAScreen();
+                        },
+                        onLocked: () => {
+                            document.getElementById('loginMode').style.display = 'none';
+                            document.getElementById('blockedMode').style.display = 'block';
+                            showAuthScreen();
+                        },
+                        onError: (msg) => {
+                            showAuthScreen();
+                            if (msg) showToast(msg, 'error');
+                        }
+                    }),
+                    timeoutPromise
+                ]);
+            } catch (err) {
+                console.warn('Auth timeout or error:', err);
+                showToast('Ошибка соединения. Попробуйте снова.', 'error');
+                document.getElementById('authMessage').style.display = 'none';
+                showAuthScreen();
+            }
         } else {
             cleanupPush();
             stopBlockCheck();
