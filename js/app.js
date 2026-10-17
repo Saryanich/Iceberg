@@ -175,11 +175,14 @@ async function handleLoginClick() {
         msg.className = 'message message-error';
         msg.style.display = 'block';
     } else {
+        // Если login вернул success, сообщение "Вход..." убирается
+        // когда onAuthStateChanged переключит экран.
+        // Если он завис, через 3 секунды просто скроем сообщение, чтобы не висело.
         setTimeout(() => {
             if (msg.textContent === 'Вход...') {
                 msg.style.display = 'none';
             }
-        }, 2000);
+        }, 3000);
     }
 }
 
@@ -267,6 +270,9 @@ async function bootMessenger(user, userData) {
     }
 }
 
+// ===================================================================
+// РОУТИНГ ПО ФАКТУ (МИНИМУМ 1 СЕК, МАКСИМУМ 10 СЕК)
+// ===================================================================
 function setupAuthState() {
     subscribeAuthState(async (user) => {
         if (authState.awaitingTwoFactor) return;
@@ -278,40 +284,83 @@ function setupAuthState() {
 
             await collectDeviceInfo().catch(() => {});
 
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout')), 10000)
-            );
+            // Делаем кнопку неактивной на время проверки
+            const loginBtn = document.getElementById('btnLogin');
+            const originalText = loginBtn ? loginBtn.textContent : 'Войти';
+            if (loginBtn) {
+                loginBtn.disabled = true;
+                loginBtn.textContent = 'Проверка...';
+            }
+
+            const startTime = Date.now();
+            let timeoutId = null;
 
             try {
-                await Promise.race([
+                // Оборачиваем в промис, чтобы прервать по таймауту 10 сек
+                const loginPromise = new Promise((resolve, reject) => {
+                    timeoutId = setTimeout(() => reject(new Error('Timeout')), 10000);
+
                     handleAuthLogin(user, {
                         onSuccess: async (u, data) => {
-                            await bootMessenger(u, data);
+                            clearTimeout(timeoutId);
+                            resolve({ type: 'success', user: u, data });
                         },
                         onNeed2FA: () => {
-                            document.getElementById('authMessage').style.display = 'none';
-                            showAuthScreen();
-                            show2FAScreen();
+                            clearTimeout(timeoutId);
+                            resolve({ type: '2fa' });
                         },
                         onLocked: () => {
-                            document.getElementById('loginMode').style.display = 'none';
-                            document.getElementById('blockedMode').style.display = 'block';
-                            showAuthScreen();
+                            clearTimeout(timeoutId);
+                            resolve({ type: 'locked' });
                         },
                         onError: (msg) => {
-                            showAuthScreen();
-                            if (msg) showToast(msg, 'error');
+                            clearTimeout(timeoutId);
+                            resolve({ type: 'error', msg });
                         }
-                    }),
-                    timeoutPromise
-                ]);
+                    }).catch(reject);
+                });
+
+                const result = await loginPromise;
+                
+                // Ждем минимум 1 секунду, чтобы не мигало
+                const elapsed = Date.now() - startTime;
+                const minDelay = Math.max(0, 1000 - elapsed);
+                if (minDelay > 0) await new Promise(r => setTimeout(r, minDelay));
+
+                // Обрабатываем результат
+                if (result.type === 'success') {
+                    await bootMessenger(result.user, result.data);
+                } else if (result.type === '2fa') {
+                    document.getElementById('authMessage').style.display = 'none';
+                    showAuthScreen();
+                    show2FAScreen();
+                } else if (result.type === 'locked') {
+                    document.getElementById('loginMode').style.display = 'none';
+                    document.getElementById('blockedMode').style.display = 'block';
+                    showAuthScreen();
+                } else if (result.type === 'error') {
+                    showAuthScreen();
+                    if (result.msg) showToast(result.msg, 'error');
+                }
+
             } catch (err) {
-                console.warn('Auth timeout or error:', err);
-                showToast('Ошибка соединения. Попробуйте снова.', 'error');
-                document.getElementById('authMessage').style.display = 'none';
+                console.warn('[Auth] Error or Timeout:', err);
+                // Если прошло меньше 1 сек, подождем
+                const elapsed = Date.now() - startTime;
+                const minDelay = Math.max(0, 1000 - elapsed);
+                if (minDelay > 0) await new Promise(r => setTimeout(r, minDelay));
+
+                showToast('Тайм-аут соединения. Проверьте интернет.', 'error');
                 showAuthScreen();
+            } finally {
+                if (loginBtn) {
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = originalText;
+                }
             }
+
         } else {
+            // Полный выход
             cleanupPush();
             stopBlockCheck();
             localStorage.removeItem('iceberg_authenticated');
@@ -339,11 +388,19 @@ function setupAuthSyncEvents() {
     window.addEventListener('iceberg:force-logout', (e) => {
         const reason = e.detail?.reason;
         localStorage.removeItem('iceberg_authenticated');
+        localStorage.removeItem('iceberg_auth_cache_v1');
+        
         showAuthScreen();
-        showToast(
-            reason === 'locked' ? '🔒 Аккаунт заблокирован' : 'Вы вышли из аккаунта',
-            'error'
-        );
+        document.getElementById('loginIdentifier').value = '';
+        document.getElementById('loginPassword').value = '';
+        document.getElementById('authMessage').style.display = 'none';
+        
+        if (reason !== 'manual') {
+            showToast(
+                reason === 'locked' ? '🔒 Аккаунт заблокирован' : 'Вы вышли из аккаунта',
+                'error'
+            );
+        }
     });
 }
 
