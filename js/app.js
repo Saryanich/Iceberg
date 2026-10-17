@@ -1,7 +1,3 @@
-// ===================================================================
-// js/app.js — Точка входа, связка всех модулей
-// ===================================================================
-
 import { APP_LOGO, STICKERS } from './config.js';
 
 import {
@@ -73,9 +69,6 @@ import {
     refreshTokenForUser
 } from './push.js';
 
-// ===================================================================
-// PARTICLES
-// ===================================================================
 function initParticles() {
     if (typeof particlesJS === 'undefined') return;
     particlesJS('particles-js', {
@@ -105,9 +98,6 @@ function initParticles() {
     });
 }
 
-// ===================================================================
-// ЭКРАНЫ
-// ===================================================================
 function showLoading() {
     document.getElementById('loadingScreen')?.classList.remove('hidden');
 }
@@ -126,9 +116,6 @@ function showMessengerScreen() {
     document.getElementById('messengerApp').style.display = 'flex';
 }
 
-// ===================================================================
-// КРАСИВЫЙ ЭКРАН ЗАГРУЗКИ
-// ===================================================================
 function animateLoadingProgress(durationMs = 5000) {
     const bar = document.getElementById('loadingBar');
     const percent = document.getElementById('loadingPercent');
@@ -149,9 +136,6 @@ function animateLoadingProgress(durationMs = 5000) {
     tick();
 }
 
-// ===================================================================
-// 2FA ЭКРАН
-// ===================================================================
 function show2FAScreen() {
     document.getElementById('twoFactorScreen').classList.add('active');
     document.getElementById('code1')?.focus();
@@ -168,9 +152,6 @@ function hide2FAScreen() {
     document.getElementById('trustDevice').checked = false;
 }
 
-// ===================================================================
-// ВХОД
-// ===================================================================
 async function handleLoginClick() {
     const id = document.getElementById('loginIdentifier').value.trim();
     const pw = document.getElementById('loginPassword').value;
@@ -195,9 +176,6 @@ async function handleLoginClick() {
     }
 }
 
-// ===================================================================
-// 2FA — ВВОД
-// ===================================================================
 function setup2FAInputs() {
     for (let i = 1; i <= 4; i++) {
         const el = document.getElementById(`code${i}`);
@@ -246,9 +224,6 @@ async function handle2FACancel() {
     showAuthScreen();
 }
 
-// ===================================================================
-// ЗАПУСК МЕССЕНДЖЕРА
-// ===================================================================
 async function bootMessenger(user, userData) {
     try {
         authState.user = user;
@@ -285,9 +260,6 @@ async function bootMessenger(user, userData) {
     }
 }
 
-// ===================================================================
-// AUTH STATE
-// ===================================================================
 function setupAuthState() {
     subscribeAuthState(async (user) => {
         if (authState.awaitingTwoFactor) return;
@@ -328,9 +300,6 @@ function setupAuthState() {
     });
 }
 
-// ===================================================================
-// СОБЫТИЯ ОТ auth.js
-// ===================================================================
 function setupAuthSyncEvents() {
     window.addEventListener('iceberg:user-data-updated', (e) => {
         const data = e.detail?.data;
@@ -356,9 +325,6 @@ function setupAuthSyncEvents() {
     });
 }
 
-// ===================================================================
-// ПРИВЯЗКА UI-СОБЫТИЙ
-// ===================================================================
 function bindUIEvents() {
     document.getElementById('loginPassword')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') handleLoginClick();
@@ -683,9 +649,6 @@ function renderFilteredList(containerId, list, type) {
     }
 }
 
-// ===================================================================
-// ЗАГЛУШКИ
-// ===================================================================
 function showCreateGroupModal() {
     uiState.selectedContactsForGroup.clear();
     document.getElementById('groupName').value = '';
@@ -962,9 +925,6 @@ async function clearAllMessages() {
     }
 }
 
-// ===================================================================
-// ЖДЁМ FIREBASE AUTH И РОУТИМ
-// ===================================================================
 async function waitForFirebaseAuthAndRoute() {
     return new Promise((resolve) => {
         let done = false;
@@ -1029,9 +989,6 @@ async function waitForFirebaseAuthAndRoute() {
     });
 }
 
-// ===================================================================
-// ИНИЦИАЛИЗАЦИЯ
-// ===================================================================
 async function init() {
     animateLoadingProgress(5000);
 
