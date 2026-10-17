@@ -171,7 +171,11 @@ export async function handleAuthLogin(user, callbacks = {}) {
     try {
         await waitForAuthReady();
         const cached = loadAuthCache();
-        if (cached && cached.uid === user.uid && cached.data) {
+        
+        // Если кэш от другого пользователя — игнорируем его и чистим
+        if (cached && cached.uid !== user.uid) {
+            clearAuthCache();
+        } else if (cached && cached.uid === user.uid && cached.data) {
             authState.user = user; authState.userData = cached.data;
             authState.sedaProActivated = cached.data.sedaProActivated || false;
             authState.restoredFromCache = true;
@@ -360,10 +364,23 @@ export async function activateSedaPro(inputCode) {
 }
 
 export async function logout() {
-    try { if (authState.user) updateDoc(doc(db, 'users', authState.user.uid), { online: false, lastSeen: serverTimestamp() }).catch(() => {}); } catch {}
+    try { 
+        if (authState.user) {
+            updateDoc(doc(db, 'users', authState.user.uid), { online: false, lastSeen: serverTimestamp() }).catch(() => {}); 
+        }
+    } catch {}
+    
     clearAuthCache();
+    authState.user = null; 
+    authState.userData = null; 
+    authState.sedaProActivated = false; 
+    authState.restoredFromCache = false;
+    authState.awaitingTwoFactor = false;
+    authState.pendingUser = null;
+
+    window.dispatchEvent(new CustomEvent('iceberg:force-logout', { detail: { reason: 'manual' } }));
+
     await signOut(auth);
-    authState.user = null; authState.userData = null; authState.sedaProActivated = false; authState.restoredFromCache = false;
 }
 
 export function subscribeAuthState(handler) { return onAuthStateChanged(auth, handler); }
