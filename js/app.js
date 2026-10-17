@@ -156,6 +156,7 @@ async function handleLoginClick() {
     const id = document.getElementById('loginIdentifier').value.trim();
     const pw = document.getElementById('loginPassword').value;
     const msg = document.getElementById('authMessage');
+    const btn = document.getElementById('btnLogin');
 
     if (!id || !pw) {
         msg.textContent = 'Заполните поля';
@@ -164,25 +165,45 @@ async function handleLoginClick() {
         return;
     }
 
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Проверка...';
+    }
+
     msg.textContent = 'Вход...';
     msg.className = 'message message-success';
     msg.style.display = 'block';
 
-    const res = await login(id, pw);
-    
-    if (!res.success) {
-        msg.textContent = res.error;
-        msg.className = 'message message-error';
-        msg.style.display = 'block';
-    } else {
-        // Если login вернул success, сообщение "Вход..." убирается
-        // когда onAuthStateChanged переключит экран.
-        // Если он завис, через 3 секунды просто скроем сообщение, чтобы не висело.
-        setTimeout(() => {
-            if (msg.textContent === 'Вход...') {
-                msg.style.display = 'none';
-            }
-        }, 3000);
+    const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('TIMEOUT')), 8000)
+    );
+
+    try {
+        const res = await Promise.race([
+            login(id, pw),
+            timeoutPromise
+        ]);
+        
+        if (!res.success) {
+            msg.textContent = res.error;
+            msg.className = 'message message-error';
+            msg.style.display = 'block';
+        }
+    } catch (e) {
+        if (e.message === 'TIMEOUT') {
+            msg.textContent = 'Сервер не отвечает. Проверьте интернет.';
+            msg.className = 'message message-error';
+            msg.style.display = 'block';
+        } else {
+            msg.textContent = 'Ошибка сети';
+            msg.className = 'message message-error';
+            msg.style.display = 'block';
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Войти';
+        }
     }
 }
 
@@ -270,9 +291,6 @@ async function bootMessenger(user, userData) {
     }
 }
 
-// ===================================================================
-// РОУТИНГ ПО ФАКТУ (МИНИМУМ 1 СЕК, МАКСИМУМ 10 СЕК)
-// ===================================================================
 function setupAuthState() {
     subscribeAuthState(async (user) => {
         if (authState.awaitingTwoFactor) return;
@@ -284,7 +302,6 @@ function setupAuthState() {
 
             await collectDeviceInfo().catch(() => {});
 
-            // Делаем кнопку неактивной на время проверки
             const loginBtn = document.getElementById('btnLogin');
             const originalText = loginBtn ? loginBtn.textContent : 'Войти';
             if (loginBtn) {
@@ -296,7 +313,6 @@ function setupAuthState() {
             let timeoutId = null;
 
             try {
-                // Оборачиваем в промис, чтобы прервать по таймауту 10 сек
                 const loginPromise = new Promise((resolve, reject) => {
                     timeoutId = setTimeout(() => reject(new Error('Timeout')), 10000);
 
@@ -322,12 +338,10 @@ function setupAuthState() {
 
                 const result = await loginPromise;
                 
-                // Ждем минимум 1 секунду, чтобы не мигало
                 const elapsed = Date.now() - startTime;
                 const minDelay = Math.max(0, 1000 - elapsed);
                 if (minDelay > 0) await new Promise(r => setTimeout(r, minDelay));
 
-                // Обрабатываем результат
                 if (result.type === 'success') {
                     await bootMessenger(result.user, result.data);
                 } else if (result.type === '2fa') {
@@ -345,7 +359,6 @@ function setupAuthState() {
 
             } catch (err) {
                 console.warn('[Auth] Error or Timeout:', err);
-                // Если прошло меньше 1 сек, подождем
                 const elapsed = Date.now() - startTime;
                 const minDelay = Math.max(0, 1000 - elapsed);
                 if (minDelay > 0) await new Promise(r => setTimeout(r, minDelay));
@@ -360,7 +373,6 @@ function setupAuthState() {
             }
 
         } else {
-            // Полный выход
             cleanupPush();
             stopBlockCheck();
             localStorage.removeItem('iceberg_authenticated');
