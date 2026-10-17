@@ -1,20 +1,3 @@
-// ===================================================================
-// js/ui.js — Весь интерфейс мессенджера
-//
-//  • Список чатов / групп / каналов / контактов
-//  • Окно чата (сообщения, медиа, стикеры, реакции)
-//  • SEDA-чаты (создание, E2E-обмен ключами)
-//  • Профиль, настройки, темы
-//  • Индикатор "печатает" и онлайн-статус
-//
-//  ИСПРАВЛЕНО:
-//  • chats всегда приводится к массиву (Array.isArray)
-//  • Защита от дублей SEDA-чатов при handshake
-//  • Защита от повторной подписки на onSnapshot
-//  • Защита от дублей сообщений при отправке
-//  • Автофикс битого chats в Firestore
-// ===================================================================
-
 import { db, auth, STICKERS, REACTION_EMOJIS, MAX_MEDIA_SIZE, MAX_PHOTO_DIMENSION, MAX_STORIES, STORY_LIFETIME, RATE_LIMIT, AUTO_DELETE_OPTIONS, THEMES } from './config.js';
 import {
     collection, doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc,
@@ -31,9 +14,6 @@ import {
 import * as DB from './db.js';
 import { authState } from './auth.js';
 
-// ===================================================================
-// СОСТОЯНИЕ
-// ===================================================================
 export const uiState = {
     currentChat: null,
     currentChatId: null,
@@ -65,9 +45,6 @@ export const uiState = {
     pinnedMessageId: null
 };
 
-// ===================================================================
-// УТИЛИТА: гарантированный массив
-// ===================================================================
 function ensureArray(val) {
     if (Array.isArray(val)) return val;
     if (val && typeof val === 'object') {
@@ -81,9 +58,6 @@ function ensureArray(val) {
     return [];
 }
 
-// ===================================================================
-// TOAST
-// ===================================================================
 export function showToast(text, type = 'info', duration = 2500) {
     const c = document.getElementById('toastContainer');
     if (!c) return;
@@ -99,9 +73,6 @@ export function showToast(text, type = 'info', duration = 2500) {
     }, duration);
 }
 
-// ===================================================================
-// УТИЛИТЫ
-// ===================================================================
 function escapeHtml(text) {
     if (!text) return '';
     const d = document.createElement('div');
@@ -140,9 +111,6 @@ function checkRateLimit(arr, maxCount, windowMs) {
     return true;
 }
 
-// ===================================================================
-// СЖАТИЕ ФОТО
-// ===================================================================
 export async function compressImage(file, maxBytes = 3 * 1024 * 1024) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -175,9 +143,6 @@ export async function compressImage(file, maxBytes = 3 * 1024 * 1024) {
     });
 }
 
-// ===================================================================
-// ТЕМЫ
-// ===================================================================
 export function setTheme(theme) {
     if (!THEMES.includes(theme)) theme = 'dark';
     uiState.currentTheme = theme;
@@ -193,9 +158,6 @@ export function loadTheme() {
     setTheme(saved);
 }
 
-// ===================================================================
-// ПРОФИЛЬ
-// ===================================================================
 export function renderUserProfile() {
     const d = authState.userData;
     if (!d) return;
@@ -214,26 +176,21 @@ export function renderUserProfile() {
     }
 }
 
-// ===================================================================
-// ЗАГРУЗКА СПИСКА ЧАТОВ
-// ===================================================================
 export async function loadChats(forceRefresh = false) {
     const uid = authState.user?.uid;
     const c = document.getElementById('chatsList');
     if (!c || !uid) return;
 
-    let chats = ensureArray(authState.userData?.chats);
-
-    // Автофикс в Firestore, если был не-массив
-    if (!Array.isArray(authState.userData?.chats)) {
+    let chats = authState.userData?.chats;
+    
+    if (!Array.isArray(chats)) {
         console.warn('[loadChats] chats не массив, привожу к массиву');
-        if (authState.userData) authState.userData.chats = chats;
+        if (authState.userData) authState.userData.chats = [];
         try {
-            await updateDoc(doc(db, 'users', uid), { chats });
-            await DB.Lists.setChats(uid, chats);
-        } catch (e) {
-            console.warn('[loadChats] fix chats failed:', e.message);
-        }
+            await updateDoc(doc(db, 'users', uid), { chats: [] });
+            await DB.Lists.setChats(uid, []);
+        } catch (e) {}
+        chats = [];
     }
 
     if (!chats.length || forceRefresh) {
@@ -294,9 +251,6 @@ function renderChatItem(chat) {
         nameRow.appendChild(mb);
     }
 
-    const chatId = chat.isSeda && chat.sedaChatId
-        ? chat.sedaChatId
-        : [authState.user.uid, chat.uid].sort().join('_');
     if (chat.isSeda) {
         const b = document.createElement('span');
         b.style.cssText = 'background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:1px 6px;border-radius:8px;font-size:9px;';
@@ -474,12 +428,8 @@ export async function loadChannels() {
     }
 }
 
-// ===================================================================
-// ВЫБОР ЧАТА
-// ===================================================================
 export async function selectChat(chat) {
     if (!chat) return;
-
     closeCurrentSubscriptions();
 
     uiState.currentChat = chat;
@@ -646,9 +596,6 @@ function closeCurrentSubscriptions() {
     if (uiState.chatMetaUnsub) { uiState.chatMetaUnsub(); uiState.chatMetaUnsub = null; }
 }
 
-// ===================================================================
-// АВТО-ПРОЧТЕНИЕ
-// ===================================================================
 async function markChatRead(chat) {
     if (!chat) return;
     let chats = ensureArray(authState.userData?.chats);
@@ -666,16 +613,12 @@ async function markChatRead(chat) {
     } catch {}
 }
 
-// ===================================================================
-// СООБЩЕНИЯ — загрузка (кэш + реальное время)
-// ===================================================================
 export async function loadMessages() {
     if (uiState.messagesUnsub) { uiState.messagesUnsub(); uiState.messagesUnsub = null; }
     if (!uiState.currentChatId) return;
 
     const area = document.getElementById('messagesArea');
 
-    // 1) Сначала показываем кэш
     const cached = await DB.getCachedMessages(uiState.currentChatId);
     if (cached && cached.length) {
         area.innerHTML = '';
@@ -686,7 +629,6 @@ export async function loadMessages() {
         bindChatLongPress();
     }
 
-    // 2) Параллельно — реальные данные
     const mRef = collection(db, 'messages', uiState.currentChatId, 'msgs');
     uiState.messagesUnsub = onSnapshot(
         query(mRef, orderBy('timestamp', 'asc'), limit(300)),
@@ -731,9 +673,6 @@ async function markIncomingRead(msgs) {
     } catch {}
 }
 
-// ===================================================================
-// РЕНДЕР СООБЩЕНИЯ
-// ===================================================================
 function renderMessage(msg) {
     const isSent = msg.senderId === authState.user.uid;
     const div = document.createElement('div');
@@ -889,9 +828,6 @@ function renderMessage(msg) {
     return div;
 }
 
-// ===================================================================
-// ОТПРАВКА СООБЩЕНИЙ (с защитой от дублей)
-// ===================================================================
 export async function sendMessage() {
     if (uiState.isSending) return;
     const input = document.getElementById('messageInput');
@@ -1021,9 +957,6 @@ async function updateChatLastMessage(previewText) {
     }
 }
 
-// ===================================================================
-// СТИКЕРЫ
-// ===================================================================
 export function initStickerPicker() {
     const p = document.getElementById('stickerPicker');
     if (!p) return;
@@ -1068,9 +1001,6 @@ export async function sendSticker(sticker) {
     }
 }
 
-// ===================================================================
-// МЕДИА
-// ===================================================================
 export async function sendMediaFile(input) {
     const file = input.files && input.files[0];
     input.value = '';
@@ -1147,9 +1077,6 @@ export async function sendMediaFile(input) {
     }
 }
 
-// ===================================================================
-// ГОЛОСОВЫЕ
-// ===================================================================
 export async function toggleVoiceRecording() {
     if (uiState.currentChannel && !uiState.currentChannel.isAdmin) {
         showToast('❌ Только администраторы', 'error');
@@ -1234,9 +1161,6 @@ export async function toggleVoiceRecording() {
     }
 }
 
-// ===================================================================
-// РЕАКЦИИ
-// ===================================================================
 export async function toggleReaction(msgId, emoji, evt) {
     if (!uiState.currentChatId) return;
     if (!checkRateLimit(uiState.reactionTimes, RATE_LIMIT.reactions.count, RATE_LIMIT.reactions.windowMs)) return;
@@ -1288,9 +1212,6 @@ function spawnReactionBurst(targetEl, emoji) {
     }
 }
 
-// ===================================================================
-// ДОЛГОЕ НАЖАТИЕ
-// ===================================================================
 export function bindChatLongPress() {
     const area = document.getElementById('messagesArea');
     if (!area) return;
@@ -1425,9 +1346,6 @@ async function openMessageActionBar(id, msgEl) {
     }
 }
 
-// ===================================================================
-// РЕПЛАЙ / РЕДАКТИРОВАНИЕ / ПЕРЕСЫЛКА
-// ===================================================================
 export function startReply(id, msgData) {
     uiState.replyTo = id;
     const rp = document.getElementById('replyPreview');
@@ -1532,9 +1450,6 @@ export function scrollToMessage(id) {
     setTimeout(() => { el.style.boxShadow = ''; }, 1200);
 }
 
-// ===================================================================
-// SEDA — создание чата
-// ===================================================================
 export async function startSedaChat() {
     if (!authState.sedaProActivated) {
         showToast('⚠️ SEDA Pro не активирован', 'error');
@@ -1607,7 +1522,6 @@ export async function startSedaChat() {
 
     await DB.saveSedaKey(sedaChatId, sedaKey);
 
-    // Через 5 минут — очистка handshake, если никто не ответил
     setTimeout(async () => {
         try {
             const s = await getDoc(handshakeRef);
@@ -1655,9 +1569,6 @@ async function openSedaChat(peerUid, sedaChatId) {
     loadChats();
 }
 
-// ===================================================================
-// SEDA — слушатель входящих handshake (с защитой от дублей)
-// ===================================================================
 export function startSedaHandshakeListener() {
     if (uiState.sedaHandshakeUnsub) uiState.sedaHandshakeUnsub();
     if (!authState.user) return;
@@ -1665,11 +1576,10 @@ export function startSedaHandshakeListener() {
     const q = query(collection(db, 'seda_handshakes'), where('peer', '==', authState.user.uid));
     uiState.sedaHandshakeUnsub = onSnapshot(q, async (snap) => {
         for (const d of snap.docs) {
-            // Защита от повторной обработки
             if (uiState.processedHandshakes.has(d.id)) continue;
             const data = d.data();
             if (!data.initiatorPublicKey) continue;
-            if (data.peerPublicKey) continue; // уже обработан
+            if (data.peerPublicKey) continue;
 
             uiState.processedHandshakes.add(d.id);
 
@@ -1698,7 +1608,6 @@ export function startSedaHandshakeListener() {
                     try { await deleteDoc(d.ref); } catch {}
                 }, 5000);
 
-                // Добавляем SEDA-чат себе (с защитой от дублей)
                 const initiatorUid = data.initiator;
                 const contact = ensureArray(authState.userData.contacts).find(c => c.uid === initiatorUid);
                 if (contact) {
@@ -1727,12 +1636,15 @@ export function startSedaHandshakeListener() {
                 uiState.processedHandshakes.delete(d.id);
             }
         }
-    }, (err) => console.error('[SEDA handshake]', err));
+    }, (err) => {
+        if (err.code === 'permission-denied') {
+            console.warn('[SEDA handshake] Ожидание прав доступа. Игнорируем...');
+        } else {
+            console.error('[SEDA handshake]', err);
+        }
+    });
 }
 
-// ===================================================================
-// SEDA — ключи
-// ===================================================================
 export async function showCurrentSedaKey() {
     if (!uiState.sedaEnabledForCurrentChat || !uiState.currentChatId) {
         showToast('Откройте SEDA-чат', 'error');
@@ -1770,9 +1682,6 @@ export function copySedaKeyToClipboard() {
         .catch(() => showToast('❌ Ошибка', 'error'));
 }
 
-// ===================================================================
-// SEDA — UI
-// ===================================================================
 export function updateSedaUI() {
     const sm = document.getElementById('sedaModeBtn');
     const sk = document.getElementById('sedaKeyBtn');
@@ -1793,9 +1702,6 @@ export function updateSedaUI() {
     }
 }
 
-// ===================================================================
-// МЕТА-СЛУШАТЕЛЬ (typing, online)
-// ===================================================================
 function startChatMetaListener(chat) {
     if (uiState.chatMetaUnsub) uiState.chatMetaUnsub();
     if (!chat || !chat.uid || chat.isSeda) return;
@@ -1836,9 +1742,6 @@ export async function notifyTyping() {
     } catch {}
 }
 
-// ===================================================================
-// ОЧИСТКА / УДАЛЕНИЕ
-// ===================================================================
 export async function clearChatById(uid, sedaChatId) {
     const chatId = sedaChatId ? sedaChatId : [authState.user.uid, uid].sort().join('_');
     if (!confirm('Очистить историю?')) return;
@@ -1884,9 +1787,6 @@ export async function deleteCurrentChat() {
     closeChat();
 }
 
-// ===================================================================
-// ОТКРЫТЬ ЧАТ С КОНТАКТОМ
-// ===================================================================
 export async function openChatWithContact(contact) {
     if (!contact || !contact.uid) return;
     let chats = ensureArray(authState.userData?.chats);
@@ -1915,9 +1815,6 @@ export async function openChatWithContact(contact) {
     switchTab('chats');
 }
 
-// ===================================================================
-// ВКЛАДКИ
-// ===================================================================
 export function switchTab(tab) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
@@ -1936,9 +1833,6 @@ export function switchTab(tab) {
     else if (tab === 'contacts') loadContacts();
 }
 
-// ===================================================================
-// АВТОУДАЛЕНИЕ
-// ===================================================================
 let autoDeleteInterval = null;
 
 export async function setAutoDelete(hours) {
