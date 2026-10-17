@@ -172,7 +172,6 @@ export async function handleAuthLogin(user, callbacks = {}) {
         await waitForAuthReady();
         const cached = loadAuthCache();
         
-        // Если кэш от другого пользователя — игнорируем его и чистим
         if (cached && cached.uid !== user.uid) {
             clearAuthCache();
         } else if (cached && cached.uid === user.uid && cached.data) {
@@ -275,6 +274,9 @@ export async function cancel2FA() {
     try { await signOut(auth); } catch {}
 }
 
+// ===================================================================
+// ВХОД (С ЗАЩИТОЙ ОТ ЗАВИСАНИЯ FIRESTORE)
+// ===================================================================
 export async function login(identifier, password) {
     if (authState.loggingIn) return { success: false, error: 'Вход уже выполняется. Подождите...' };
     
@@ -297,18 +299,33 @@ export async function login(identifier, password) {
         if (!cleanIdentifier.includes('@')) {
             if (!isValidGlobalId(cleanIdentifier)) { recordFailedAttempt(); return { success: false, error: 'Неверный формат Global ID' }; }
             let foundEmail = null;
-            try {
-                const gidDoc = await getDoc(doc(db, 'global_ids', cleanIdentifier));
-                if (gidDoc.exists()) foundEmail = gidDoc.data().email;
-            } catch (e) {}
 
-            if (!foundEmail) {
+            // Оборачиваем поиск в Firestore в таймаут 6 секунд
+            const searchPromise = (async () => {
+                try {
+                    const gidDoc = await getDoc(doc(db, 'global_ids', cleanIdentifier));
+                    if (gidDoc.exists()) return gidDoc.data().email;
+                } catch (e) {}
+
                 try {
                     const q = query(collection(db, 'users'), where('globalId', '==', cleanIdentifier), limit(1));
                     const snap = await getDocs(q);
-                    if (!snap.empty) foundEmail = snap.docs[0].data().email;
+                    if (!snap.empty) return snap.docs[0].data().email;
                 } catch (e) {}
+                return null;
+            })();
+
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000));
+
+            try {
+                foundEmail = await Promise.race([searchPromise, timeoutPromise]);
+            } catch (err) {
+                if (err.message === 'timeout') {
+                    recordFailedAttempt();
+                    return { success: false, error: 'Сервер не отвечает. Проверьте интернет.' };
+                }
             }
+
             if (!foundEmail) { recordFailedAttempt(); return { success: false, error: 'Global ID не найден' }; }
             email = foundEmail;
         } else {
