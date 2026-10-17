@@ -1,6 +1,3 @@
-// ===================================================================
-// js/auth.js — Авторизация (Айсберг)
-// ===================================================================
 import { auth, db, SEDA_ACTIVATION_CODE } from './config.js';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, serverTimestamp, arrayUnion, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -26,7 +23,6 @@ export const authState = {
     restoredFromCache: false
 };
 
-// Защита от вечного "Вход уже выполняется"
 function resetLoggingIn() {
     setTimeout(() => { authState.loggingIn = false; }, 10000);
 }
@@ -35,15 +31,18 @@ function getBruteForceState() {
     try { return JSON.parse(localStorage.getItem(BRUTE_FORCE_KEY) || '{"attempts":0,"lockedUntil":0}'); }
     catch { return { attempts: 0, lockedUntil: 0 }; }
 }
+
 function saveBruteForceState(state) {
     try { localStorage.setItem(BRUTE_FORCE_KEY, JSON.stringify(state)); } catch {}
 }
+
 function isLockedOut() {
     const s = getBruteForceState();
     if (s.lockedUntil && s.lockedUntil > Date.now()) return { locked: true, secondsLeft: Math.ceil((s.lockedUntil - Date.now()) / 1000) };
     if (s.lockedUntil && s.lockedUntil <= Date.now()) saveBruteForceState({ attempts: 0, lockedUntil: 0 });
     return { locked: false };
 }
+
 function recordFailedAttempt() {
     const s = getBruteForceState();
     s.attempts = (s.attempts || 0) + 1;
@@ -51,6 +50,7 @@ function recordFailedAttempt() {
     saveBruteForceState(s);
     return s;
 }
+
 function resetFailedAttempts() { saveBruteForceState({ attempts: 0, lockedUntil: 0 }); }
 
 function checkRateLimit(key, maxCount, windowMs) {
@@ -73,6 +73,7 @@ function sanitizeIdentifier(raw) { return typeof raw === 'string' ? raw.trim().r
 function saveAuthCache(uid, data) {
     try { localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify({ uid, data, savedAt: Date.now() })); } catch {}
 }
+
 function loadAuthCache() {
     try {
         const raw = localStorage.getItem(AUTH_CACHE_KEY);
@@ -85,6 +86,7 @@ function loadAuthCache() {
         return parsed;
     } catch { return null; }
 }
+
 function clearAuthCache() { try { localStorage.removeItem(AUTH_CACHE_KEY); } catch {} }
 
 export async function collectDeviceInfo() {
@@ -94,6 +96,7 @@ export async function collectDeviceInfo() {
     fetch('https://api.ipify.org?format=json').then(r => r.json()).then(d => { authState.currentIP = d.ip; }).catch(() => { authState.currentIP = 'unknown'; });
     return { ip: authState.currentIP || 'unknown', fingerprint: authState.deviceFingerprint };
 }
+
 function collectDeviceInfoSync() {
     const n = navigator;
     const raw = `${n.userAgent}|${n.language}|${screen.width}x${screen.height}|${n.platform}|${n.hardwareConcurrency || 0}`;
@@ -102,6 +105,7 @@ function collectDeviceInfoSync() {
     authState.deviceFingerprint = 'fp_' + (h >>> 0).toString(16);
     return authState.deviceFingerprint;
 }
+
 function waitForAuthReady(timeoutMs = 3000) {
     if (auth.currentUser) return Promise.resolve(auth.currentUser);
     return new Promise((resolve) => {
@@ -117,17 +121,16 @@ async function isDeviceKnown(uid) {
         const devices = d.data()?.trustedDevices || [];
         if (devices.length === 0) return false;
         return devices.some(x => x.fingerprint === authState.deviceFingerprint);
-    } catch (e) {
-        console.warn('[auth] isDeviceKnown error:', e.message);
-        return false;
-    }
+    } catch (e) { return false; }
 }
+
 async function isAccountLocked(uid) {
     try {
         const d = await getDoc(doc(db, 'users', uid));
         return d.data()?.accountLocked === true;
     } catch (e) { return false; }
 }
+
 async function addKnownDevice(uid) {
     try {
         await updateDoc(doc(db, 'users', uid), {
@@ -136,7 +139,7 @@ async function addKnownDevice(uid) {
                 userAgent: navigator.userAgent, addedAt: new Date(), lastUsed: new Date()
             })
         });
-    } catch (e) { console.warn('[auth] addKnownDevice error:', e.message); }
+    } catch (e) {}
 }
 
 async function generate2FACode(uid) {
@@ -148,7 +151,7 @@ async function generate2FACode(uid) {
             twoFactorCodeExpires: new Date(Date.now() + 5 * 60 * 1000),
             pendingDeviceInfo: { ip: authState.currentIP || 'unknown', userAgent: navigator.userAgent, requestedAt: new Date() }
         });
-    } catch (e) { console.warn('[auth] generate2FACode error:', e.message); }
+    } catch (e) {}
     return code;
 }
 
@@ -234,7 +237,7 @@ async function syncUserFromServer(uid) {
             online: true, lastSeen: serverTimestamp(),
             currentIP: authState.currentIP || 'unknown', currentDevice: authState.deviceFingerprint
         }).catch(() => {});
-    } catch (e) { console.warn('[auth] syncUserFromServer error:', e.message); }
+    } catch (e) {}
 }
 
 export async function verify2FA(code, trustDevice = false) {
@@ -253,7 +256,7 @@ export async function verify2FA(code, trustDevice = false) {
             online: true, lastSeen: serverTimestamp(),
             currentIP: authState.currentIP || 'unknown', currentDevice: authState.deviceFingerprint
         });
-    } catch (e) { console.warn('[auth] verify2FA update error:', e.message); }
+    } catch (e) {}
 
     authState.awaitingTwoFactor = false; authState.user = user; authState.pendingUser = null;
     const ud = await getDoc(doc(db, 'users', user.uid));
@@ -280,7 +283,7 @@ export async function login(identifier, password) {
     if (password.length < 6) return { success: false, error: 'Пароль минимум 6 символов' };
 
     authState.loggingIn = true;
-    resetLoggingIn(); // Сброс через 10 сек на случай зависания
+    resetLoggingIn();
 
     try {
         collectDeviceInfoSync();
@@ -384,4 +387,5 @@ export function startBlockCheck(uid, onBlocked, intervalMs = 30000) {
         if (await isAccountLocked(uid)) { stopBlockCheck(); onBlocked?.(); await logout(); }
     }, intervalMs);
 }
+
 export function stopBlockCheck() { if (blockCheckInterval) { clearInterval(blockCheckInterval); blockCheckInterval = null; } }
