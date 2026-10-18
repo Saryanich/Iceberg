@@ -2080,10 +2080,10 @@ export function startSedaHandshakeListener() {
                 }
                 continue;
             }
-            // Инициатор подтвердил, что получил и сохранил ключ. Оставляем документ в Firestore
-            // (в нём только зашифрованный ключ), но отмечаем handshake завершённым.
-            if (data.initiatorAck === true && data.completed !== true) {
-                await updateDoc(d.ref, { completed: true, completedAt: Date.now() }).catch(() => {});
+            // Инициатор подтвердил сохранение ключа на устройстве. Удаляем рукопожатие:
+            // после подтверждения ключи уже находятся локально у обеих сторон.
+            if (data.initiatorAck === true && data.mode !== 'iceberg-base') {
+                await deleteDoc(d.ref).catch(err => console.warn('[SEDA] Не удалось удалить рукопожатие:', err));
                 continue;
             }
             if (data.completed === true || uiState.processedHandshakes.has(d.id)) continue;
