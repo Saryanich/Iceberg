@@ -1291,8 +1291,12 @@ export async function sendMediaFile(input) {
         showToast('❌ Только администраторы', 'error');
         return;
     }
-    if (file.size > MAX_MEDIA_SIZE) {
-        showToast(`Файл слишком большой (макс ${formatBytes(MAX_MEDIA_SIZE)})`, 'error');
+    const isImageFile = file.type.startsWith('image/');
+    const maxOriginalImageSize = 15 * 1024 * 1024;
+    if ((!isImageFile && file.size > MAX_MEDIA_SIZE) ||
+        (isImageFile && file.size > maxOriginalImageSize)) {
+        const maxSize = isImageFile ? maxOriginalImageSize : MAX_MEDIA_SIZE;
+        showToast(`Файл слишком большой (макс ${formatBytes(maxSize)})`, 'error');
         return;
     }
     if (!checkRateLimit(uiState.mediaTimes, RATE_LIMIT.media.count, RATE_LIMIT.media.windowMs)) return;
