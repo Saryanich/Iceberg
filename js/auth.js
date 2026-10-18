@@ -23,10 +23,6 @@ export const authState = {
     restoredFromCache: false
 };
 
-function resetLoggingIn() {
-    setTimeout(() => { authState.loggingIn = false; }, 10000);
-}
-
 function getBruteForceState() {
     try { return JSON.parse(localStorage.getItem(BRUTE_FORCE_KEY) || '{"attempts":0,"lockedUntil":0}'); }
     catch { return { attempts: 0, lockedUntil: 0 }; }
@@ -293,7 +289,6 @@ export async function login(identifier, password) {
     if (password.length < 6) return { success: false, error: 'Пароль минимум 6 символов' };
 
     authState.loggingIn = true;
-    resetLoggingIn();
 
     try {
         collectDeviceInfoSync();
