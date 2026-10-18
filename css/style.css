@@ -2161,3 +2161,166 @@ input::placeholder, textarea::placeholder {
     .chat-operation-spinner { animation-duration: 2s; }
     .chat-operation-indicator { animation: none; }
 }
+
+
+/* ==================== ICEBERG OFFLINE / CONNECTION RECOVERY ==================== */
+#loadingScreen::before,
+#loadingScreen::after {
+    content: none !important;
+    animation: none !important;
+}
+.loading-ring,
+.loading-ring::before {
+    display: none !important;
+    animation: none !important;
+}
+.loading-logo-wrap::before {
+    animation: glowPulse 3s ease-in-out infinite !important;
+}
+@media (prefers-reduced-motion: reduce) {
+    .loading-logo-wrap::before { animation: none !important; }
+}
+
+.offline-screen[hidden] { display: none !important; }
+.offline-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    display: grid;
+    place-items: center;
+    padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+    overflow: auto;
+    color: #eaf4ff;
+    background:
+        radial-gradient(ellipse at 50% 28%, rgba(39, 105, 164, .24), transparent 44%),
+        linear-gradient(145deg, #050914 0%, #0a1427 52%, #050812 100%);
+    opacity: 1;
+    transition: opacity .42s ease, filter .42s ease, transform .42s ease;
+}
+.offline-screen.is-exiting {
+    opacity: 0;
+    filter: blur(12px);
+    transform: scale(1.025);
+    pointer-events: none;
+}
+.offline-card {
+    width: min(100%, 430px);
+    padding: clamp(26px, 6vw, 42px);
+    text-align: center;
+    border: 1px solid rgba(148, 196, 238, .18);
+    border-radius: 28px;
+    background: linear-gradient(160deg, rgba(17, 34, 58, .94), rgba(8, 16, 31, .96));
+    box-shadow: 0 28px 90px rgba(0, 0, 0, .36), inset 0 1px rgba(255,255,255,.04);
+    animation: offlineCardIn .55s cubic-bezier(.16, 1, .3, 1) both;
+}
+.offline-mark {
+    width: 76px;
+    height: 76px;
+    display: grid;
+    place-items: center;
+    margin: 0 auto 24px;
+    border-radius: 24px;
+    border: 1px solid rgba(125, 211, 252, .22);
+    background: radial-gradient(circle, rgba(56, 145, 210, .22), rgba(12, 30, 52, .3));
+    box-shadow: 0 0 38px rgba(64, 164, 255, .12);
+}
+.offline-mark span {
+    position: relative;
+    width: 27px;
+    height: 27px;
+    border: 2px solid #8bd5ff;
+    border-radius: 50%;
+}
+.offline-mark span::before,
+.offline-mark span::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 34px;
+    height: 2px;
+    border-radius: 2px;
+    background: #8bd5ff;
+    transform: translate(-50%, -50%) rotate(45deg);
+}
+.offline-mark span::after { transform: translate(-50%, -50%) rotate(-45deg); }
+.offline-eyebrow {
+    margin-bottom: 12px;
+    color: #80cfff;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .24em;
+}
+.offline-card h1 {
+    margin: 0 0 12px;
+    color: #f2f8ff;
+    font-size: clamp(25px, 6vw, 32px);
+    letter-spacing: -.035em;
+}
+.offline-card > p {
+    margin: 0 auto;
+    max-width: 330px;
+    color: #a8bbd1;
+    font-size: 14px;
+    line-height: 1.65;
+}
+.offline-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    margin: 23px 0 20px;
+    color: #a8bbd1;
+    font-size: 12px;
+}
+.offline-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #ff8e9b;
+    box-shadow: 0 0 12px rgba(255, 100, 125, .45);
+}
+.offline-screen.is-checking .offline-status-dot {
+    background: #80cfff;
+    box-shadow: 0 0 12px rgba(100, 181, 246, .6);
+    animation: offlinePulse 1s ease-in-out infinite;
+}
+.offline-retry {
+    width: 100%;
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 13px 18px;
+    color: #071321;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 800;
+    border: 0;
+    border-radius: 15px;
+    cursor: pointer;
+    background: linear-gradient(110deg, #9be1ff, #78baff 55%, #c4b5fd);
+    box-shadow: 0 9px 28px rgba(74, 157, 229, .2);
+    transition: transform .18s ease, filter .18s ease, opacity .18s ease;
+}
+.offline-retry:hover { filter: brightness(1.07); transform: translateY(-1px); }
+.offline-retry:active { transform: scale(.985); }
+.offline-retry:disabled { cursor: wait; opacity: .7; transform: none; }
+.retry-icon { font-size: 22px; line-height: 1; }
+.offline-screen.is-checking .retry-icon { animation: retrySpin .9s linear infinite; }
+.offline-card .offline-footnote {
+    margin-top: 17px;
+    color: #7188a2;
+    font-size: 11px;
+}
+@keyframes offlineCardIn {
+    from { opacity: 0; transform: translateY(12px) scale(.985); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes offlinePulse { 50% { opacity: .35; } }
+@keyframes retrySpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+    .offline-card, .offline-screen, .offline-screen.is-checking .retry-icon,
+    .offline-screen.is-checking .offline-status-dot { animation: none !important; transition: none !important; }
+}
