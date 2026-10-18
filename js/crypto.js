@@ -204,6 +204,49 @@ export async function sedaUltraDecrypt(payload, keyStr) {
 export function isSedaUltraPayload(payload) {
     return typeof payload === 'string' && payload.startsWith(ULTRA_PREFIX);
 }
+ 
+// Базовый режим Iceberg: один AES-256-GCM слой, отдельно от SEDA Ultra.
+const BASE_PREFIX = 'ICEBERGBASE1:';
+
+async function deriveBaseKey(keyStr) {
+    if (typeof keyStr !== 'string' || !keyStr.startsWith('SEDAKEY:')) throw new Error('Некорректный ключ Iceberg');
+    const raw = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(keyStr));
+    const material = await crypto.subtle.importKey('raw', raw, 'HKDF', false, ['deriveKey']);
+    const salt = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('Iceberg Base Encryption v1'));
+    return crypto.subtle.deriveKey({
+        name: 'HKDF', hash: 'SHA-256', salt,
+        info: new TextEncoder().encode('Iceberg Base / AES-256-GCM / v1')
+    }, material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+
+export async function icebergBaseEncrypt(text, keyStr) {
+    const key = await deriveBaseKey(keyStr);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, tagLength: 128 }, key, new TextEncoder().encode(String(text)));
+    return BASE_PREFIX + JSON.stringify({ v: 1, iv: bufToBase64(iv), c: bufToBase64(cipher) });
+}
+
+export async function icebergBaseDecrypt(payload, keyStr) {
+    try {
+        if (typeof payload !== 'string' || !payload.startsWith(BASE_PREFIX)) return null;
+        const envelope = JSON.parse(payload.slice(BASE_PREFIX.length));
+        if (envelope?.v !== 1 || typeof envelope.iv !== 'string' || typeof envelope.c !== 'string') return null;
+        const key = await deriveBaseKey(keyStr);
+        const plain = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: new Uint8Array(base64ToBuf(envelope.iv)), tagLength: 128 },
+            key, base64ToBuf(envelope.c)
+        );
+        return new TextDecoder().decode(plain);
+    } catch (e) {
+        console.error('[Iceberg Base] decrypt error:', e);
+        return null;
+    }
+}
+
+export function isIcebergBasePayload(payload) {
+    return typeof payload === 'string' && payload.startsWith(BASE_PREFIX);
+}
+
 
 // ===================================================================
 // ЧАСТЬ 3: SHA-256 (для 2FA и хэшей)
