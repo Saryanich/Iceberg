@@ -11,8 +11,7 @@ import {
     subscribeAuthState,
     startBlockCheck,
     stopBlockCheck,
-    collectDeviceInfo,
-    tryInstantRestore
+    collectDeviceInfo
 } from './auth.js';
 
 import * as DB from './db.js';
