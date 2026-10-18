@@ -208,8 +208,12 @@ export function isSedaUltraPayload(payload) {
 // Базовый режим Iceberg: один AES-256-GCM слой, отдельно от SEDA Ultra.
 const BASE_PREFIX = 'ICEBERGBASE1:';
 
+export function generateIcebergBaseKey() {
+    return 'ICEBERGBASEKEY:' + bufToBase64(crypto.getRandomValues(new Uint8Array(32)));
+}
+
 async function deriveBaseKey(keyStr) {
-    if (typeof keyStr !== 'string' || !keyStr.startsWith('SEDAKEY:')) throw new Error('Некорректный ключ Iceberg');
+    if (typeof keyStr !== 'string' || !keyStr.startsWith('ICEBERGBASEKEY:')) throw new Error('Некорректный ключ Iceberg');
     const raw = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(keyStr));
     const material = await crypto.subtle.importKey('raw', raw, 'HKDF', false, ['deriveKey']);
     const salt = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('Iceberg Base Encryption v1'));
