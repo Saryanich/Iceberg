@@ -60,7 +60,7 @@ function checkRateLimit(key, maxCount, windowMs) {
         all[key] = arr;
         localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(all));
         return true;
-    } catch { return true; }
+    } catch { return false; }
 }
 
 function isValidEmail(email) { return typeof email === 'string' && email.length >= 5 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
@@ -95,13 +95,9 @@ function getPersistentDeviceToken() {
         let token = localStorage.getItem(DEVICE_TOKEN_KEY);
         if (token && /^dev_[a-f0-9]{64}$/.test(token)) return token;
 
+        if (!globalThis.crypto?.getRandomValues) return null;
         const bytes = new Uint8Array(32);
-        if (globalThis.crypto?.getRandomValues) {
-            globalThis.crypto.getRandomValues(bytes);
-        } else {
-            // Compatibility fallback for older browsers; the token is still persisted locally.
-            for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
-        }
+        globalThis.crypto.getRandomValues(bytes);
         token = 'dev_' + Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
         localStorage.setItem(DEVICE_TOKEN_KEY, token);
         return token;
