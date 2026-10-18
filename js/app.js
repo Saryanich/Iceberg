@@ -144,26 +144,6 @@ function showMessengerScreen() {
     app.addEventListener('animationend', () => app.classList.remove('interface-enter'), { once: true });
 }
 
-function animateLoadingProgress(durationMs = 5000) {
-    const bar = document.getElementById('loadingBar');
-    const percent = document.getElementById('loadingPercent');
-    if (!bar || !percent) return;
-
-    const start = Date.now();
-    const tick = () => {
-        const elapsed = Date.now() - start;
-        const progress = Math.min(elapsed / durationMs, 1);
-        const eased = 1 - Math.pow(1 - progress, 3);
-        const value = Math.round(eased * 100);
-        bar.style.width = value + '%';
-        percent.textContent = value;
-        if (progress < 1) {
-            requestAnimationFrame(tick);
-        }
-    };
-    tick();
-}
-
 function show2FAScreen() {
     document.getElementById('twoFactorScreen').classList.add('active');
     document.getElementById('code1')?.focus();
