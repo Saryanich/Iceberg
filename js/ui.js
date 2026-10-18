@@ -1113,6 +1113,10 @@ export async function sendMessage() {
             return;
         }
 
+        if (chatContext.currentChat?.isSeda && !authState.sedaProActivated) {
+            showToast('SEDA-чаты доступны только с активной подпиской', 'error');
+            return;
+        }
         if (chatContext.sedaEnabled && authState.sedaProActivated) {
             let keyStr = chatContext.sedaKey;
             if (!keyStr) {
@@ -1349,7 +1353,9 @@ export async function sendMediaFile(input) {
                 chatContext.sedaKey = keyStr;
                 if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = keyStr;
             }
-            mediaToSend = await sedaUltraEncryptWithKey(dataUrl, keyStr);
+            mediaToSend = chatContext.currentChat?.isSeda
+                ? await sedaUltraEncryptWithKey(dataUrl, keyStr)
+                : await icebergBaseEncrypt(dataUrl, keyStr);
             mediaEncrypted = true;
         }
 
@@ -1444,6 +1450,10 @@ export async function toggleVoiceRecording() {
                 try {
                     let dataUrl = reader.result;
                     let mediaEncrypted = false;
+                    if (chatContext.currentChat?.isSeda && !authState.sedaProActivated) {
+                        showToast('SEDA-чаты доступны только с активной подпиской', 'error');
+                        return;
+                    }
                     if (chatContext.sedaEnabled && authState.sedaProActivated) {
                         let keyStr = chatContext.sedaKey;
                         if (!keyStr) {
@@ -1452,7 +1462,9 @@ export async function toggleVoiceRecording() {
                             chatContext.sedaKey = keyStr;
                             if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = keyStr;
                         }
-                        dataUrl = await sedaUltraEncryptWithKey(dataUrl, keyStr);
+                        dataUrl = chatContext.currentChat?.isSeda
+                            ? await sedaUltraEncryptWithKey(dataUrl, keyStr)
+                            : await icebergBaseEncrypt(dataUrl, keyStr);
                         mediaEncrypted = true;
                     }
                     const preview = '🎤 Голосовое';
