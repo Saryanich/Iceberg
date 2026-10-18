@@ -158,6 +158,7 @@ async function renderMessagesSequentially(area, messages, loadVersion, chatId) {
     const renderVersion = ++messageRenderSequence;
     const operationRows = Array.from(area.querySelectorAll('.chat-operation-indicator'));
     area.innerHTML = '';
+    for (const row of operationRows) area.appendChild(row);
     for (let i = 0; i < messages.length; i++) {
         if (loadVersion !== messageLoadVersion ||
             renderVersion !== messageRenderSequence ||
@@ -170,7 +171,6 @@ async function renderMessagesSequentially(area, messages, loadVersion, chatId) {
     if (loadVersion === messageLoadVersion && renderVersion === messageRenderSequence &&
         uiState.currentChatId === chatId) {
         bindChatLongPress();
-        for (const row of operationRows) area.appendChild(row);
         area.scrollTop = area.scrollHeight;
         return true;
     }
