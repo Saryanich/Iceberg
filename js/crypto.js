@@ -62,18 +62,29 @@ function erccDecrypt(text) {
     return out.join('');
 }
 
-// Генерация SEDA-ключа: { 8-битная строка: число }
+// Генерация SEDA-ключа: формат оставлен совместимым со старыми ключами.
+// Используем CSPRNG вместо Math.random(), чтобы новые таблицы подстановки
+// нельзя было предсказать по состоянию обычного генератора случайных чисел.
 export function generateSedaKey() {
+    if (!globalThis.crypto?.getRandomValues) {
+        throw new Error('Криптографический генератор случайных чисел недоступен');
+    }
+
     const key = {};
     const used = new Set();
+    const values = new Uint32Array(128);
+
     for (let i = 32; i < 127; i++) {
         let n;
-        let guard = 0;
+        let attempts = 0;
         do {
-            n = Math.floor(Math.random() * 1000);
-            guard++;
-            if (guard > 5000) break;
+            if (attempts >= 128) {
+                crypto.getRandomValues(values);
+                attempts = 0;
+            }
+            n = values[attempts++] % 1000;
         } while (used.has(n));
+
         used.add(n);
         key[i.toString(2).padStart(8, '0')] = n;
     }
