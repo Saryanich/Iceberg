@@ -73,6 +73,7 @@ export function generateSedaKey() {
     const key = {};
     const used = new Set();
     const values = new Uint32Array(128);
+    crypto.getRandomValues(values);
 
     for (let i = 32; i < 127; i++) {
         let n;
