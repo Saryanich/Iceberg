@@ -6,7 +6,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
  
 import {
-    sedaEncrypt, sedaDecrypt, sedaEncryptWithKey, serializeKey, deserializeKey,
+    sedaEncrypt, sedaDecrypt, sedaEncryptWithKey, sedaUltraEncryptWithKey, sedaUltraDecrypt, isSedaUltraPayload, serializeKey, deserializeKey,
     generateECDHKeyPair, exportPublicKey, importPublicKey,
     exportPrivateKey, deriveSharedKey, aesEncrypt, aesDecrypt
 } from './crypto.js';
@@ -163,7 +163,7 @@ async function renderMessagesSequentially(area, messages, loadVersion, chatId) {
         if (loadVersion !== messageLoadVersion ||
             renderVersion !== messageRenderSequence ||
             uiState.currentChatId !== chatId) return false;
-        area.appendChild(renderMessage(messages[i]));
+        area.appendChild(await renderMessage(messages[i]));
         if (i > 0 && i % 8 === 0) {
             await new Promise(resolve => requestAnimationFrame(() => resolve()));
         }
@@ -902,7 +902,7 @@ async function markIncomingRead(msgs, chatId) {
     }
 }
 
-function renderMessage(msg) {
+async function renderMessage(msg) {
     const isSent = msg.senderId === authState.user.uid;
     const div = document.createElement('div');
     div.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
@@ -915,7 +915,9 @@ function renderMessage(msg) {
 
     if (isEncrypted && msg.text) {
         if (uiState.currentSedaKey) {
-            const dec = sedaDecrypt(msg.text, uiState.currentSedaKey);
+            const dec = isSedaUltraPayload(msg.text)
+                ? await sedaUltraDecrypt(msg.text, uiState.currentSedaKey)
+                : sedaDecrypt(msg.text, uiState.currentSedaKey);
             if (dec !== null) {
                 displayText = dec;
                 isDecrypted = true;
@@ -933,7 +935,9 @@ function renderMessage(msg) {
     let mediaSrc = null;
     if ((msg.type === 'photo' || msg.type === 'video' || msg.type === 'file' || msg.type === 'audio') && msg.media) {
         if (msg.mediaEncrypted && uiState.currentSedaKey) {
-            mediaSrc = sedaDecrypt(msg.media, uiState.currentSedaKey);
+            mediaSrc = isSedaUltraPayload(msg.media)
+                ? await sedaUltraDecrypt(msg.media, uiState.currentSedaKey)
+                : sedaDecrypt(msg.media, uiState.currentSedaKey);
         } else {
             mediaSrc = msg.media;
         }
@@ -1089,12 +1093,13 @@ export async function sendMessage() {
             uiState.editingMessage = null;
             let editText = originalText;
             if (chatContext.sedaEnabled && chatContext.sedaKey) {
-                editText = sedaEncryptWithKey(originalText, chatContext.sedaKey);
+                editText = await sedaUltraEncryptWithKey(originalText, chatContext.sedaKey);
             }
             await updateDoc(doc(db, 'messages', chatIdAtSend, 'msgs', editId), {
                 text: editText,
                 edited: true,
-                editedAt: serverTimestamp()
+                editedAt: serverTimestamp(),
+                cryptoVersion: isSedaUltraPayload(editText) ? 'SEDA_ULTRA_1' : 'SEDA_PRO_3'
             });
             document.getElementById('replyPreview')?.classList.add('hidden');
             return;
@@ -1106,13 +1111,13 @@ export async function sendMessage() {
         if (chatContext.sedaEnabled && authState.sedaProActivated) {
             let keyStr = chatContext.sedaKey;
             if (!keyStr) {
-                const r = sedaEncrypt(originalText);
-                textToSend = r.encrypted;
+                const r = sedaEncrypt('init');
+                textToSend = await sedaUltraEncryptWithKey(originalText, r.key);
                 await DB.saveSedaKey(chatIdAtSend, r.key);
                 chatContext.sedaKey = r.key;
                 if (uiState.currentChatId === chatIdAtSend) uiState.currentSedaKey = r.key;
             } else {
-                textToSend = sedaEncryptWithKey(originalText, keyStr);
+                textToSend = await sedaUltraEncryptWithKey(originalText, keyStr);
             }
             encrypted = true;
         }
@@ -1124,6 +1129,7 @@ export async function sendMessage() {
             timestamp: serverTimestamp(),
             read: false,
             encrypted,
+            cryptoVersion: encrypted ? 'SEDA_ULTRA_1' : null,
             type: 'text',
             replyTo: uiState.replyTo || null,
             reactions: {}
@@ -1335,7 +1341,7 @@ export async function sendMediaFile(input) {
                 chatContext.sedaKey = r.key;
                 if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = r.key;
             }
-            mediaToSend = sedaEncryptWithKey(dataUrl, keyStr);
+            mediaToSend = await sedaUltraEncryptWithKey(dataUrl, keyStr);
             mediaEncrypted = true;
         }
 
@@ -1439,7 +1445,7 @@ export async function toggleVoiceRecording() {
                             chatContext.sedaKey = r.key;
                             if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = r.key;
                         }
-                        dataUrl = sedaEncryptWithKey(dataUrl, keyStr);
+                        dataUrl = await sedaUltraEncryptWithKey(dataUrl, keyStr);
                         mediaEncrypted = true;
                     }
                     const preview = '🎤 Голосовое';
