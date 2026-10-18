@@ -881,6 +881,14 @@ export async function sendMessage() {
 
     uiState.isSending = true;
     const chatIdAtSend = uiState.currentChatId;
+    const chatContext = {
+        chatId: chatIdAtSend,
+        currentChat: uiState.currentChat,
+        currentGroup: uiState.currentGroup,
+        currentChannel: uiState.currentChannel,
+        sedaEnabled: uiState.sedaEnabledForCurrentChat,
+        sedaKey: uiState.currentSedaKey
+    };
     const originalText = text;
     input.value = '';
     input.style.height = 'auto';
@@ -890,8 +898,8 @@ export async function sendMessage() {
             const editId = uiState.editingMessage;
             uiState.editingMessage = null;
             let editText = originalText;
-            if (uiState.sedaEnabledForCurrentChat && uiState.currentSedaKey) {
-                editText = sedaEncryptWithKey(originalText, uiState.currentSedaKey);
+            if (chatContext.sedaEnabled && chatContext.sedaKey) {
+                editText = sedaEncryptWithKey(originalText, chatContext.sedaKey);
             }
             await updateDoc(doc(db, 'messages', chatIdAtSend, 'msgs', editId), {
                 text: editText,
@@ -905,13 +913,14 @@ export async function sendMessage() {
         let textToSend = originalText;
         let encrypted = false;
 
-        if (uiState.sedaEnabledForCurrentChat && authState.sedaProActivated) {
-            let keyStr = uiState.currentSedaKey;
+        if (chatContext.sedaEnabled && authState.sedaProActivated) {
+            let keyStr = chatContext.sedaKey;
             if (!keyStr) {
                 const r = sedaEncrypt(originalText);
                 textToSend = r.encrypted;
                 await DB.saveSedaKey(chatIdAtSend, r.key);
-                uiState.currentSedaKey = r.key;
+                chatContext.sedaKey = r.key;
+                if (uiState.currentChatId === chatIdAtSend) uiState.currentSedaKey = r.key;
             } else {
                 textToSend = sedaEncryptWithKey(originalText, keyStr);
             }
@@ -932,7 +941,7 @@ export async function sendMessage() {
 
         await addDoc(collection(db, 'messages', chatIdAtSend, 'msgs'), message);
         cancelReply();
-        await updateChatLastMessage(originalText);
+        await updateChatLastMessage(originalText, chatContext);
     } catch (e) {
         console.error('Ошибка отправки:', e);
         showToast('❌ Ошибка отправки', 'error');
@@ -942,15 +951,19 @@ export async function sendMessage() {
     }
 }
 
-async function updateChatLastMessage(previewText) {
+async function updateChatLastMessage(previewText, context) {
     try {
-        const chatIdAtSend = uiState.currentChatId;
+        const chatIdAtSend = context?.chatId;
+        const currentChat = context?.currentChat;
+        const currentGroup = context?.currentGroup;
+        const currentChannel = context?.currentChannel;
+        if (!chatIdAtSend || !currentChat) return;
 
-        if (uiState.currentChat) {
+        if (currentChat) {
             let chats = ensureArray(authState.userData?.chats);
-            let idx = uiState.currentChat.isSeda && uiState.currentChat.sedaChatId
-                ? chats.findIndex(c => c.sedaChatId === uiState.currentChat.sedaChatId)
-                : chats.findIndex(c => c.uid === uiState.currentChat.uid && !c.isGroup && !c.isSeda);
+            let idx = currentChat.isSeda && currentChat.sedaChatId
+                ? chats.findIndex(c => c.sedaChatId === currentChat.sedaChatId)
+                : chats.findIndex(c => c.uid === currentChat.uid && !c.isGroup && !c.isSeda);
             if (idx !== -1) {
                 const u = [...chats];
                 u[idx] = { ...u[idx], lastMessage: previewText, lastMessageTime: new Date() };
@@ -959,14 +972,14 @@ async function updateChatLastMessage(previewText) {
                 loadChats();
             }
 
-            if (!uiState.currentGroup && !uiState.currentChannel && uiState.currentChat.uid) {
-                const cRef = doc(db, 'users', uiState.currentChat.uid);
+            if (!currentGroup && !currentChannel && currentChat.uid) {
+                const cRef = doc(db, 'users', currentChat.uid);
                 const cDoc = await getDoc(cRef);
                 if (cDoc.exists()) {
                     const cd = cDoc.data();
                     const cChats = ensureArray(cd.chats);
-                    let cIdx = uiState.currentChat.isSeda && uiState.currentChat.sedaChatId
-                        ? cChats.findIndex(c => c.sedaChatId === uiState.currentChat.sedaChatId)
+                    let cIdx = currentChat.isSeda && currentChat.sedaChatId
+                        ? cChats.findIndex(c => c.sedaChatId === currentChat.sedaChatId)
                         : cChats.findIndex(c => c.uid === authState.user.uid && !c.isGroup && !c.isSeda);
                     if (cIdx !== -1) {
                         const u = [...cChats];
@@ -980,8 +993,8 @@ async function updateChatLastMessage(previewText) {
                             avatar: authState.userData.avatar || null,
                             mood: authState.userData.mood || null,
                             isGroup: false,
-                            isSeda: uiState.currentChat.isSeda || false,
-                            sedaChatId: uiState.currentChat.sedaChatId || null,
+                            isSeda: currentChat.isSeda || false,
+                            sedaChatId: currentChat.sedaChatId || null,
                             unread: true,
                             lastMessage: previewText,
                             lastMessageTime: new Date()
@@ -1044,7 +1057,15 @@ export async function sendMediaFile(input) {
     const file = input.files && input.files[0];
     input.value = '';
     if (!file || !uiState.currentChatId) return;
-    if (uiState.currentChannel && !uiState.currentChannel.isAdmin) {
+    const chatContext = {
+        chatId: uiState.currentChatId,
+        currentChat: uiState.currentChat,
+        currentGroup: uiState.currentGroup,
+        currentChannel: uiState.currentChannel,
+        sedaEnabled: uiState.sedaEnabledForCurrentChat,
+        sedaKey: uiState.currentSedaKey
+    };
+    if (chatContext.currentChannel && !chatContext.currentChannel.isAdmin) {
         showToast('❌ Только администраторы', 'error');
         return;
     }
@@ -1076,19 +1097,20 @@ export async function sendMediaFile(input) {
         let mediaToSend = dataUrl;
         let mediaEncrypted = false;
 
-        if (uiState.sedaEnabledForCurrentChat && authState.sedaProActivated) {
-            let keyStr = uiState.currentSedaKey;
+        if (chatContext.sedaEnabled && authState.sedaProActivated) {
+            let keyStr = chatContext.sedaKey;
             if (!keyStr) {
                 const r = sedaEncrypt('init');
-                await DB.saveSedaKey(uiState.currentChatId, r.key);
+                await DB.saveSedaKey(chatContext.chatId, r.key);
                 keyStr = r.key;
-                uiState.currentSedaKey = r.key;
+                chatContext.sedaKey = r.key;
+                if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = r.key;
             }
             mediaToSend = sedaEncryptWithKey(dataUrl, keyStr);
             mediaEncrypted = true;
         }
 
-        await addDoc(collection(db, 'messages', uiState.currentChatId, 'msgs'), {
+        await addDoc(collection(db, 'messages', chatContext.chatId, 'msgs'), {
             text: '',
             senderId: authState.user.uid,
             senderName: authState.userData.nickname,
@@ -1109,7 +1131,7 @@ export async function sendMediaFile(input) {
             : mediaType === 'video' ? '🎥 Видео'
             : mediaType === 'audio' ? '🎵 Аудио'
             : '📄 ' + file.name;
-        await updateChatLastMessage(preview);
+        await updateChatLastMessage(preview, chatContext);
     } catch (e) {
         console.error('sendMediaFile error:', e);
         showToast('❌ Ошибка отправки', 'error');
