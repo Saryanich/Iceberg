@@ -99,8 +99,11 @@ service cloud.firestore {
     }
 
     match /iceberg_contacts/{uid}/items/{contactUid} {
-      allow read, write: if self(uid)
-        && request.resource.data.keys().hasOnly(['uid','nickname','globalId','addedAt']);
+      allow read: if self(uid);
+      allow create, update: if self(uid)
+        && request.resource.data.keys().hasOnly(['uid','nickname','globalId','addedAt'])
+        && request.resource.data.uid == contactUid;
+      allow delete: if self(uid);
     }
 
     match /iceberg_chats/{chatId} {
