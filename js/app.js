@@ -131,6 +131,11 @@ function hideLoading() {
 
 let offlineRetryInProgress = false;
 
+function isConnectionFailure(error) {
+    const message = String(error?.message || error || '').toLowerCase();
+    return !navigator.onLine || /network|offline|timeout|timed out|unavailable|deadline-exceeded|failed to fetch|fetch failed|connection/.test(message);
+}
+
 function showOfflineScreen(message = 'Не удалось связаться с сервисами Айсберга. Проверьте интернет и попробуйте снова.') {
     const loading = document.getElementById('loadingScreen');
     const offline = document.getElementById('offlineScreen');
@@ -418,7 +423,7 @@ function setupAuthState() {
                         },
                         onError: (msg) => {
                             clearTimeout(timeoutId);
-                            resolve({ type: 'error', msg });
+                            resolve({ type: 'error', msg, connectionFailure: isConnectionFailure(msg) });
                         }
                     }).catch(reject);
                 });
@@ -440,8 +445,12 @@ function setupAuthState() {
                     document.getElementById('blockedMode').style.display = 'block';
                     showAuthScreen();
                 } else if (result.type === 'error') {
-                    showAuthScreen();
-                    if (result.msg) showToast(result.msg, 'error');
+                    if (result.connectionFailure) {
+                        showOfflineScreen(result.msg || 'Не удалось связаться с сервисами Айсберга. Проверьте интернет и попробуйте снова.');
+                    } else {
+                        showAuthScreen();
+                        if (result.msg) showToast(result.msg, 'error');
+                    }
                 }
 
             } catch (err) {
@@ -1153,9 +1162,13 @@ async function waitForFirebaseAuthAndRoute() {
                             resolve();
                         },
                         onError: (msg) => {
-                            hideLoading();
-                            showAuthScreen();
-                            if (msg) showToast(msg, 'error');
+                            if (isConnectionFailure(msg)) {
+                                showOfflineScreen(msg || 'Не удалось связаться с сервисами Айсберга. Проверьте интернет и попробуйте снова.');
+                            } else {
+                                hideLoading();
+                                showAuthScreen();
+                                if (msg) showToast(msg, 'error');
+                            }
                             resolve();
                         }
                     });
