@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Iceberg — Firebase Setup</title>
+<style>
+:root{color-scheme:dark;--bg:#0a0f1b;--panel:#111a2b;--line:#28354d;--text:#e8eefb;--muted:#a7b5cc;--accent:#79a9ff;--ok:#6ee7b7}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#182744 0,#0a0f1b 55%);color:var(--text);font:16px/1.55 system-ui,-apple-system,sans-serif;padding:28px 16px}
+main{max-width:980px;margin:auto}h1{font-size:clamp(28px,5vw,42px);margin:0 0 8px}h2{margin-top:28px;font-size:22px}.sub,.muted{color:var(--muted)}.panel{background:rgba(17,26,43,.94);border:1px solid var(--line);border-radius:18px;padding:20px;margin:16px 0;box-shadow:0 18px 55px #0003}
+.warning{border-color:#7d6030;background:#241c10}.steps{padding-left:22px}.steps li{margin:9px 0}button{background:var(--accent);color:#081225;border:0;border-radius:10px;padding:11px 16px;font-weight:750;cursor:pointer;margin:5px 6px 5px 0}button.secondary{background:#273650;color:var(--text)}textarea,pre{width:100%;background:#080d17;color:#dce8ff;border:1px solid var(--line);border-radius:12px;padding:14px;overflow:auto;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}textarea{min-height:300px;resize:vertical}.tag{display:inline-block;border:1px solid var(--line);border-radius:99px;padding:3px 9px;color:var(--ok);font-size:12px;margin-bottom:8px}.status{min-height:24px;color:var(--ok)}code{color:#b9d1ff;overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<main>
+  <span class="tag">ICEBERG · FIREBASE SETUP</span>
+  <h1>Новая структура Айсберга</h1>
+  <p class="sub">Подготовка правил и схемы Firestore. Эта страница не содержит Admin SDK и не может самостоятельно публиковать Firebase Security Rules — Firebase разрешает менять их только через консоль/CLI с правами владельца.</p>
+  <section class="panel warning">
+    <strong>Важно перед включением правил</strong>
+    <p>Код приложения должен использовать коллекции <code>iceberg_profiles</code>, <code>iceberg_contacts</code>, <code>iceberg_chats</code>, <code>iceberg_groups</code>, <code>iceberg_channels</code> и <code>iceberg_seda_handshakes</code>. Пока клиентские модули ещё обращаются к старым путям <code>users</code>, <code>messages</code>, <code>groups</code>, <code>channels</code> и <code>seda_handshakes</code>, эти новые правила не являются совместимыми с текущим приложением. Не публикуй их, пока миграция путей в коде не завершена и не проверена.
+    </p>
+  </section>
+  <section class="panel">
+    <h2>1. Предлагаемая структура</h2>
+    <ul>
+      <li><code>iceberg_profiles/{uid}</code> — только публичная часть профиля.</li>
+      <li><code>iceberg_contacts/{uid}/items/{contactUid}</code> — контакты владельца.</li>
+      <li><code>iceberg_chats/{chatId}</code> — личный чат, поля <code>memberUids</code>, <code>createdBy</code>, <code>createdAt</code>.</li>
+      <li><code>iceberg_chats/{chatId}/messages/{messageId}</code> — сообщения участников.</li>
+      <li><code>iceberg_groups/{groupId}</code> — группа, поля <code>memberUids</code>, <code>adminUids</code>, <code>ownerId</code>.</li>
+      <li><code>iceberg_channels/{channelId}</code> — канал, поля <code>memberUids</code>, <code>adminUids</code>, <code>ownerId</code>, <code>isPublic</code>.</li>
+      <li><code>iceberg_seda_handshakes/{id}</code> — обмен ключами только между <code>initiator</code> и <code>peer</code>.</li>
+    </ul>
+  </section>
+  <section class="panel">
+    <h2>2. Правила Firestore для новой схемы</h2>
+    <p class="muted">Скопируй в Firebase Console → Firestore Database → Rules только после завершения миграции кода и проверки тестами.</p>
+    <textarea id="rules" spellcheck="false" aria-label="Firestore rules" readonly></textarea>
+    <button id="copyRules">Копировать правила</button>
+    <div class="status" id="status" role="status"></div>
+  </section>
+  <section class="panel">
+    <h2>3. Порядок запуска</h2>
+    <ol class="steps">
+      <li>Открой <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer">Firebase Console</a> и выбери проект <code>glob-data</code>.</li>
+      <li>Сначала переведи код на перечисленные пути и добавь проверку членства в чате/группе/канале.</li>
+      <li>Прогони Firestore Emulator Rules tests для владельца, участника и постороннего пользователя.</li>
+      <li>Вставь правила в консоль и нажми Publish.</li>
+      <li>Создавай документы по мере использования приложения; Firestore не требует предварительно создавать пустые коллекции.</li>
+    </ol>
+  </section>
+</main>
+<script>
+const rules = `rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function self(uid) { return signedIn() && request.auth.uid == uid; }
+    function chatMember(chatId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/iceberg_chats/$(chatId))
+        && request.auth.uid in get(/databases/$(database)/documents/iceberg_chats/$(chatId)).data.memberUids;
+    }
+    function groupMember(groupId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/iceberg_groups/$(groupId))
+        && request.auth.uid in get(/databases/$(database)/documents/iceberg_groups/$(groupId)).data.memberUids;
+    }
+    function groupAdmin(groupId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/iceberg_groups/$(groupId))
+        && request.auth.uid in get(/databases/$(database)/documents/iceberg_groups/$(groupId)).data.adminUids;
+    }
+    function channelMember(channelId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/iceberg_channels/$(channelId))
+        && request.auth.uid in get(/databases/$(database)/documents/iceberg_channels/$(channelId)).data.memberUids;
+    }
+    function channelAdmin(channelId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/iceberg_channels/$(channelId))
+        && request.auth.uid in get(/databases/$(database)/documents/iceberg_channels/$(channelId)).data.adminUids;
+    }
+
+    // Legacy collections закрыты. Они не должны читаться новым клиентом.
+    match /users/{uid} { allow read, write: if self(uid); }
+    match /messages/{chatId}/{document=**} { allow read, write: if false; }
+    match /groups/{groupId} { allow read, write: if false; }
+    match /channels/{channelId} { allow read, write: if false; }
+    match /seda_handshakes/{handshakeId} { allow read, write: if false; }
+
+    match /iceberg_profiles/{uid} {
+      allow read: if signedIn();
+      allow create, update: if self(uid)
+        && request.resource.data.keys().hasOnly(['uid','displayName','nickname','globalId','avatarUrl','createdAt','updatedAt']);
+      allow delete: if self(uid);
+    }
+
+    match /iceberg_contacts/{uid}/items/{contactUid} {
+      allow read, write: if self(uid)
+        && request.resource.data.keys().hasOnly(['uid','nickname','globalId','addedAt']);
+    }
+
+    match /iceberg_chats/{chatId} {
+      allow read: if chatMember(chatId);
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.auth.uid in request.resource.data.memberUids
+        && request.resource.data.memberUids.size() >= 2
+        && request.resource.data.memberUids.size() <= 2
+        && request.resource.data.keys().hasOnly(['memberUids','createdBy','createdAt','updatedAt','lastMessageAt']);
+      allow update: if chatMember(chatId)
+        && request.resource.data.memberUids == resource.data.memberUids
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt','lastMessageAt']);
+      allow delete: if signedIn() && resource.data.createdBy == request.auth.uid;
+
+      match /messages/{messageId} {
+        allow read: if chatMember(chatId);
+        allow create: if chatMember(chatId)
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.keys().hasOnly(['senderId','text','encrypted','cryptoVersion','type','media','mediaEncrypted','createdAt','replyTo','reactions']);
+        allow update: if chatMember(chatId)
+          && resource.data.senderId == request.auth.uid
+          && request.resource.data.senderId == resource.data.senderId;
+        allow delete: if chatMember(chatId) && resource.data.senderId == request.auth.uid;
+      }
+    }
+
+    match /iceberg_groups/{groupId} {
+      allow read: if groupMember(groupId);
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.auth.uid in request.resource.data.memberUids
+        && request.auth.uid in request.resource.data.adminUids
+        && request.resource.data.keys().hasOnly(['name','ownerId','memberUids','adminUids','createdAt','updatedAt']);
+      allow update: if groupAdmin(groupId)
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','memberUids','adminUids','updatedAt']);
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+
+      match /messages/{messageId} {
+        allow read: if groupMember(groupId);
+        allow create: if groupMember(groupId)
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.keys().hasOnly(['senderId','text','encrypted','cryptoVersion','type','media','mediaEncrypted','createdAt','replyTo','reactions']);
+        allow update, delete: if groupAdmin(groupId) || (groupMember(groupId) && resource.data.senderId == request.auth.uid);
+      }
+    }
+
+    match /iceberg_channels/{channelId} {
+      allow read: if channelMember(channelId)
+        || (resource.data.isPublic == true && signedIn());
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.auth.uid in request.resource.data.memberUids
+        && request.auth.uid in request.resource.data.adminUids
+        && request.resource.data.keys().hasOnly(['name','description','ownerId','memberUids','adminUids','isPublic','createdAt','updatedAt']);
+      allow update: if channelAdmin(channelId)
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','description','memberUids','adminUids','isPublic','updatedAt']);
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+
+      match /messages/{messageId} {
+        allow read: if channelMember(channelId);
+        allow create: if channelMember(channelId)
+          && request.resource.data.senderId == request.auth.uid
+          && (channelAdmin(channelId))
+          && request.resource.data.keys().hasOnly(['senderId','text','encrypted','cryptoVersion','type','media','mediaEncrypted','createdAt','replyTo','reactions']);
+        allow update, delete: if channelAdmin(channelId) || (channelMember(channelId) && resource.data.senderId == request.auth.uid);
+      }
+    }
+
+    match /iceberg_seda_handshakes/{handshakeId} {
+      allow read: if signedIn()
+        && (resource.data.initiator == request.auth.uid || resource.data.peer == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.initiator == request.auth.uid
+        && request.resource.data.peer is string
+        && request.resource.data.peer != request.auth.uid
+        && request.resource.data.keys().hasOnly(['initiator','peer','initiatorPublicKey','peerPublicKey','encryptedSedaKey','createdAt','expiresAt','completed','respondedAt']);
+      allow update: if signedIn()
+        && (resource.data.initiator == request.auth.uid || resource.data.peer == request.auth.uid)
+        && request.resource.data.initiator == resource.data.initiator
+        && request.resource.data.peer == resource.data.peer
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['peerPublicKey','encryptedSedaKey','completed','respondedAt','expiresAt']);
+      allow delete: if signedIn()
+        && (resource.data.initiator == request.auth.uid || resource.data.peer == request.auth.uid);
+    }
+
+    // No wildcard allow: everything not listed is denied.
+  }
+}`;
+document.getElementById('rules').value = rules;
+document.getElementById('copyRules').addEventListener('click', async () => {
+  const status = document.getElementById('status');
+  try { await navigator.clipboard.writeText(rules); status.textContent = 'Правила скопированы.'; }
+  catch { const area = document.getElementById('rules'); area.focus(); area.select(); status.textContent = 'Автокопирование недоступно — нажми и удерживай текст, затем «Копировать».'; }
+});
+</script>
+</body>
+</html>
