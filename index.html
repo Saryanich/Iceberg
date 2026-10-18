@@ -33,13 +33,28 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <!-- ЭКРАН ЗАГРУЗКИ -->
-<div id="loadingScreen">
+<div id="loadingScreen" role="status" aria-live="polite">
     <div class="loading-logo-wrap">
-        <div class="loading-ring"></div>
         <img src="https://i.ibb.co/8JY0bXs/IMG-0335.jpg" alt="Айсберг" class="loading-logo">
     </div>
     <div class="loading-title">АЙСБЕРГ</div>
     <div class="loading-subtitle">защищённый мессенджер</div>
+</div>
+
+<!-- Самостоятельный экран сетевой ошибки: остаётся доступным без Firebase. -->
+<div id="offlineScreen" class="offline-screen" hidden role="alert" aria-live="assertive">
+    <div class="offline-card">
+        <div class="offline-mark" aria-hidden="true"><span></span></div>
+        <div class="offline-eyebrow">ICEBERG CONNECTION</div>
+        <h1>Нет подключения</h1>
+        <p id="offlineDescription">Не удалось связаться с сервисами Айсберга. Проверьте интернет и попробуйте снова.</p>
+        <div class="offline-status"><span class="offline-status-dot"></span><span id="offlineStatusText">Соединение не установлено</span></div>
+        <button id="retryConnectionBtn" class="offline-retry" type="button">
+            <span class="retry-icon" aria-hidden="true">↻</span>
+            <span id="retryConnectionLabel">Повторить попытку</span>
+        </button>
+        <p class="offline-footnote">Ваши данные не удалены. Повторная попытка не изменяет аккаунт.</p>
+    </div>
 </div>
     <!-- ===============================================================
          ЭКРАН 2FA
