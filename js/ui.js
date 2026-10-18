@@ -1089,8 +1089,10 @@ export async function sendMessage() {
             const editId = uiState.editingMessage;
             uiState.editingMessage = null;
             let editText = originalText;
-            if (chatContext.sedaEnabled && chatContext.sedaKey) {
-                editText = await sedaUltraEncryptWithKey(originalText, chatContext.sedaKey);
+            if (chatContext.sedaEnabled && chatContext.sedaKey && authState.sedaProActivated) {
+                editText = chatContext.currentChat?.isSeda
+                    ? await sedaUltraEncryptWithKey(originalText, chatContext.sedaKey)
+                    : await icebergBaseEncrypt(originalText, chatContext.sedaKey);
             }
             await updateDoc(doc(db, 'messages', chatIdAtSend, 'msgs', editId), {
                 text: editText,
@@ -1105,16 +1107,26 @@ export async function sendMessage() {
         let textToSend = originalText;
         let encrypted = false;
 
+        if (chatContext.currentChat?.isSeda && !authState.sedaProActivated) {
+            showToast('SEDA-чаты доступны только с активной подпиской', 'error');
+            input.value = originalText;
+            return;
+        }
+
         if (chatContext.sedaEnabled && authState.sedaProActivated) {
             let keyStr = chatContext.sedaKey;
             if (!keyStr) {
                 keyStr = serializeKey(generateSedaKey());
-                textToSend = await sedaUltraEncryptWithKey(originalText, keyStr);
+                textToSend = chatContext.currentChat?.isSeda
+                    ? await sedaUltraEncryptWithKey(originalText, keyStr)
+                    : await icebergBaseEncrypt(originalText, keyStr);
                 await DB.saveSedaKey(chatIdAtSend, keyStr);
                 chatContext.sedaKey = keyStr;
                 if (uiState.currentChatId === chatIdAtSend) uiState.currentSedaKey = keyStr;
             } else {
-                textToSend = await sedaUltraEncryptWithKey(originalText, keyStr);
+                textToSend = chatContext.currentChat?.isSeda
+                    ? await sedaUltraEncryptWithKey(originalText, keyStr)
+                    : await icebergBaseEncrypt(originalText, keyStr);
             }
             encrypted = true;
         }
@@ -1126,7 +1138,7 @@ export async function sendMessage() {
             timestamp: serverTimestamp(),
             read: false,
             encrypted,
-            cryptoVersion: encrypted ? 'SEDA_ULTRA_1' : null,
+            cryptoVersion: encrypted ? (chatContext.currentChat?.isSeda ? 'SEDA_ULTRA_1' : 'ICEBERG_BASE_1') : null,
             type: 'text',
             replyTo: uiState.replyTo || null,
             reactions: {}
