@@ -6,7 +6,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
  
 import {
-    sedaEncrypt, sedaDecrypt, sedaEncryptWithKey, sedaUltraEncryptWithKey, sedaUltraDecrypt, isSedaUltraPayload, serializeKey, deserializeKey,
+    generateSedaKey, serializeKey, sedaUltraEncryptWithKey, sedaUltraDecrypt, isSedaUltraPayload,
     generateECDHKeyPair, exportPublicKey, importPublicKey,
     exportPrivateKey, deriveSharedKey, aesEncrypt, aesDecrypt
 } from './crypto.js';
@@ -915,9 +915,7 @@ async function renderMessage(msg) {
 
     if (isEncrypted && msg.text) {
         if (uiState.currentSedaKey) {
-            const dec = isSedaUltraPayload(msg.text)
-                ? await sedaUltraDecrypt(msg.text, uiState.currentSedaKey)
-                : sedaDecrypt(msg.text, uiState.currentSedaKey);
+            const dec = await sedaUltraDecrypt(msg.text, uiState.currentSedaKey);
             if (dec !== null) {
                 displayText = dec;
                 isDecrypted = true;
@@ -935,9 +933,7 @@ async function renderMessage(msg) {
     let mediaSrc = null;
     if ((msg.type === 'photo' || msg.type === 'video' || msg.type === 'file' || msg.type === 'audio') && msg.media) {
         if (msg.mediaEncrypted && uiState.currentSedaKey) {
-            mediaSrc = isSedaUltraPayload(msg.media)
-                ? await sedaUltraDecrypt(msg.media, uiState.currentSedaKey)
-                : sedaDecrypt(msg.media, uiState.currentSedaKey);
+            mediaSrc = await sedaUltraDecrypt(msg.media, uiState.currentSedaKey);
         } else {
             mediaSrc = msg.media;
         }
@@ -1099,7 +1095,7 @@ export async function sendMessage() {
                 text: editText,
                 edited: true,
                 editedAt: serverTimestamp(),
-                cryptoVersion: isSedaUltraPayload(editText) ? 'SEDA_ULTRA_1' : 'SEDA_PRO_3'
+                cryptoVersion: chatContext.sedaEnabled ? 'SEDA_ULTRA_1' : null
             });
             document.getElementById('replyPreview')?.classList.add('hidden');
             return;
@@ -1111,11 +1107,11 @@ export async function sendMessage() {
         if (chatContext.sedaEnabled && authState.sedaProActivated) {
             let keyStr = chatContext.sedaKey;
             if (!keyStr) {
-                const r = sedaEncrypt('init');
-                textToSend = await sedaUltraEncryptWithKey(originalText, r.key);
-                await DB.saveSedaKey(chatIdAtSend, r.key);
-                chatContext.sedaKey = r.key;
-                if (uiState.currentChatId === chatIdAtSend) uiState.currentSedaKey = r.key;
+                const keyStr = serializeKey(generateSedaKey());
+                textToSend = await sedaUltraEncryptWithKey(originalText, keyStr);
+                await DB.saveSedaKey(chatIdAtSend, keyStr);
+                chatContext.sedaKey = keyStr;
+                if (uiState.currentChatId === chatIdAtSend) uiState.currentSedaKey = keyStr;
             } else {
                 textToSend = await sedaUltraEncryptWithKey(originalText, keyStr);
             }
@@ -1335,9 +1331,8 @@ export async function sendMediaFile(input) {
         if (chatContext.sedaEnabled && authState.sedaProActivated) {
             let keyStr = chatContext.sedaKey;
             if (!keyStr) {
-                const r = sedaEncrypt('init');
-                await DB.saveSedaKey(chatContext.chatId, r.key);
-                keyStr = r.key;
+                keyStr = serializeKey(generateSedaKey());
+                await DB.saveSedaKey(chatContext.chatId, keyStr);
                 chatContext.sedaKey = r.key;
                 if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = r.key;
             }
@@ -1439,9 +1434,8 @@ export async function toggleVoiceRecording() {
                     if (chatContext.sedaEnabled && authState.sedaProActivated) {
                         let keyStr = chatContext.sedaKey;
                         if (!keyStr) {
-                            const r = sedaEncrypt('init');
-                            await DB.saveSedaKey(chatContext.chatId, r.key);
-                            keyStr = r.key;
+                            keyStr = serializeKey(generateSedaKey());
+                            await DB.saveSedaKey(chatContext.chatId, keyStr);
                             chatContext.sedaKey = r.key;
                             if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = r.key;
                         }
@@ -1701,8 +1695,7 @@ export function startEdit(id, msgData) {
     uiState.editingMessage = id;
     let displayText = msgData.text;
     if (msgData.encrypted && uiState.currentSedaKey) {
-        const dec = sedaDecrypt(msgData.text, uiState.currentSedaKey);
-        if (dec !== null) displayText = dec;
+        displayText = '[SEDA Ultra: откройте чат для расшифровки]';
     }
     const input = document.getElementById('messageInput');
     input.value = displayText;
@@ -1809,8 +1802,7 @@ export async function startSedaChat() {
     const privJwk = await exportPrivateKey(keyPair);
     await DB.saveECDHKeys(sedaChatId, pubBase64, privJwk);
 
-    const sedaResult = sedaEncrypt('init_' + Date.now());
-    const sedaKey = sedaResult.key;
+    const sedaKey = serializeKey(generateSedaKey());
 
     const handshakeRef = doc(db, 'seda_handshakes', sedaChatId);
     await setDoc(handshakeRef, {
@@ -1936,8 +1928,7 @@ export function startSedaHandshakeListener() {
                 const peerPub = await importPublicKey(data.initiatorPublicKey);
                 const sharedKey = await deriveSharedKey(keyPair.privateKey, peerPub);
 
-                const sedaResult = sedaEncrypt('init_' + Date.now());
-                const mySedaKey = sedaResult.key;
+                const mySedaKey = serializeKey(generateSedaKey());
                 const encryptedMyKey = await aesEncrypt(mySedaKey, sharedKey);
 
                 await updateDoc(d.ref, {
