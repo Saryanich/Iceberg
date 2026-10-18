@@ -1113,10 +1113,6 @@ export async function sendMessage() {
             return;
         }
 
-        if (chatContext.currentChat?.isSeda && !authState.sedaProActivated) {
-            showToast('SEDA-чаты доступны только с активной подпиской', 'error');
-            return;
-        }
         if (chatContext.sedaEnabled && authState.sedaProActivated) {
             let keyStr = chatContext.sedaKey;
             if (!keyStr) {
@@ -1345,6 +1341,10 @@ export async function sendMediaFile(input) {
         let mediaToSend = dataUrl;
         let mediaEncrypted = false;
 
+        if (chatContext.currentChat?.isSeda && !authState.sedaProActivated) {
+            showToast('SEDA-чаты доступны только с активной подпиской', 'error');
+            return;
+        }
         if (chatContext.sedaEnabled && authState.sedaProActivated) {
             let keyStr = chatContext.sedaKey;
             if (!keyStr) {
