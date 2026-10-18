@@ -7,7 +7,7 @@ import {
  
 import {
     generateSedaKey, serializeKey, sedaUltraEncryptWithKey, sedaUltraDecrypt, isSedaUltraPayload,
-    icebergBaseEncrypt, icebergBaseDecrypt, isIcebergBasePayload,
+    icebergBaseEncrypt, icebergBaseDecrypt, isIcebergBasePayload, generateIcebergBaseKey,
     generateECDHKeyPair, exportPublicKey, importPublicKey,
     exportPrivateKey, deriveSharedKey, aesEncrypt, aesDecrypt
 } from './crypto.js';
@@ -557,6 +557,65 @@ export async function loadChannels() {
     }
 }
 
+// Automatic E2E key agreement for ordinary direct chats; no subscription or confirmation.
+const baseHandshakeListeners = new Map();
+async function ensureIcebergBaseKey(chatId, peerUid) {
+    if (!authState.user?.uid || !chatId || !peerUid || uiState.currentChat?.isSeda) return null;
+    const cached = await DB.getSedaKey(chatId);
+    if (cached?.startsWith('ICEBERGBASEKEY:')) {
+        if (uiState.currentChatId === chatId) uiState.currentSedaKey = cached;
+        return cached;
+    }
+    const handshakeId = 'base_' + chatId;
+    const ref = doc(db, 'seda_handshakes', handshakeId);
+    const existing = await getDoc(ref);
+    let privJwk, baseKey;
+    if (existing.exists()) {
+        const data = existing.data();
+        if (data.mode !== 'iceberg-base' || data.initiator !== authState.user.uid || data.peer !== peerUid) return null;
+        const saved = await DB.getECDHKeys(handshakeId);
+        if (!saved) throw new Error('Нет локального ключа рукопожатия');
+        privJwk = saved.privateKey;
+        baseKey = await DB.getSedaKey(chatId);
+        if (!baseKey?.startsWith('ICEBERGBASEKEY:')) return null;
+    } else {
+        const pair = await generateECDHKeyPair();
+        const pub = await exportPublicKey(pair);
+        privJwk = await exportPrivateKey(pair);
+        baseKey = generateIcebergBaseKey();
+        await DB.saveECDHKeys(handshakeId, pub, privJwk);
+        await DB.saveSedaKey(chatId, baseKey);
+        await setDoc(ref, {
+            mode: 'iceberg-base', chatId, initiator: authState.user.uid, peer: peerUid,
+            initiatorPublicKey: pub, peerPublicKey: null, encryptedBaseKey: null,
+            peerKeyStored: false, initiatorAck: false, createdAt: Date.now(),
+            expiresAt: Date.now() + 10 * 60 * 1000
+        });
+    }
+    const listenerId = handshakeId + ':' + authState.user.uid;
+    if (!baseHandshakeListeners.has(listenerId)) {
+        const unsub = onSnapshot(ref, async snap => {
+            if (!snap.exists()) return;
+            const data = snap.data();
+            if (data.mode !== 'iceberg-base') return;
+            try {
+                const privateKey = await crypto.subtle.importKey('jwk', privJwk,
+                    { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+                if (data.peerKeyStored) {
+                    await updateDoc(ref, { initiatorAck: true, initiatorAckAt: Date.now() });
+                    return;
+                }
+                if (!data.peerPublicKey || data.encryptedBaseKey) return;
+                const peerPublic = await importPublicKey(data.peerPublicKey);
+                const shared = await deriveSharedKey(privateKey, peerPublic, 'iceberg-base-handshake-v1');
+                await updateDoc(ref, { encryptedBaseKey: await aesEncrypt(baseKey, shared), baseKeySentAt: Date.now() });
+            } catch (err) { console.error('[Iceberg Base initiator]', err); }
+        });
+        baseHandshakeListeners.set(listenerId, unsub);
+    }
+    return baseKey;
+}
+
 export async function selectChat(chat) {
     if (!chat) return;
     closeCurrentSubscriptions();
@@ -571,13 +630,13 @@ export async function selectChat(chat) {
         uiState.currentSedaKey = authState.sedaProActivated ? await DB.getSedaKey(chat.sedaChatId) : null;
     } else {
         uiState.currentChatId = [authState.user.uid, chat.uid].sort().join('_');
-        const savedKey = await DB.getSedaKey(uiState.currentChatId);
-        if (savedKey && authState.sedaProActivated) {
-            uiState.sedaEnabledForCurrentChat = true;
-            uiState.currentSedaKey = savedKey;
-        } else {
-            uiState.sedaEnabledForCurrentChat = false;
-            uiState.currentSedaKey = null;
+        uiState.sedaEnabledForCurrentChat = false;
+        uiState.currentSedaKey = await DB.getSedaKey(uiState.currentChatId);
+        if (!uiState.currentSedaKey) {
+            ensureIcebergBaseKey(uiState.currentChatId, chat.uid).catch(err => {
+                console.error('[Iceberg Base handshake]', err);
+                showToast('Не удалось установить базовое шифрование. Проверьте подключение и откройте чат снова.', 'error', 4500);
+            });
         }
     }
 
@@ -919,19 +978,19 @@ async function renderMessage(msg) {
             const dec = await sedaUltraDecrypt(msg.text, uiState.currentSedaKey);
             if (dec !== null) { displayText = dec; isDecrypted = true; div.classList.add('message-seda'); }
             else { displayText = '[Не удалось расшифровать SEDA Ultra]'; div.classList.add('message-seda'); }
-        } else if (!isSedaUltraPayload(msg.text) && uiState.currentSedaKey && authState.sedaProActivated && isIcebergBasePayload(msg.text)) {
+        } else if (!isSedaUltraPayload(msg.text) && uiState.currentSedaKey && isIcebergBasePayload(msg.text)) {
             const dec = await icebergBaseDecrypt(msg.text, uiState.currentSedaKey);
             if (dec !== null) { displayText = dec; isDecrypted = true; }
             else displayText = '[Не удалось расшифровать сообщение Iceberg]';
         } else if (isSedaUltraPayload(msg.text) || isIcebergBasePayload(msg.text)) {
-            displayText = '[Зашифровано — нужен активный SEDA Pro и ключ чата]';
+            displayText = '[Зашифровано — ожидается ключ чата]';
             div.classList.add('message-seda');
         }
     }
 
     let mediaSrc = null;
     if ((msg.type === 'photo' || msg.type === 'video' || msg.type === 'file' || msg.type === 'audio') && msg.media) {
-        if (msg.mediaEncrypted && uiState.currentSedaKey && authState.sedaProActivated) {
+        if (msg.mediaEncrypted && uiState.currentSedaKey) {
             mediaSrc = isSedaUltraPayload(msg.media)
                 ? (uiState.currentChat?.isSeda ? await sedaUltraDecrypt(msg.media, uiState.currentSedaKey) : null)
                 : await icebergBaseDecrypt(msg.media, uiState.currentSedaKey);
@@ -1089,10 +1148,13 @@ export async function sendMessage() {
             const editId = uiState.editingMessage;
             uiState.editingMessage = null;
             let editText = originalText;
-            if (chatContext.sedaEnabled && chatContext.sedaKey && authState.sedaProActivated) {
-                editText = chatContext.currentChat?.isSeda
-                    ? await sedaUltraEncryptWithKey(originalText, chatContext.sedaKey)
-                    : await icebergBaseEncrypt(originalText, chatContext.sedaKey);
+            if (chatContext.currentChat && !chatContext.currentChat.isSeda) {
+                let baseKey = chatContext.sedaKey;
+                if (!baseKey?.startsWith('ICEBERGBASEKEY:')) baseKey = await ensureIcebergBaseKey(chatIdAtSend, chatContext.currentChat.uid);
+                if (!baseKey?.startsWith('ICEBERGBASEKEY:')) throw new Error('Защищённый ключ чата ещё не готов');
+                editText = await icebergBaseEncrypt(originalText, baseKey);
+            } else if (chatContext.currentChat?.isSeda && chatContext.sedaEnabled && chatContext.sedaKey && authState.sedaProActivated) {
+                editText = await sedaUltraEncryptWithKey(originalText, chatContext.sedaKey);
             }
             await updateDoc(doc(db, 'messages', chatIdAtSend, 'msgs', editId), {
                 text: editText,
@@ -1106,6 +1168,19 @@ export async function sendMessage() {
 
         let textToSend = originalText;
         let encrypted = false;
+        if (chatContext.currentChat && !chatContext.currentChat.isSeda) {
+            let baseKey = chatContext.sedaKey;
+            if (!baseKey?.startsWith('ICEBERGBASEKEY:')) baseKey = await ensureIcebergBaseKey(chatIdAtSend, chatContext.currentChat.uid);
+            if (!baseKey?.startsWith('ICEBERGBASEKEY:')) {
+                showToast('Устанавливаем защищённое соединение. Повторите отправку через несколько секунд.', 'info', 4000);
+                input.value = originalText;
+                return;
+            }
+            textToSend = await icebergBaseEncrypt(originalText, baseKey);
+            encrypted = true;
+            chatContext.sedaKey = baseKey;
+            if (uiState.currentChatId === chatIdAtSend) uiState.currentSedaKey = baseKey;
+        }
 
         if (chatContext.currentChat?.isSeda && !authState.sedaProActivated) {
             showToast('SEDA-чаты доступны только с активной подпиской', 'error');
@@ -1113,7 +1188,7 @@ export async function sendMessage() {
             return;
         }
 
-        if (chatContext.sedaEnabled && authState.sedaProActivated) {
+        if (chatContext.currentChat?.isSeda && chatContext.sedaEnabled && authState.sedaProActivated) {
             let keyStr = chatContext.sedaKey;
             if (!keyStr) {
                 keyStr = serializeKey(generateSedaKey());
@@ -1345,7 +1420,15 @@ export async function sendMediaFile(input) {
             showToast('SEDA-чаты доступны только с активной подпиской', 'error');
             return;
         }
-        if (chatContext.sedaEnabled && authState.sedaProActivated) {
+        if (chatContext.currentChat && !chatContext.currentChat.isSeda) {
+            let keyStr = chatContext.sedaKey;
+            if (!keyStr?.startsWith('ICEBERGBASEKEY:')) keyStr = await ensureIcebergBaseKey(chatContext.chatId, chatContext.currentChat.uid);
+            if (!keyStr?.startsWith('ICEBERGBASEKEY:')) throw new Error('Защищённое соединение ещё устанавливается');
+            mediaToSend = await icebergBaseEncrypt(dataUrl, keyStr);
+            mediaEncrypted = true;
+            chatContext.sedaKey = keyStr;
+            if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = keyStr;
+        } else if (chatContext.currentChat?.isSeda && chatContext.sedaEnabled && authState.sedaProActivated) {
             let keyStr = chatContext.sedaKey;
             if (!keyStr) {
                 keyStr = serializeKey(generateSedaKey());
@@ -1454,7 +1537,15 @@ export async function toggleVoiceRecording() {
                         showToast('SEDA-чаты доступны только с активной подпиской', 'error');
                         return;
                     }
-                    if (chatContext.sedaEnabled && authState.sedaProActivated) {
+                    if (chatContext.currentChat && !chatContext.currentChat.isSeda) {
+                        let keyStr = chatContext.sedaKey;
+                        if (!keyStr?.startsWith('ICEBERGBASEKEY:')) keyStr = await ensureIcebergBaseKey(chatContext.chatId, chatContext.currentChat.uid);
+                        if (!keyStr?.startsWith('ICEBERGBASEKEY:')) throw new Error('Защищённое соединение ещё устанавливается');
+                        dataUrl = await icebergBaseEncrypt(dataUrl, keyStr);
+                        mediaEncrypted = true;
+                        chatContext.sedaKey = keyStr;
+                        if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = keyStr;
+                    } else if (chatContext.currentChat?.isSeda && chatContext.sedaEnabled && authState.sedaProActivated) {
                         let keyStr = chatContext.sedaKey;
                         if (!keyStr) {
                             keyStr = serializeKey(generateSedaKey());
@@ -1937,6 +2028,38 @@ export function startSedaHandshakeListener() {
     uiState.sedaHandshakeUnsub = onSnapshot(q, async (snap) => {
         for (const d of snap.docs) {
             const data = d.data();
+            if (data.mode === 'iceberg-base') {
+                if (data.initiatorAck === true) { await deleteDoc(d.ref).catch(() => {}); continue; }
+                if (!data.initiatorPublicKey) continue;
+                if (data.peerPublicKey && data.encryptedBaseKey && !data.peerKeyStored && !uiState.processedHandshakes.has(d.id)) {
+                    uiState.processedHandshakes.add(d.id);
+                    try {
+                        const savedPair = await DB.getECDHKeys(d.id);
+                        if (!savedPair) throw new Error('Нет локального приватного ключа');
+                        const privateKey = await crypto.subtle.importKey('jwk', savedPair.privateKey,
+                            { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+                        const initiatorPublic = await importPublicKey(data.initiatorPublicKey);
+                        const shared = await deriveSharedKey(privateKey, initiatorPublic, 'iceberg-base-handshake-v1');
+                        const key = await aesDecrypt(data.encryptedBaseKey, shared);
+                        if (!key?.startsWith('ICEBERGBASEKEY:')) throw new Error('Неверный базовый ключ');
+                        await DB.saveSedaKey(data.chatId, key);
+                        await updateDoc(d.ref, { peerKeyStored: true, peerKeyStoredAt: Date.now() });
+                        if (uiState.currentChatId === data.chatId) uiState.currentSedaKey = key;
+                    } catch (err) { console.error('[Iceberg Base responder]', err); uiState.processedHandshakes.delete(d.id); }
+                    continue;
+                }
+                if (!data.peerPublicKey && !uiState.processedHandshakes.has(d.id)) {
+                    uiState.processedHandshakes.add(d.id);
+                    try {
+                        const pair = await generateECDHKeyPair();
+                        const pub = await exportPublicKey(pair);
+                        const priv = await exportPrivateKey(pair);
+                        await DB.saveECDHKeys(d.id, pub, priv);
+                        await updateDoc(d.ref, { peerPublicKey: pub, peerRespondedAt: Date.now() });
+                    } catch (err) { console.error('[Iceberg Base responder setup]', err); uiState.processedHandshakes.delete(d.id); }
+                }
+                continue;
+            }
             // Инициатор подтвердил, что получил и сохранил ключ. Оставляем документ в Firestore
             // (в нём только зашифрованный ключ), но отмечаем handshake завершённым.
             if (data.initiatorAck === true && data.completed !== true) {
