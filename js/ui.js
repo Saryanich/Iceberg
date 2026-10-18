@@ -565,7 +565,7 @@ async function ensureIcebergBaseKey(chatId, peerUid) {
     const handshakeId = 'base_' + chatId;
     const ref = doc(db, 'seda_handshakes', handshakeId);
     const existing = await getDoc(ref);
-    let privJwk, baseKey;
+    let privJwk, baseKey, pendingHandshake = false;
     if (cached?.startsWith('ICEBERGBASEKEY:')) {
         if (!existing.exists()) {
             if (uiState.currentChatId === chatId) uiState.currentSedaKey = cached;
@@ -587,6 +587,7 @@ async function ensureIcebergBaseKey(chatId, peerUid) {
         if (!saved) throw new Error('Нет локального ключа рукопожатия');
         privJwk = saved.privateKey;
         baseKey = cached;
+        pendingHandshake = true;
     }
     if (existing.exists()) {
         const data = existing.data();
@@ -631,7 +632,7 @@ async function ensureIcebergBaseKey(chatId, peerUid) {
         });
         baseHandshakeListeners.set(listenerId, unsub);
     }
-    return baseKey;
+    return pendingHandshake ? null : baseKey;
 }
 
 export async function selectChat(chat) {
