@@ -166,8 +166,12 @@ async function isDeviceKnown(uid) {
 async function isAccountLocked(uid) {
     try {
         const d = await getDoc(doc(db, 'users', uid));
-        return d.data()?.accountLocked === true;
-    } catch (e) { return false; }
+        // A missing profile or an unreadable lock state must not be treated as unlocked.
+        return !d.exists() || d.data()?.accountLocked === true;
+    } catch (e) {
+        console.error('[Auth] Could not verify account lock state:', e);
+        return true;
+    }
 }
 
 async function addKnownDevice(uid) {
@@ -183,15 +187,22 @@ async function addKnownDevice(uid) {
 }
 
 async function generate2FACode(uid) {
-    const code = Math.floor(1000 + Math.random() * 9000).toString();
+    const range = 9000;
+    const ceiling = Math.floor(0x100000000 / range) * range;
+    const values = new Uint32Array(1);
+    let value;
+    do {
+        crypto.getRandomValues(values);
+        value = values[0];
+    } while (value >= ceiling);
+    const code = String(1000 + (value % range));
     const hash = await hash2FACode(code, uid);
-    try {
-        await updateDoc(doc(db, 'users', uid), {
-            twoFactorCodeHash: hash, twoFactorCodePlain: code,
-            twoFactorCodeExpires: new Date(Date.now() + 5 * 60 * 1000),
-            pendingDeviceInfo: { ip: authState.currentIP || 'unknown', userAgent: navigator.userAgent, requestedAt: new Date() }
-        });
-    } catch (e) {}
+    // Do not swallow persistence errors: showing a code that was not saved creates a broken flow.
+    await updateDoc(doc(db, 'users', uid), {
+        twoFactorCodeHash: hash, twoFactorCodePlain: code,
+        twoFactorCodeExpires: new Date(Date.now() + 5 * 60 * 1000),
+        pendingDeviceInfo: { ip: authState.currentIP || 'unknown', userAgent: navigator.userAgent, requestedAt: new Date() }
+    });
     return code;
 }
 
@@ -214,14 +225,9 @@ export async function handleAuthLogin(user, callbacks = {}) {
         
         if (cached && cached.uid !== user.uid) {
             clearAuthCache();
-        } else if (cached && cached.uid === user.uid && cached.data) {
-            authState.user = user; authState.userData = cached.data;
-            authState.sedaProActivated = cached.data.sedaProActivated || false;
-            authState.restoredFromCache = true;
-            onSuccess?.(user, cached.data);
-            syncUserFromServer(user.uid).catch(() => {});
-            return;
         }
+        // A local cache is for offline rendering only, never proof that an account is unlocked.
+        // When online, always verify the current server-side account state before opening the app.
 
         const ud = await getDoc(doc(db, 'users', user.uid));
         const data = ud.data();
@@ -229,9 +235,12 @@ export async function handleAuthLogin(user, callbacks = {}) {
         if (!data) { await signOut(auth); onError?.('Профиль не найден'); return; }
         if (data.accountLocked) { onLocked?.(); return; }
 
-        if (!data.icebergAccess) {
-            updateDoc(doc(db, 'users', user.uid), { icebergAccess: true, icebergLastLogin: serverTimestamp() }).catch(() => {});
+        if (data.icebergAccess === false) {
+            await signOut(auth);
+            onError?.('Доступ к Айсбергу для этого аккаунта отключён.');
+            return;
         }
+        updateDoc(doc(db, 'users', user.uid), { icebergLastLogin: serverTimestamp() }).catch(() => {});
 
         const known = await isDeviceKnown(user.uid);
         if (known) {
@@ -251,15 +260,18 @@ export async function handleAuthLogin(user, callbacks = {}) {
             onNeed2FA?.(code);
         }
     } catch (e) {
-        const cached = loadAuthCache();
+        // Only permit cached rendering when the browser explicitly reports offline.
+        // Permission errors, missing documents and other online failures must not bypass checks.
+        const cached = !navigator.onLine ? loadAuthCache() : null;
         if (cached && cached.uid === user.uid && cached.data) {
-            authState.user = user; authState.userData = cached.data;
+            authState.user = user;
+            authState.userData = cached.data;
             authState.sedaProActivated = cached.data.sedaProActivated || false;
             authState.restoredFromCache = true;
             onSuccess?.(user, cached.data);
             return;
         }
-        onError?.(e.message || 'Ошибка входа');
+        onError?.(!navigator.onLine ? 'Нет подключения. Попробуйте снова после восстановления интернета.' : (e.message || 'Ошибка входа'));
     }
 }
 
