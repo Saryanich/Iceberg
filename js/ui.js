@@ -567,8 +567,8 @@ export async function selectChat(chat) {
 
     if (chat.isSeda && chat.sedaChatId) {
         uiState.currentChatId = chat.sedaChatId;
-        uiState.sedaEnabledForCurrentChat = true;
-        uiState.currentSedaKey = await DB.getSedaKey(chat.sedaChatId);
+        uiState.sedaEnabledForCurrentChat = !!authState.sedaProActivated;
+        uiState.currentSedaKey = authState.sedaProActivated ? await DB.getSedaKey(chat.sedaChatId) : null;
     } else {
         uiState.currentChatId = [authState.user.uid, chat.uid].sort().join('_');
         const savedKey = await DB.getSedaKey(uiState.currentChatId);
@@ -1098,7 +1098,7 @@ export async function sendMessage() {
                 text: editText,
                 edited: true,
                 editedAt: serverTimestamp(),
-                cryptoVersion: chatContext.sedaEnabled ? 'SEDA_ULTRA_1' : null
+                cryptoVersion: chatContext.sedaEnabled ? (chatContext.currentChat?.isSeda ? 'SEDA_ULTRA_1' : 'ICEBERG_BASE_1') : null
             });
             document.getElementById('replyPreview')?.classList.add('hidden');
             return;
