@@ -1,6 +1,6 @@
 import { auth, db, SEDA_ACTIVATION_CODE } from './config.js';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, serverTimestamp, arrayUnion, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, serverTimestamp, arrayUnion, limit, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { hash2FACode, sha256Hex } from './crypto.js';
 
 const AUTH_CACHE_KEY = 'iceberg_auth_cache_v1';
@@ -301,21 +301,45 @@ export async function verify2FA(code, trustDevice = false) {
     if (!checkRateLimit('2fa', 5, 5 * 60 * 1000)) return { success: false, error: 'Слишком много попыток. Подождите 5 минут' };
 
     const user = authState.pendingUser;
-    if (!await verify2FACode(user.uid, code)) return { success: false, error: 'Неверный или истёкший код' };
+    const userRef = doc(db, 'users', user.uid);
+    let verification;
+    try {
+        // Consume the code atomically so two simultaneous requests cannot both use it.
+        verification = await runTransaction(db, async (transaction) => {
+            const snap = await transaction.get(userRef);
+            if (!snap.exists()) return { success: false, error: 'Профиль не найден' };
+            const data = snap.data();
+            if (data.accountLocked === true) return { success: false, error: 'Аккаунт заблокирован' };
+            const expires = data.twoFactorCodeExpires?.toDate?.() || null;
+            if (!data.twoFactorCodeHash || (expires && expires < new Date())) {
+                return { success: false, error: 'Код отсутствует или истёк. Запросите новый.' };
+            }
+            if ((await hash2FACode(code, user.uid)) !== data.twoFactorCodeHash) {
+                return { success: false, error: 'Неверный или истёкший код' };
+            }
+            transaction.update(userRef, {
+                twoFactorCodeHash: null, twoFactorCodePlain: null,
+                twoFactorCodeExpires: null, pendingDeviceInfo: null,
+                online: true, lastSeen: serverTimestamp(),
+                currentIP: authState.currentIP || 'unknown',
+                currentDevice: authState.deviceFingerprint
+            });
+            return { success: true };
+        });
+    } catch (error) {
+        console.error('[2FA] Не удалось проверить код:', error);
+        return { success: false, error: 'Не удалось проверить код. Проверьте соединение и повторите попытку.' };
+    }
 
+    if (!verification.success) return verification;
     if (trustDevice) await addKnownDevice(user.uid);
 
-    try {
-        await updateDoc(doc(db, 'users', user.uid), {
-            twoFactorCodeHash: null, twoFactorCodePlain: null, twoFactorCodeExpires: null, pendingDeviceInfo: null,
-            online: true, lastSeen: serverTimestamp(),
-            currentIP: authState.currentIP || 'unknown', currentDevice: authState.deviceFingerprint
-        });
-    } catch (e) {}
-
-    authState.awaitingTwoFactor = false; authState.user = user; authState.pendingUser = null;
-    const ud = await getDoc(doc(db, 'users', user.uid));
-    authState.userData = ud.data(); authState.sedaProActivated = authState.userData?.sedaProActivated || false;
+    authState.awaitingTwoFactor = false;
+    authState.user = user;
+    authState.pendingUser = null;
+    const ud = await getDoc(userRef);
+    authState.userData = ud.data();
+    authState.sedaProActivated = authState.userData?.sedaProActivated || false;
     if (authState.userData) saveAuthCache(user.uid, authState.userData);
     resetFailedAttempts();
     return { success: true, user, data: authState.userData };
