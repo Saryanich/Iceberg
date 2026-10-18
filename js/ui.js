@@ -57,9 +57,13 @@ const PENDING_CHAT_SYNC_KEY = 'iceberg_pending_direct_chat_sync_v1';
 let operationIndicatorSequence = 0;
 let messageRenderSequence = 0;
 
+function pendingChatSyncStorageKey() {
+    return PENDING_CHAT_SYNC_KEY + '_' + (authState.user?.uid || 'anonymous');
+}
+
 function readPendingChatSyncs() {
     try {
-        const value = JSON.parse(localStorage.getItem(PENDING_CHAT_SYNC_KEY) || '[]');
+        const value = JSON.parse(localStorage.getItem(pendingChatSyncStorageKey()) || '[]');
         return Array.isArray(value) ? value : [];
     } catch { return []; }
 }
@@ -81,21 +85,21 @@ function queueDirectChatSync(context, previewText) {
     };
     const items = readPendingChatSyncs();
     items.push(entry);
-    try { localStorage.setItem(PENDING_CHAT_SYNC_KEY, JSON.stringify(items.slice(-100))); } catch {}
+    try { localStorage.setItem(pendingChatSyncStorageKey(), JSON.stringify(items.slice(-100))); } catch {}
     return entry.id;
 }
 
 function removePendingChatSync(id) {
     if (!id) return;
     try {
-        localStorage.setItem(PENDING_CHAT_SYNC_KEY, JSON.stringify(
+        localStorage.setItem(pendingChatSyncStorageKey(), JSON.stringify(
             readPendingChatSyncs().filter(item => item.id !== id)
         ));
     } catch {}
 }
 
 let flushingPendingChatSyncs = false;
-async function flushPendingChatSyncs() {
+export async function flushPendingChatSyncs() {
     if (flushingPendingChatSyncs || !navigator.onLine || !authState.user?.uid) return;
     flushingPendingChatSyncs = true;
     try {
@@ -1293,19 +1297,18 @@ export async function sendMediaFile(input) {
 
         cancelReply();
         updateOperationIndicator(indicator, 'Файл добавлен в очередь', navigator.onLine ? 'Ожидание подтверждения…' : 'Ожидание сети…');
-        if (navigator.onLine) {
-            writePromise.then(async () => {
-                const ok = await updateChatLastMessage(preview, chatContext);
-                if (ok) removePendingChatSync(pendingSyncId);
-                removeOperationIndicator(indicator);
-            }).catch((e) => {
-                console.error('[Media] Сообщение ожидает синхронизации:', e);
-                queueDirectChatSync(chatContext, preview);
-                updateOperationIndicator(indicator, 'Ожидает подключения', 'Повторим автоматически');
-            });
-        } else {
+        if (!navigator.onLine) {
             updateOperationIndicator(indicator, 'Ожидает подключения', 'Отправится при появлении сети');
         }
+        writePromise.then(async () => {
+            const ok = await updateChatLastMessage(preview, chatContext);
+            if (ok) removePendingChatSync(pendingSyncId);
+            removeOperationIndicator(indicator);
+        }).catch((e) => {
+            console.error('[Media] Сообщение ожидает синхронизации:', e);
+            queueDirectChatSync(chatContext, preview);
+            updateOperationIndicator(indicator, 'Ожидает подключения', 'Повторим автоматически');
+        });
     } catch (e) {
         console.error('sendMediaFile error:', e);
         updateOperationIndicator(indicator, 'Не удалось подготовить файл', 'Попробуйте ещё раз');
