@@ -209,6 +209,74 @@ export function sedaEncryptWithKey(text, keyStr) {
 }
 
 // ===================================================================
+// SEDA ULTRA v1 — дополнительный формат для новых сообщений.
+// Пять последовательных AES-256-GCM слоёв с отдельными ключами HKDF-SHA-256.
+// Старые SEDA Pro сообщения и ключи остаются поддержанными.
+// Важно: безопасность зависит также от защиты устройства и обмена ключами.
+// ===================================================================
+const ULTRA_PREFIX = 'SEDAULTRA1:';
+const ULTRA_LAYERS = 5;
+
+async function deriveUltraKeys(keyStr) {
+    if (typeof keyStr !== 'string' || !keyStr.startsWith('SEDAKEY:')) {
+        throw new Error('Некорректный ключ SEDA');
+    }
+    const raw = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(keyStr));
+    const material = await crypto.subtle.importKey('raw', raw, 'HKDF', false, ['deriveKey']);
+    const salt = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('Iceberg SEDA Ultra v1'));
+    const keys = [];
+    for (let i = 0; i < ULTRA_LAYERS; i++) {
+        keys.push(await crypto.subtle.deriveKey({
+            name: 'HKDF',
+            hash: 'SHA-256',
+            salt,
+            info: new TextEncoder().encode('Iceberg SEDA Ultra v1 / AES-256-GCM / layer ' + i)
+        }, material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']));
+    }
+    return keys;
+}
+
+async function ultraSeal(text, key) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, tagLength: 128 }, key, new TextEncoder().encode(text));
+    return bufToBase64(iv) + '.' + bufToBase64(cipher);
+}
+
+async function ultraOpen(payload, key) {
+    const split = payload.indexOf('.');
+    if (split <= 0 || split === payload.length - 1) throw new Error('Повреждённый SEDA Ultra payload');
+    const iv = new Uint8Array(base64ToBuf(payload.slice(0, split)));
+    const cipher = base64ToBuf(payload.slice(split + 1));
+    if (iv.length !== 12) throw new Error('Некорректный AES-GCM IV');
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv, tagLength: 128 }, key, cipher);
+    return new TextDecoder().decode(plain);
+}
+
+export async function sedaUltraEncryptWithKey(text, keyStr) {
+    const keys = await deriveUltraKeys(keyStr);
+    let payload = String(text);
+    for (const key of keys) payload = await ultraSeal(payload, key);
+    return ULTRA_PREFIX + payload;
+}
+
+export async function sedaUltraDecrypt(payload, keyStr) {
+    try {
+        if (typeof payload !== 'string' || !payload.startsWith(ULTRA_PREFIX)) return null;
+        const keys = await deriveUltraKeys(keyStr);
+        let plain = payload.slice(ULTRA_PREFIX.length);
+        for (let i = keys.length - 1; i >= 0; i--) plain = await ultraOpen(plain, keys[i]);
+        return plain;
+    } catch (e) {
+        console.error('[SEDA Ultra] decrypt error:', e);
+        return null;
+    }
+}
+
+export function isSedaUltraPayload(payload) {
+    return typeof payload === 'string' && payload.startsWith(ULTRA_PREFIX);
+}
+
+// ===================================================================
 // ЧАСТЬ 2: E2E-шифрование ключа SEDA (ECDH P-256 + AES-256-GCM)
 // ===================================================================
 const ECDH_PARAMS = { name: 'ECDH', namedCurve: 'P-256' };
