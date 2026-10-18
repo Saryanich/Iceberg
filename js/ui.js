@@ -915,11 +915,11 @@ async function renderMessage(msg) {
     let isDecrypted = false;
 
     if (isEncrypted && msg.text) {
-        if (uiState.currentSedaKey && authState.sedaProActivated && isSedaUltraPayload(msg.text)) {
+        if (uiState.currentChat?.isSeda && uiState.currentSedaKey && authState.sedaProActivated && isSedaUltraPayload(msg.text)) {
             const dec = await sedaUltraDecrypt(msg.text, uiState.currentSedaKey);
             if (dec !== null) { displayText = dec; isDecrypted = true; div.classList.add('message-seda'); }
             else { displayText = '[Не удалось расшифровать SEDA Ultra]'; div.classList.add('message-seda'); }
-        } else if (uiState.currentSedaKey && authState.sedaProActivated && isIcebergBasePayload(msg.text)) {
+        } else if (!isSedaUltraPayload(msg.text) && uiState.currentSedaKey && authState.sedaProActivated && isIcebergBasePayload(msg.text)) {
             const dec = await icebergBaseDecrypt(msg.text, uiState.currentSedaKey);
             if (dec !== null) { displayText = dec; isDecrypted = true; }
             else displayText = '[Не удалось расшифровать сообщение Iceberg]';
@@ -933,7 +933,7 @@ async function renderMessage(msg) {
     if ((msg.type === 'photo' || msg.type === 'video' || msg.type === 'file' || msg.type === 'audio') && msg.media) {
         if (msg.mediaEncrypted && uiState.currentSedaKey && authState.sedaProActivated) {
             mediaSrc = isSedaUltraPayload(msg.media)
-                ? await sedaUltraDecrypt(msg.media, uiState.currentSedaKey)
+                ? (uiState.currentChat?.isSeda ? await sedaUltraDecrypt(msg.media, uiState.currentSedaKey) : null)
                 : await icebergBaseDecrypt(msg.media, uiState.currentSedaKey);
         } else {
             mediaSrc = msg.mediaEncrypted ? null : msg.media;
@@ -1719,8 +1719,12 @@ export function startReply(id, msgData) {
 export async function startEdit(id, msgData) {
     uiState.editingMessage = id;
     let displayText = msgData.text;
-    if (msgData.encrypted && uiState.currentSedaKey) {
-        displayText = await sedaUltraDecrypt(msgData.text, uiState.currentSedaKey) ?? '[Не удалось расшифровать SEDA Ultra]';
+    if (msgData.encrypted && uiState.currentSedaKey && authState.sedaProActivated) {
+        displayText = isSedaUltraPayload(msgData.text)
+            ? (uiState.currentChat?.isSeda
+                ? await sedaUltraDecrypt(msgData.text, uiState.currentSedaKey) ?? '[Не удалось расшифровать SEDA Ultra]'
+                : '[SEDA Ultra доступен только в SEDA-чатах]')
+            : await icebergBaseDecrypt(msgData.text, uiState.currentSedaKey) ?? '[Не удалось расшифровать сообщение Iceberg]';
     }
     const input = document.getElementById('messageInput');
     input.value = displayText;
