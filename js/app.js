@@ -32,6 +32,7 @@ import {
     selectChannel,
     closeChat,
     loadMessages,
+    flushPendingChatSyncs,
     sendMessage,
     sendSticker,
     sendMediaFile,
@@ -279,6 +280,7 @@ async function bootMessenger(user, userData) {
         loadGroups();
         loadChannels();
         loadContacts();
+        if (navigator.onLine) flushPendingChatSyncs().catch(e => console.warn('[Offline sync]', e));
 
         startSedaHandshakeListener();
 
