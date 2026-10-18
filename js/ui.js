@@ -53,6 +53,124 @@ function ensureArray(val) {
     return values.filter(item => item !== null && typeof item === 'object' && !Array.isArray(item));
 }
 
+const PENDING_CHAT_SYNC_KEY = 'iceberg_pending_direct_chat_sync_v1';
+let operationIndicatorSequence = 0;
+let messageRenderSequence = 0;
+
+function readPendingChatSyncs() {
+    try {
+        const value = JSON.parse(localStorage.getItem(PENDING_CHAT_SYNC_KEY) || '[]');
+        return Array.isArray(value) ? value : [];
+    } catch { return []; }
+}
+
+function queueDirectChatSync(context, previewText) {
+    if (!context?.currentChat?.uid || context.currentGroup || context.currentChannel) return null;
+    const chat = context.currentChat;
+    const entry = {
+        id: String(context.chatId) + ':' + Date.now() + ':' + Math.random().toString(36).slice(2, 8),
+        chatId: context.chatId,
+        previewText: String(previewText || '').slice(0, 120),
+        queuedAt: Date.now(),
+        currentChat: {
+            uid: chat.uid, nickname: chat.nickname || 'Пользователь',
+            globalId: chat.globalId || '', avatar: chat.avatar || null,
+            mood: chat.mood || null, isSeda: !!chat.isSeda,
+            sedaChatId: chat.sedaChatId || null
+        }
+    };
+    const items = readPendingChatSyncs();
+    items.push(entry);
+    try { localStorage.setItem(PENDING_CHAT_SYNC_KEY, JSON.stringify(items.slice(-100))); } catch {}
+    return entry.id;
+}
+
+function removePendingChatSync(id) {
+    if (!id) return;
+    try {
+        localStorage.setItem(PENDING_CHAT_SYNC_KEY, JSON.stringify(
+            readPendingChatSyncs().filter(item => item.id !== id)
+        ));
+    } catch {}
+}
+
+let flushingPendingChatSyncs = false;
+async function flushPendingChatSyncs() {
+    if (flushingPendingChatSyncs || !navigator.onLine || !authState.user?.uid) return;
+    flushingPendingChatSyncs = true;
+    try {
+        for (const item of readPendingChatSyncs()) {
+            if (!navigator.onLine) break;
+            const context = {
+                chatId: item.chatId,
+                currentChat: item.currentChat,
+                currentGroup: null,
+                currentChannel: null
+            };
+            const ok = await updateChatLastMessage(item.previewText, context, true);
+            if (ok) removePendingChatSync(item.id);
+        }
+    } finally {
+        flushingPendingChatSyncs = false;
+    }
+}
+window.addEventListener('online', () => { flushPendingChatSyncs(); });
+window.addEventListener('pageshow', () => { if (navigator.onLine) flushPendingChatSyncs(); });
+
+function showOperationIndicator(chatId, label, kind = 'upload') {
+    if (!chatId || uiState.currentChatId !== chatId) return null;
+    const area = document.getElementById('messagesArea');
+    if (!area) return null;
+    const row = document.createElement('div');
+    row.className = 'chat-operation-indicator';
+    row.dataset.operationId = String(++operationIndicatorSequence);
+    row.dataset.chatId = chatId;
+    const spinner = document.createElement('span');
+    spinner.className = 'chat-operation-spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+    const text = document.createElement('span');
+    text.className = 'chat-operation-label';
+    text.textContent = label;
+    const progress = document.createElement('span');
+    progress.className = 'chat-operation-progress';
+    progress.textContent = kind === 'upload' ? 'Подготовка…' : '';
+    row.append(spinner, text, progress);
+    area.appendChild(row);
+    area.scrollTop = area.scrollHeight;
+    return { row, text, progress, chatId };
+}
+
+function updateOperationIndicator(indicator, label, progressText = '') {
+    if (!indicator?.row?.isConnected) return;
+    indicator.text.textContent = label;
+    indicator.progress.textContent = progressText;
+}
+
+function removeOperationIndicator(indicator) {
+    indicator?.row?.remove();
+}
+
+async function renderMessagesSequentially(area, messages, loadVersion, chatId) {
+    const renderVersion = ++messageRenderSequence;
+    area.innerHTML = '';
+    for (let i = 0; i < messages.length; i++) {
+        if (loadVersion !== messageLoadVersion ||
+            renderVersion !== messageRenderSequence ||
+            uiState.currentChatId !== chatId) return false;
+        area.appendChild(renderMessage(messages[i]));
+        if (i > 0 && i % 8 === 0) {
+            await new Promise(resolve => requestAnimationFrame(() => resolve()));
+        }
+    }
+    if (loadVersion === messageLoadVersion && renderVersion === messageRenderSequence &&
+        uiState.currentChatId === chatId) {
+        bindChatLongPress();
+        area.scrollTop = area.scrollHeight;
+        return true;
+    }
+    return false;
+}
+
 export function showToast(text, type = 'info', duration = 2500) {
     const c = document.getElementById('toastContainer');
     if (!c) return;
@@ -640,23 +758,32 @@ export async function loadMessages() {
     const area = document.getElementById('messagesArea');
     if (!chatId || !area) return;
 
-    area.innerHTML = '<div class="empty-state">Загрузка сообщений...</div>';
+    area.innerHTML = '';
+    const loading = showOperationIndicator(chatId, 'Подключаем чат…', 'loading');
+    let firstSnapshot = true;
 
-    // Кэш ускоряет интерфейс, но его сбой не должен блокировать загрузку из Firestore.
     try {
         const cached = await DB.getCachedMessages(chatId);
-        if (loadVersion !== messageLoadVersion || uiState.currentChatId !== chatId) return;
-        if (cached && cached.length) {
-            area.innerHTML = '';
-            for (const msg of cached) area.appendChild(renderMessage(msg));
-            area.scrollTop = area.scrollHeight;
-            bindChatLongPress();
+        if (loadVersion !== messageLoadVersion || uiState.currentChatId !== chatId) {
+            removeOperationIndicator(loading);
+            return;
+        }
+        if (cached?.length) {
+            const rendered = await renderMessagesSequentially(area, cached, loadVersion, chatId);
+            if (rendered && loading?.row?.isConnected) {
+                updateOperationIndicator(loading, 'Синхронизация новых сообщений…', 'Кэш устройства');
+                area.appendChild(loading.row);
+                area.scrollTop = area.scrollHeight;
+            }
         }
     } catch (err) {
-        console.warn('[Messages] Не удалось прочитать локальный кэш:', err);
+        console.warn('[Messages] Локальный кэш недоступен:', err);
     }
 
-    if (loadVersion !== messageLoadVersion || uiState.currentChatId !== chatId) return;
+    if (loadVersion !== messageLoadVersion || uiState.currentChatId !== chatId) {
+        removeOperationIndicator(loading);
+        return;
+    }
 
     const mRef = collection(db, 'messages', chatId, 'msgs');
     uiState.messagesUnsub = onSnapshot(
@@ -666,13 +793,23 @@ export async function loadMessages() {
             const msgs = [];
             snap.forEach(d => msgs.push({ id: d.id, ...d.data() }));
 
-            area.innerHTML = '';
-            if (!msgs.length) {
-                area.innerHTML = '<div class="empty-state">Нет сообщений. Напишите первое!</div>';
+            const currentIds = Array.from(area.querySelectorAll('.message-bubble')).map(el => el.dataset.id);
+            const nextIds = msgs.map(m => m.id);
+            const sameMessages = currentIds.length === nextIds.length &&
+                currentIds.every((id, i) => id === nextIds[i]);
+
+            if (!sameMessages) {
+                await renderMessagesSequentially(area, msgs, loadVersion, chatId);
             } else {
-                for (const msg of msgs) area.appendChild(renderMessage(msg));
-                area.scrollTop = area.scrollHeight;
                 bindChatLongPress();
+            }
+
+            if (firstSnapshot) {
+                firstSnapshot = false;
+                removeOperationIndicator(loading);
+                if (!msgs.length && !area.querySelector('.message-bubble')) {
+                    area.innerHTML = '<div class="empty-state">Нет сообщений. Напишите первое!</div>';
+                }
             }
 
             try {
@@ -687,8 +824,11 @@ export async function loadMessages() {
         (err) => {
             if (loadVersion !== messageLoadVersion || uiState.currentChatId !== chatId) return;
             console.error('[onSnapshot] Ошибка:', err);
+            removeOperationIndicator(loading);
             showToast('Не удалось загрузить сообщения. Проверьте соединение или доступ.', 'error', 4000);
-            if (!area.childElementCount) area.innerHTML = '<div class="empty-state">Не удалось загрузить сообщения</div>';
+            if (!area.querySelector('.message-bubble')) {
+                area.innerHTML = '<div class="empty-state">Не удалось загрузить сообщения</div>';
+            }
         }
     );
 }
@@ -939,9 +1079,21 @@ export async function sendMessage() {
             reactions: {}
         };
 
-        await addDoc(collection(db, 'messages', chatIdAtSend, 'msgs'), message);
+        const pendingSyncId = queueDirectChatSync(chatContext, originalText);
+        const writePromise = addDoc(collection(db, 'messages', chatIdAtSend, 'msgs'), message);
         cancelReply();
-        await updateChatLastMessage(originalText, chatContext);
+        if (navigator.onLine) {
+            writePromise.then(async () => {
+                const ok = await updateChatLastMessage(originalText, chatContext);
+                if (ok) removePendingChatSync(pendingSyncId);
+            }).catch((e) => {
+                console.error('[Messages] Сообщение ожидает синхронизации:', e);
+                queueDirectChatSync(chatContext, originalText);
+                showToast('Сообщение ожидает подключения к сети', 'info', 4000);
+            });
+        } else {
+            showToast('Нет сети — сообщение ожидает отправки', 'info', 3500);
+        }
     } catch (e) {
         console.error('Ошибка отправки:', e);
         showToast('❌ Ошибка отправки', 'error');
@@ -951,13 +1103,13 @@ export async function sendMessage() {
     }
 }
 
-async function updateChatLastMessage(previewText, context) {
+async function updateChatLastMessage(previewText, context, fromQueue = false) {
     try {
         const chatIdAtSend = context?.chatId;
         const currentChat = context?.currentChat;
         const currentGroup = context?.currentGroup;
         const currentChannel = context?.currentChannel;
-        if (!chatIdAtSend || !currentChat) return;
+        if (!chatIdAtSend || !currentChat) return false;
 
         if (currentChat) {
             let chats = ensureArray(authState.userData?.chats);
@@ -1004,8 +1156,13 @@ async function updateChatLastMessage(previewText, context) {
                 }
             }
         }
+        return true;
     } catch (e) {
         console.error('updateChatLastMessage:', e);
+        if (!fromQueue && context?.currentChat?.uid && !context.currentGroup && !context.currentChannel) {
+            queueDirectChatSync(context, previewText);
+        }
+        return false;
     }
 }
 
@@ -1075,7 +1232,9 @@ export async function sendMediaFile(input) {
     }
     if (!checkRateLimit(uiState.mediaTimes, RATE_LIMIT.media.count, RATE_LIMIT.media.windowMs)) return;
 
+    const indicator = showOperationIndicator(chatContext.chatId, file.type.startsWith('video/') ? 'Подготовка видео…' : 'Подготовка медиа…');
     try {
+        updateOperationIndicator(indicator, 'Читаем файл…', formatBytes(file.size));
         let dataUrl;
         let mediaType;
 
@@ -1094,6 +1253,7 @@ export async function sendMediaFile(input) {
             else mediaType = 'file';
         }
 
+        updateOperationIndicator(indicator, 'Файл подготовлен', 'Отправляем…');
         let mediaToSend = dataUrl;
         let mediaEncrypted = false;
 
@@ -1110,7 +1270,12 @@ export async function sendMediaFile(input) {
             mediaEncrypted = true;
         }
 
-        await addDoc(collection(db, 'messages', chatContext.chatId, 'msgs'), {
+        const preview = mediaType === 'photo' ? '📷 Фото'
+            : mediaType === 'video' ? '🎥 Видео'
+            : mediaType === 'audio' ? '🎵 Аудио'
+            : '📄 ' + file.name;
+        const pendingSyncId = queueDirectChatSync(chatContext, preview);
+        const writePromise = addDoc(collection(db, 'messages', chatContext.chatId, 'msgs'), {
             text: '',
             senderId: authState.user.uid,
             senderName: authState.userData.nickname,
@@ -1127,14 +1292,26 @@ export async function sendMediaFile(input) {
         });
 
         cancelReply();
-        const preview = mediaType === 'photo' ? '📷 Фото'
-            : mediaType === 'video' ? '🎥 Видео'
-            : mediaType === 'audio' ? '🎵 Аудио'
-            : '📄 ' + file.name;
-        await updateChatLastMessage(preview, chatContext);
+        updateOperationIndicator(indicator, 'Файл добавлен в очередь', navigator.onLine ? 'Ожидание подтверждения…' : 'Ожидание сети…');
+        if (navigator.onLine) {
+            writePromise.then(async () => {
+                const ok = await updateChatLastMessage(preview, chatContext);
+                if (ok) removePendingChatSync(pendingSyncId);
+                removeOperationIndicator(indicator);
+            }).catch((e) => {
+                console.error('[Media] Сообщение ожидает синхронизации:', e);
+                queueDirectChatSync(chatContext, preview);
+                updateOperationIndicator(indicator, 'Ожидает подключения', 'Повторим автоматически');
+            });
+        } else {
+            updateOperationIndicator(indicator, 'Ожидает подключения', 'Отправится при появлении сети');
+        }
     } catch (e) {
         console.error('sendMediaFile error:', e);
+        updateOperationIndicator(indicator, 'Не удалось подготовить файл', 'Попробуйте ещё раз');
         showToast('❌ Ошибка отправки', 'error');
+        setTimeout(() => removeOperationIndicator(indicator), 3500);
+        return;
     }
 }
 
