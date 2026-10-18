@@ -156,6 +156,7 @@ function removeOperationIndicator(indicator) {
 
 async function renderMessagesSequentially(area, messages, loadVersion, chatId) {
     const renderVersion = ++messageRenderSequence;
+    const operationRows = Array.from(area.querySelectorAll('.chat-operation-indicator'));
     area.innerHTML = '';
     for (let i = 0; i < messages.length; i++) {
         if (loadVersion !== messageLoadVersion ||
@@ -169,6 +170,7 @@ async function renderMessagesSequentially(area, messages, loadVersion, chatId) {
     if (loadVersion === messageLoadVersion && renderVersion === messageRenderSequence &&
         uiState.currentChatId === chatId) {
         bindChatLongPress();
+        for (const row of operationRows) area.appendChild(row);
         area.scrollTop = area.scrollHeight;
         return true;
     }
@@ -1130,18 +1132,17 @@ export async function sendMessage() {
         const pendingSyncId = queueDirectChatSync(chatContext, originalText);
         const writePromise = addDoc(collection(db, 'messages', chatIdAtSend, 'msgs'), message);
         cancelReply();
-        if (navigator.onLine) {
-            writePromise.then(async () => {
-                const ok = await updateChatLastMessage(originalText, chatContext);
-                if (ok) removePendingChatSync(pendingSyncId);
-            }).catch((e) => {
-                console.error('[Messages] Сообщение ожидает синхронизации:', e);
-                queueDirectChatSync(chatContext, originalText);
-                showToast('Сообщение ожидает подключения к сети', 'info', 4000);
-            });
-        } else {
+        if (!navigator.onLine) {
             showToast('Нет сети — сообщение ожидает отправки', 'info', 3500);
         }
+        writePromise.then(async () => {
+            const ok = await updateChatLastMessage(originalText, chatContext);
+            if (ok) removePendingChatSync(pendingSyncId);
+        }).catch((e) => {
+            console.error('[Messages] Сообщение ожидает синхронизации:', e);
+            queueDirectChatSync(chatContext, originalText);
+            showToast('Сообщение ожидает подключения к сети', 'info', 4000);
+        });
     } catch (e) {
         console.error('Ошибка отправки:', e);
         showToast('❌ Ошибка отправки', 'error');
