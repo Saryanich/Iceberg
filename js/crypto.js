@@ -236,36 +236,46 @@ async function deriveUltraKeys(keyStr) {
     return keys;
 }
 
-async function ultraSeal(text, key) {
+async function ultraSealBytes(bytes, key) {
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, tagLength: 128 }, key, new TextEncoder().encode(text));
-    return bufToBase64(iv) + '.' + bufToBase64(cipher);
+    const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, tagLength: 128 }, key, bytes);
+    return { iv: bufToBase64(iv), cipher: new Uint8Array(cipher) };
 }
 
-async function ultraOpen(payload, key) {
-    const split = payload.indexOf('.');
-    if (split <= 0 || split === payload.length - 1) throw new Error('Повреждённый SEDA Ultra payload');
-    const iv = new Uint8Array(base64ToBuf(payload.slice(0, split)));
-    const cipher = base64ToBuf(payload.slice(split + 1));
+async function ultraOpenBytes(cipher, ivBase64, key) {
+    const iv = new Uint8Array(base64ToBuf(ivBase64));
     if (iv.length !== 12) throw new Error('Некорректный AES-GCM IV');
-    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv, tagLength: 128 }, key, cipher);
-    return new TextDecoder().decode(plain);
+    return new Uint8Array(await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv, tagLength: 128 }, key, cipher
+    ));
 }
 
 export async function sedaUltraEncryptWithKey(text, keyStr) {
     const keys = await deriveUltraKeys(keyStr);
-    let payload = String(text);
-    for (const key of keys) payload = await ultraSeal(payload, key);
-    return ULTRA_PREFIX + payload;
+    const encoder = new TextEncoder();
+    let payload = encoder.encode(String(text));
+    const ivs = [];
+    for (const key of keys) {
+        const sealed = await ultraSealBytes(payload, key);
+        ivs.push(sealed.iv);
+        payload = sealed.cipher;
+    }
+    // Base64 выполняется только один раз на финальном ciphertext — важно для медиа.
+    return ULTRA_PREFIX + JSON.stringify({ v: 1, ivs, c: bufToBase64(payload) });
 }
 
 export async function sedaUltraDecrypt(payload, keyStr) {
     try {
         if (typeof payload !== 'string' || !payload.startsWith(ULTRA_PREFIX)) return null;
+        const envelope = JSON.parse(payload.slice(ULTRA_PREFIX.length));
+        if (envelope?.v !== 1 || !Array.isArray(envelope.ivs) ||
+            envelope.ivs.length !== ULTRA_LAYERS || typeof envelope.c !== 'string') return null;
         const keys = await deriveUltraKeys(keyStr);
-        let plain = payload.slice(ULTRA_PREFIX.length);
-        for (let i = keys.length - 1; i >= 0; i--) plain = await ultraOpen(plain, keys[i]);
-        return plain;
+        let bytes = new Uint8Array(base64ToBuf(envelope.c));
+        for (let i = keys.length - 1; i >= 0; i--) {
+            bytes = await ultraOpenBytes(bytes, envelope.ivs[i], keys[i]);
+        }
+        return new TextDecoder().decode(bytes);
     } catch (e) {
         console.error('[SEDA Ultra] decrypt error:', e);
         return null;
