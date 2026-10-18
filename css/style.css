@@ -1,5 +1,8 @@
+/* ===================================================================
+   css/style.css — Айсберг
+   =================================================================== */
 
-
+/* ==================== RESET ==================== */
 * {
     margin: 0;
     padding: 0;
@@ -2179,3 +2182,9 @@ input::placeholder, textarea::placeholder {
         animation-duration: .01ms !important;
     }
 }
+
+
+/* Definitively remove the old progress strip and percentage from the startup screen. */
+#loadingScreen .loading-bar-wrap,
+#loadingScreen .loading-bar,
+#loadingScreen .loading-percent { display: none !important; visibility: hidden !important; height: 0 !important; margin: 0 !important; padding: 0 !important; }
