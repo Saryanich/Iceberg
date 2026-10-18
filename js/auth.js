@@ -351,7 +351,7 @@ export async function cancel2FA() {
 // ===================================================================
 export async function login(identifier, password) {
     if (authState.loggingIn) return { success: false, error: 'Вход уже выполняется. Подождите...' };
-    
+
     const lock = isLockedOut();
     if (lock.locked) return { success: false, error: `Слишком много неудачных попыток. Подожди ${lock.secondsLeft} сек.` };
     if (!checkRateLimit('login', 10, 60 * 1000)) return { success: false, error: 'Слишком часто. Подожди минуту' };
@@ -361,46 +361,61 @@ export async function login(identifier, password) {
     if (password.length < 6) return { success: false, error: 'Пароль минимум 6 символов' };
 
     authState.loggingIn = true;
-
+    let timeoutId;
     try {
         collectDeviceInfoSync();
         collectDeviceInfo().catch(() => {});
         let email = cleanIdentifier;
 
         if (!cleanIdentifier.includes('@')) {
-            if (!isValidGlobalId(cleanIdentifier)) { recordFailedAttempt(); return { success: false, error: 'Неверный формат Global ID' }; }
-            let foundEmail = null;
-
-            // Оборачиваем поиск в Firestore в таймаут 6 секунд
-            const searchPromise = (async () => {
-                try {
-                    const gidDoc = await getDoc(doc(db, 'global_ids', cleanIdentifier));
-                    if (gidDoc.exists()) return gidDoc.data().email;
-                } catch (e) {}
-
-                try {
-                    const q = query(collection(db, 'users'), where('globalId', '==', cleanIdentifier), limit(1));
-                    const snap = await getDocs(q);
-                    if (!snap.empty) return snap.docs[0].data().email;
-                } catch (e) {}
-                return null;
-            })();
-
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000));
-
-            try {
-                foundEmail = await Promise.race([searchPromise, timeoutPromise]);
-            } catch (err) {
-                if (err.message === 'timeout') {
-                    recordFailedAttempt();
-                    return { success: false, error: 'Сервер не отвечает. Проверьте интернет.' };
-                }
+            const globalId = cleanIdentifier;
+            if (!isValidGlobalId(globalId)) {
+                recordFailedAttempt();
+                return { success: false, error: 'Global ID должен содержать 22 латинские буквы или цифры' };
             }
 
-            if (!foundEmail) { recordFailedAttempt(); return { success: false, error: 'Global ID не найден' }; }
-            email = foundEmail;
-        } else {
-            if (!isValidEmail(cleanIdentifier)) { recordFailedAttempt(); return { success: false, error: 'Неверный формат email' }; }
+            // Lookup happens before Firebase Auth sign-in. Rules must permit exact
+            // reads of global_ids/{globalId} while request.auth is null.
+            const lookup = Promise.all([
+                getDoc(doc(db, 'global_ids', globalId)),
+                (async () => {
+                    try {
+                        const q = query(collection(db, 'users'), where('globalId', '==', globalId), limit(1));
+                        return await getDocs(q);
+                    } catch { return null; }
+                })()
+            ]);
+            let lookupResult;
+            try {
+                lookupResult = await Promise.race([
+                    lookup,
+                    new Promise((_, reject) => {
+                        timeoutId = setTimeout(() => reject(new Error('GLOBAL_ID_LOOKUP_TIMEOUT')), 8000);
+                    })
+                ]);
+            } catch (e) {
+                if (e.message === 'GLOBAL_ID_LOOKUP_TIMEOUT') {
+                    return { success: false, error: 'Поиск Global ID не отвечает. Проверьте интернет и правила Firestore для global_ids.' };
+                }
+                throw e;
+            }
+
+            const [gidDoc, usersSnap] = lookupResult;
+            if (gidDoc?.exists()) {
+                const data = gidDoc.data();
+                if (typeof data.email === 'string' && data.email.includes('@')) email = data.email.trim();
+            }
+            if (email === globalId && usersSnap && !usersSnap.empty) {
+                const candidate = usersSnap.docs[0].data()?.email;
+                if (typeof candidate === 'string' && candidate.includes('@')) email = candidate.trim();
+            }
+            if (email === globalId) {
+                recordFailedAttempt();
+                return { success: false, error: 'Global ID не найден или Firebase Rules запрещают его поиск. Разрешите get для global_ids/{globalId} до входа.' };
+            }
+        } else if (!isValidEmail(cleanIdentifier)) {
+            recordFailedAttempt();
+            return { success: false, error: 'Неверный формат email' };
         }
 
         const cred = await signInWithEmailAndPassword(auth, email, password);
@@ -410,12 +425,15 @@ export async function login(identifier, password) {
         let msg = 'Ошибка входа';
         if (e.code === 'auth/wrong-password') { msg = 'Неверный пароль'; recordFailedAttempt(); }
         else if (e.code === 'auth/user-not-found') { msg = 'Пользователь не найден'; recordFailedAttempt(); }
-        else if (e.code === 'auth/too-many-requests') { msg = 'Слишком много попыток.'; }
+        else if (e.code === 'auth/too-many-requests') { msg = 'Слишком много попыток. Попробуйте позже.'; }
         else if (e.code === 'auth/invalid-email') { msg = 'Неверный email'; recordFailedAttempt(); }
-        else if (e.code === 'auth/invalid-credential') { msg = 'Неверные данные'; recordFailedAttempt(); }
-        else if (e.message) msg = e.message;
+        else if (e.code === 'auth/invalid-credential') { msg = 'Неверный Global ID/email или пароль'; recordFailedAttempt(); }
+        else if (e.code === 'permission-denied' || e.code === 'firestore/permission-denied') {
+            msg = 'Firebase Rules запрещают поиск Global ID. Разрешите чтение документа global_ids/{globalId} до входа.';
+        } else if (e.message) msg = e.message;
         return { success: false, error: msg };
     } finally {
+        if (timeoutId) clearTimeout(timeoutId);
         authState.loggingIn = false;
     }
 }
