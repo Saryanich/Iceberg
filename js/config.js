@@ -1,6 +1,6 @@
-// ===================================================================
+// ==================================================================
 // js/config.js — Конфигурация, Firebase, константы
-// ===================================================================
+// ==================================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getAuth, browserLocalPersistence, setPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
