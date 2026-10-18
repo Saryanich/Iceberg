@@ -2184,7 +2184,6 @@ input::placeholder, textarea::placeholder {
 }
 
 
-/* Definitively remove the old progress strip and percentage from the startup screen. */
-#loadingScreen .loading-bar-wrap,
-#loadingScreen .loading-bar,
-#loadingScreen .loading-percent { display: none !important; visibility: hidden !important; height: 0 !important; margin: 0 !important; padding: 0 !important; }
+
+/* Legacy progress markup is hidden as a fallback; the elements are also removed from index.html. */
+#loadingScreen .loading-bar-wrap, #loadingScreen .loading-bar, #loadingScreen .loading-percent { display: none !important; }
