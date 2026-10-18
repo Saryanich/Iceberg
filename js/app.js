@@ -1094,10 +1094,6 @@ async function waitForFirebaseAuthAndRoute() {
 }
 
 async function init() {
-    // Remove the legacy progress strip and percentage from the DOM entirely.
-    document.querySelector('#loadingScreen .loading-bar-wrap')?.remove();
-    document.querySelector('#loadingScreen .loading-percent')?.remove();
-
     loadTheme();
     initParticles();
 
