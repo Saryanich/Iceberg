@@ -28,7 +28,7 @@ body {
     transition: background .4s, color .4s;
 }
 
-/*  ==================== ТЕМЫ =================== */
+/*  =================== ТЕМЫ ================== */
 body.theme-dark {
     --bg-primary: #0A0F1E;
     --bg-secondary: #0F1A2A;
