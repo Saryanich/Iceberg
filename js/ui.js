@@ -1236,12 +1236,19 @@ export async function sendSticker(sticker) {
     }
     if (!checkRateLimit(uiState.messageTimes, RATE_LIMIT.messages.count, RATE_LIMIT.messages.windowMs)) return;
 
+    const chatContext = {
+        chatId: uiState.currentChatId,
+        currentChat: uiState.currentChat,
+        currentGroup: uiState.currentGroup,
+        currentChannel: uiState.currentChannel
+    };
     const sp = document.getElementById('stickerPicker');
     if (sp) sp.classList.remove('show');
     uiState.stickerPickerOpen = false;
 
     try {
-        await addDoc(collection(db, 'messages', uiState.currentChatId, 'msgs'), {
+        const pendingSyncId = queueDirectChatSync(chatContext, sticker);
+        const writePromise = addDoc(collection(db, 'messages', chatContext.chatId, 'msgs'), {
             text: sticker,
             senderId: authState.user.uid,
             senderName: authState.userData.nickname,
@@ -1253,8 +1260,17 @@ export async function sendSticker(sticker) {
             reactions: {}
         });
         cancelReply();
-        await updateChatLastMessage(sticker);
+        if (!navigator.onLine) showToast('Нет сети — стикер ожидает отправки', 'info', 3500);
+        writePromise.then(async () => {
+            const ok = await updateChatLastMessage(sticker, chatContext);
+            if (ok) removePendingChatSync(pendingSyncId);
+        }).catch((e) => {
+            console.error('[Sticker] Отправка ожидает сети:', e);
+            queueDirectChatSync(chatContext, sticker);
+            showToast('Стикер ожидает подключения к сети', 'info', 3500);
+        });
     } catch (e) {
+        console.error('[Sticker] Ошибка:', e);
         showToast('Ошибка', 'error');
     }
 }
@@ -1364,6 +1380,14 @@ export async function sendMediaFile(input) {
 }
 
 export async function toggleVoiceRecording() {
+    const chatContext = {
+        chatId: uiState.currentChatId,
+        currentChat: uiState.currentChat,
+        currentGroup: uiState.currentGroup,
+        currentChannel: uiState.currentChannel,
+        sedaEnabled: uiState.sedaEnabledForCurrentChat,
+        sedaKey: uiState.currentSedaKey
+    };
     if (uiState.currentChannel && !uiState.currentChannel.isAdmin) {
         showToast('❌ Только администраторы', 'error');
         return;
@@ -1402,17 +1426,21 @@ export async function toggleVoiceRecording() {
                 try {
                     let dataUrl = reader.result;
                     let mediaEncrypted = false;
-                    if (uiState.sedaEnabledForCurrentChat && authState.sedaProActivated) {
-                        let keyStr = uiState.currentSedaKey;
+                    if (chatContext.sedaEnabled && authState.sedaProActivated) {
+                        let keyStr = chatContext.sedaKey;
                         if (!keyStr) {
                             const r = sedaEncrypt('init');
-                            await DB.saveSedaKey(uiState.currentChatId, r.key);
+                            await DB.saveSedaKey(chatContext.chatId, r.key);
                             keyStr = r.key;
+                            chatContext.sedaKey = r.key;
+                            if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = r.key;
                         }
                         dataUrl = sedaEncryptWithKey(dataUrl, keyStr);
                         mediaEncrypted = true;
                     }
-                    await addDoc(collection(db, 'messages', uiState.currentChatId, 'msgs'), {
+                    const preview = '🎤 Голосовое';
+                    const pendingSyncId = queueDirectChatSync(chatContext, preview);
+                    const writePromise = addDoc(collection(db, 'messages', chatContext.chatId, 'msgs'), {
                         text: '',
                         senderId: authState.user.uid,
                         senderName: authState.userData.nickname,
@@ -1428,7 +1456,15 @@ export async function toggleVoiceRecording() {
                         reactions: {}
                     });
                     cancelReply();
-                    await updateChatLastMessage('🎤 Голосовое');
+                    if (!navigator.onLine) showToast('Нет сети — голосовое ожидает отправки', 'info', 3500);
+                    writePromise.then(async () => {
+                        const ok = await updateChatLastMessage(preview, chatContext);
+                        if (ok) removePendingChatSync(pendingSyncId);
+                    }).catch((e) => {
+                        console.error('[Voice] Отправка ожидает сети:', e);
+                        queueDirectChatSync(chatContext, preview);
+                        showToast('Голосовое ожидает подключения к сети', 'info', 3500);
+                    });
                 } catch (e) {
                     console.error(e);
                     showToast('❌ Ошибка отправки', 'error');
