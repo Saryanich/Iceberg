@@ -627,26 +627,42 @@ async function markChatRead(chat) {
     } catch {}
 }
 
+let messageLoadVersion = 0;
+
 export async function loadMessages() {
-    if (uiState.messagesUnsub) { uiState.messagesUnsub(); uiState.messagesUnsub = null; }
-    if (!uiState.currentChatId) return;
-
-    const area = document.getElementById('messagesArea');
-
-    const cached = await DB.getCachedMessages(uiState.currentChatId);
-    if (cached && cached.length) {
-        area.innerHTML = '';
-        for (const msg of cached) {
-            area.appendChild(renderMessage(msg));
-        }
-        area.scrollTop = area.scrollHeight;
-        bindChatLongPress();
+    if (uiState.messagesUnsub) {
+        try { uiState.messagesUnsub(); } catch {}
+        uiState.messagesUnsub = null;
     }
 
-    const mRef = collection(db, 'messages', uiState.currentChatId, 'msgs');
+    const chatId = uiState.currentChatId;
+    const loadVersion = ++messageLoadVersion;
+    const area = document.getElementById('messagesArea');
+    if (!chatId || !area) return;
+
+    area.innerHTML = '<div class="empty-state">Загрузка сообщений...</div>';
+
+    // Кэш ускоряет интерфейс, но его сбой не должен блокировать загрузку из Firestore.
+    try {
+        const cached = await DB.getCachedMessages(chatId);
+        if (loadVersion !== messageLoadVersion || uiState.currentChatId !== chatId) return;
+        if (cached && cached.length) {
+            area.innerHTML = '';
+            for (const msg of cached) area.appendChild(renderMessage(msg));
+            area.scrollTop = area.scrollHeight;
+            bindChatLongPress();
+        }
+    } catch (err) {
+        console.warn('[Messages] Не удалось прочитать локальный кэш:', err);
+    }
+
+    if (loadVersion !== messageLoadVersion || uiState.currentChatId !== chatId) return;
+
+    const mRef = collection(db, 'messages', chatId, 'msgs');
     uiState.messagesUnsub = onSnapshot(
         query(mRef, orderBy('timestamp', 'asc'), limit(300)),
         async (snap) => {
+            if (loadVersion !== messageLoadVersion || uiState.currentChatId !== chatId) return;
             const msgs = [];
             snap.forEach(d => msgs.push({ id: d.id, ...d.data() }));
 
@@ -654,37 +670,46 @@ export async function loadMessages() {
             if (!msgs.length) {
                 area.innerHTML = '<div class="empty-state">Нет сообщений. Напишите первое!</div>';
             } else {
-                for (const msg of msgs) {
-                    area.appendChild(renderMessage(msg));
-                }
+                for (const msg of msgs) area.appendChild(renderMessage(msg));
                 area.scrollTop = area.scrollHeight;
                 bindChatLongPress();
             }
 
-            await DB.setCachedMessages(uiState.currentChatId, msgs);
-            markIncomingRead(msgs);
+            try {
+                await DB.setCachedMessages(chatId, msgs);
+            } catch (err) {
+                console.warn('[Messages] Не удалось обновить локальный кэш:', err);
+            }
+            if (loadVersion === messageLoadVersion && uiState.currentChatId === chatId) {
+                markIncomingRead(msgs, chatId);
+            }
         },
         (err) => {
+            if (loadVersion !== messageLoadVersion || uiState.currentChatId !== chatId) return;
             console.error('[onSnapshot] Ошибка:', err);
-            showToast('⚠️ Соединение потеряно', 'error');
+            showToast('Не удалось загрузить сообщения. Проверьте соединение или доступ.', 'error', 4000);
+            if (!area.childElementCount) area.innerHTML = '<div class="empty-state">Не удалось загрузить сообщения</div>';
         }
     );
 }
 
-async function markIncomingRead(msgs) {
+async function markIncomingRead(msgs, chatId) {
+    if (!authState.user?.uid || !chatId) return;
     try {
         const batch = writeBatch(db);
         let updated = 0;
         for (const m of msgs) {
             if (m.senderId !== authState.user.uid && !m.read) {
-                batch.update(doc(db, 'messages', uiState.currentChatId, 'msgs', m.id), {
+                batch.update(doc(db, 'messages', chatId, 'msgs', m.id), {
                     read: true, readAt: Date.now()
                 });
                 updated++;
             }
         }
         if (updated > 0) await batch.commit();
-    } catch {}
+    } catch (err) {
+        console.warn('[Messages] Не удалось отметить сообщения прочитанными:', err);
+    }
 }
 
 function renderMessage(msg) {
