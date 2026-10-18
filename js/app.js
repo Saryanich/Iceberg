@@ -953,7 +953,7 @@ async function createGroupFromModal() {
     const name = document.getElementById('groupName').value.trim();
     if (!name) return showToast('Введите название', 'error');
     try {
-        const { addDoc, collection, doc, updateDoc, getDoc, arrayUnion, serverTimestamp } =
+        const { addDoc, collection, doc, setDoc, updateDoc, getDoc, arrayUnion, serverTimestamp } =
             await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
         const { db } = await import('./config.js');
 
@@ -969,6 +969,18 @@ async function createGroupFromModal() {
             name, createdAt: serverTimestamp(), createdBy: authState.user.uid,
             members, memberCount: members.length
         });
+
+        // Дополнительная ACL-карточка в новой коллекции iceberg.
+        // Не меняет старую схему groups/users и не мешает работе старых клиентов.
+        await setDoc(doc(db, 'iceberg', 'group_' + ref.id), {
+            type: 'group',
+            resourceId: ref.id,
+            ownerId: authState.user.uid,
+            memberUids: members.map(m => m.uid),
+            adminUids: [authState.user.uid],
+            createdAt: serverTimestamp(),
+            schemaVersion: 1
+        }).catch(e => console.warn('[Iceberg ACL] Не удалось сохранить ACL группы:', e));
 
         for (const m of members) {
             const uRef = doc(db, 'users', m.uid);
@@ -993,7 +1005,7 @@ async function createChannelFromModal() {
     const description = document.getElementById('channelDescription').value.trim();
     if (!name) return showToast('Введите название', 'error');
     try {
-        const { addDoc, collection, doc, updateDoc, arrayUnion, serverTimestamp } =
+        const { addDoc, collection, doc, setDoc, updateDoc, arrayUnion, serverTimestamp } =
             await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
         const { db } = await import('./config.js');
 
@@ -1001,6 +1013,17 @@ async function createChannelFromModal() {
             name, description, createdAt: serverTimestamp(), createdBy: authState.user.uid,
             admins: [authState.user.uid], members: [authState.user.uid], memberCount: 1
         });
+
+        // Дополнительная ACL-карточка; старые поля channels/users остаются без изменений.
+        await setDoc(doc(db, 'iceberg', 'channel_' + ref.id), {
+            type: 'channel',
+            resourceId: ref.id,
+            ownerId: authState.user.uid,
+            memberUids: [authState.user.uid],
+            adminUids: [authState.user.uid],
+            createdAt: serverTimestamp(),
+            schemaVersion: 1
+        }).catch(e => console.warn('[Iceberg ACL] Не удалось сохранить ACL канала:', e));
 
         const channelEntry = {
             id: ref.id, name, description, isAdmin: true,
