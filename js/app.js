@@ -1191,21 +1191,9 @@ async function init() {
         return;
     }
 
-    // Не держим пользователя на заставке фиксированные 5 секунд.
-    // Если Firebase уже восстановил сессию, сразу открываем мессенджер.
-    const restored = tryInstantRestore();
-    if (restored && authState.user) {
-        try {
-            await bootMessenger(authState.user, restored);
-            hideLoading();
-            showMessengerScreen();
-        } catch (e) {
-            console.warn('[init] instant restore failed:', e);
-            await waitForFirebaseAuthAndRoute();
-        }
-    } else {
-        await waitForFirebaseAuthAndRoute();
-    }
+    // Firebase Auth retains the session for automatic sign-in, but the UI is not
+    // opened from a local profile cache before the current lock/access state is checked.
+    await waitForFirebaseAuthAndRoute();
     initialAuthRouting = false;
 
     if (localStorage.getItem('iceberg_app') === 'true') {
