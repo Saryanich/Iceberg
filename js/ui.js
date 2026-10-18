@@ -562,13 +562,22 @@ const baseHandshakeListeners = new Map();
 async function ensureIcebergBaseKey(chatId, peerUid) {
     if (!authState.user?.uid || !chatId || !peerUid || uiState.currentChat?.isSeda) return null;
     const cached = await DB.getSedaKey(chatId);
-    if (cached?.startsWith('ICEBERGBASEKEY:')) {
-        if (uiState.currentChatId === chatId) uiState.currentSedaKey = cached;
-        return cached;
-    }
     const handshakeId = 'base_' + chatId;
     const ref = doc(db, 'seda_handshakes', handshakeId);
     const existing = await getDoc(ref);
+    if (cached?.startsWith('ICEBERGBASEKEY:')) {
+        if (!existing.exists()) {
+            if (uiState.currentChatId === chatId) uiState.currentSedaKey = cached;
+            return cached;
+        }
+        const status = existing.data();
+        if (status.mode === 'iceberg-base' && status.peerKeyStored === true) {
+            if (uiState.currentChatId === chatId) uiState.currentSedaKey = cached;
+            return cached;
+        }
+        // Local secret exists, but do not send until the peer has confirmed local storage.
+        return null;
+    }
     let privJwk, baseKey;
     if (existing.exists()) {
         const data = existing.data();
@@ -1160,7 +1169,7 @@ export async function sendMessage() {
                 text: editText,
                 edited: true,
                 editedAt: serverTimestamp(),
-                cryptoVersion: chatContext.sedaEnabled ? (chatContext.currentChat?.isSeda ? 'SEDA_ULTRA_1' : 'ICEBERG_BASE_1') : null
+                cryptoVersion: chatContext.currentChat?.isSeda ? (chatContext.sedaEnabled ? 'SEDA_ULTRA_1' : null) : (chatContext.currentChat ? 'ICEBERG_BASE_1' : null)
             });
             document.getElementById('replyPreview')?.classList.add('hidden');
             return;
@@ -2056,6 +2065,7 @@ export function startSedaHandshakeListener() {
                         const priv = await exportPrivateKey(pair);
                         await DB.saveECDHKeys(d.id, pub, priv);
                         await updateDoc(d.ref, { peerPublicKey: pub, peerRespondedAt: Date.now() });
+                        uiState.processedHandshakes.delete(d.id);
                     } catch (err) { console.error('[Iceberg Base responder setup]', err); uiState.processedHandshakes.delete(d.id); }
                 }
                 continue;
