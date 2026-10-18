@@ -1,7 +1,7 @@
 import { db, auth, STICKERS, REACTION_EMOJIS, MAX_MEDIA_SIZE, MAX_PHOTO_DIMENSION, MAX_STORIES, STORY_LIFETIME, RATE_LIMIT, AUTO_DELETE_OPTIONS, THEMES } from './config.js';
 import {
     collection, doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc,
-    query, where, getDocs, onSnapshot, orderBy, limit, serverTimestamp,
+    query, where, getDocs, onSnapshot, orderBy, limit, serverTimestamp, Timestamp,
     arrayUnion, arrayRemove, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
@@ -751,6 +751,27 @@ async function markChatRead(chat) {
 
 let messageLoadVersion = 0;
 
+function cachedTimestampToFirestore(value) {
+    if (!value) return null;
+    if (typeof value.toMillis === 'function') return value;
+    if (typeof value.toDate === 'function') return Timestamp.fromDate(value.toDate());
+    if (value instanceof Date) return Timestamp.fromDate(value);
+    if (typeof value === 'number' && Number.isFinite(value)) return Timestamp.fromMillis(value);
+    if (typeof value.seconds === 'number') {
+        return new Timestamp(value.seconds, Number(value.nanoseconds || 0));
+    }
+    return null;
+}
+
+function messageTimestampMillis(message) {
+    const value = message?.timestamp;
+    if (typeof value?.toMillis === 'function') return value.toMillis();
+    if (typeof value?.seconds === 'number') return value.seconds * 1000 + Number(value.nanoseconds || 0) / 1e6;
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'number') return value;
+    return 0;
+}
+
 export async function loadMessages() {
     if (uiState.messagesUnsub) {
         try { uiState.messagesUnsub(); } catch {}
@@ -764,7 +785,8 @@ export async function loadMessages() {
 
     area.innerHTML = '';
     const loading = showOperationIndicator(chatId, 'Подключаем чат…', 'loading');
-    let firstSnapshot = true;
+    let cachedMessages = [];
+    let hasCache = false;
 
     try {
         const cached = await DB.getCachedMessages(chatId);
@@ -772,8 +794,10 @@ export async function loadMessages() {
             removeOperationIndicator(loading);
             return;
         }
-        if (cached?.length) {
-            const rendered = await renderMessagesSequentially(area, cached, loadVersion, chatId);
+        cachedMessages = Array.isArray(cached) ? cached : [];
+        hasCache = cachedMessages.length > 0;
+        if (hasCache) {
+            const rendered = await renderMessagesSequentially(area, cachedMessages, loadVersion, chatId);
             if (rendered && loading?.row?.isConnected) {
                 updateOperationIndicator(loading, 'Синхронизация новых сообщений…', 'Кэш устройства');
                 area.appendChild(loading.row);
@@ -790,26 +814,46 @@ export async function loadMessages() {
     }
 
     const mRef = collection(db, 'messages', chatId, 'msgs');
+    const lastCached = hasCache ? cachedMessages[cachedMessages.length - 1] : null;
+    const cursor = cachedTimestampToFirestore(lastCached?.timestamp);
+    const incrementalQuery = !!(hasCache && cursor);
+    const messagesQuery = incrementalQuery
+        ? query(mRef, where('timestamp', '>=', cursor), orderBy('timestamp', 'desc'), limit(300))
+        : query(mRef, orderBy('timestamp', 'desc'), limit(200));
+    let firstSnapshot = true;
+
     uiState.messagesUnsub = onSnapshot(
-        query(mRef, orderBy('timestamp', 'asc'), limit(300)),
+        messagesQuery,
         async (snap) => {
             if (loadVersion !== messageLoadVersion || uiState.currentChatId !== chatId) return;
-            const msgs = [];
-            snap.forEach(d => msgs.push({ id: d.id, ...d.data() }));
+            let incoming = [];
+            snap.forEach(d => incoming.push({ id: d.id, ...d.data() }));
+            incoming.reverse();
+
+            let msgs;
+            if (incrementalQuery) {
+                const byId = new Map(cachedMessages.map(m => [m.id, m]));
+                for (const message of incoming) {
+                    byId.set(message.id, { ...(byId.get(message.id) || {}), ...message });
+                }
+                msgs = Array.from(byId.values()).sort((a, b) => messageTimestampMillis(a) - messageTimestampMillis(b));
+                msgs = msgs.slice(-200);
+            } else {
+                msgs = incoming;
+            }
 
             const currentIds = Array.from(area.querySelectorAll('.message-bubble')).map(el => el.dataset.id);
             const nextIds = msgs.map(m => m.id);
             const sameMessages = currentIds.length === nextIds.length &&
                 currentIds.every((id, i) => id === nextIds[i]);
 
-            if (!sameMessages) {
-                await renderMessagesSequentially(area, msgs, loadVersion, chatId);
-            } else {
-                bindChatLongPress();
-            }
+            if (!sameMessages) await renderMessagesSequentially(area, msgs, loadVersion, chatId);
+            else bindChatLongPress();
 
+            cachedMessages = msgs;
             if (firstSnapshot) {
                 firstSnapshot = false;
+                hasCache = hasCache || msgs.length > 0;
                 removeOperationIndicator(loading);
                 if (!msgs.length && !area.querySelector('.message-bubble')) {
                     area.innerHTML = '<div class="empty-state">Нет сообщений. Напишите первое!</div>';
