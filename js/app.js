@@ -319,8 +319,13 @@ async function bootMessenger(user, userData) {
     }
 }
 
+let initialAuthRouting = true;
+
 function setupAuthState() {
     subscribeAuthState(async (user) => {
+        // The initial Firebase restoration is handled by waitForFirebaseAuthAndRoute().
+        // Ignore this listener during startup to avoid duplicate device checks / 2FA prompts.
+        if (initialAuthRouting) return;
         if (authState.awaitingTwoFactor) return;
 
         if (user) {
@@ -1055,7 +1060,7 @@ async function waitForFirebaseAuthAndRoute() {
             hideLoading();
             showAuthScreen();
             resolve();
-        }, 2000);
+        }, 15000);
 
         const unsub = subscribeAuthState(async (user) => {
             if (done) return;
@@ -1109,7 +1114,9 @@ async function waitForFirebaseAuthAndRoute() {
 }
 
 async function init() {
-    // The loading screen uses a cinematic animation instead of a progress bar.
+    // Remove the legacy progress strip and percentage from the DOM entirely.
+    document.querySelector('#loadingScreen .loading-bar-wrap')?.remove();
+    document.querySelector('#loadingScreen .loading-percent')?.remove();
 
     loadTheme();
     initParticles();
@@ -1136,6 +1143,7 @@ async function init() {
     } else {
         await waitForFirebaseAuthAndRoute();
     }
+    initialAuthRouting = false;
 
     if (localStorage.getItem('iceberg_app') === 'true') {
         localStorage.removeItem('iceberg_app');
