@@ -1107,7 +1107,7 @@ export async function sendMessage() {
         if (chatContext.sedaEnabled && authState.sedaProActivated) {
             let keyStr = chatContext.sedaKey;
             if (!keyStr) {
-                const keyStr = serializeKey(generateSedaKey());
+                keyStr = serializeKey(generateSedaKey());
                 textToSend = await sedaUltraEncryptWithKey(originalText, keyStr);
                 await DB.saveSedaKey(chatIdAtSend, keyStr);
                 chatContext.sedaKey = keyStr;
@@ -1333,8 +1333,8 @@ export async function sendMediaFile(input) {
             if (!keyStr) {
                 keyStr = serializeKey(generateSedaKey());
                 await DB.saveSedaKey(chatContext.chatId, keyStr);
-                chatContext.sedaKey = r.key;
-                if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = r.key;
+                chatContext.sedaKey = keyStr;
+                if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = keyStr;
             }
             mediaToSend = await sedaUltraEncryptWithKey(dataUrl, keyStr);
             mediaEncrypted = true;
@@ -1436,8 +1436,8 @@ export async function toggleVoiceRecording() {
                         if (!keyStr) {
                             keyStr = serializeKey(generateSedaKey());
                             await DB.saveSedaKey(chatContext.chatId, keyStr);
-                            chatContext.sedaKey = r.key;
-                            if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = r.key;
+                            chatContext.sedaKey = keyStr;
+                            if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = keyStr;
                         }
                         dataUrl = await sedaUltraEncryptWithKey(dataUrl, keyStr);
                         mediaEncrypted = true;
@@ -1691,11 +1691,11 @@ export function startReply(id, msgData) {
     document.getElementById('messageInput')?.focus();
 }
 
-export function startEdit(id, msgData) {
+export async function startEdit(id, msgData) {
     uiState.editingMessage = id;
     let displayText = msgData.text;
     if (msgData.encrypted && uiState.currentSedaKey) {
-        displayText = '[SEDA Ultra: откройте чат для расшифровки]';
+        displayText = await sedaUltraDecrypt(msgData.text, uiState.currentSedaKey) ?? '[Не удалось расшифровать SEDA Ultra]';
     }
     const input = document.getElementById('messageInput');
     input.value = displayText;
