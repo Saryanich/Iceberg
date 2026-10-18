@@ -231,47 +231,6 @@ body.theme-blue {
     50% { opacity: 1; }
 }
 
-.loading-bar-wrap {
-    width: 240px;
-    height: 4px;
-    background: rgba(100, 181, 246, .12);
-    border-radius: 4px;
-    margin-top: 40px;
-    overflow: hidden;
-    position: relative;
-    box-shadow: 0 0 20px rgba(100, 181, 246, .1) inset;
-}
-
-.loading-bar {
-    height: 100%;
-    width: 0%;
-    background: linear-gradient(90deg, #64B5F6, #a78bfa, #64B5F6);
-    background-size: 200% auto;
-    border-radius: 4px;
-    animation: shimmerBar 1.5s linear infinite;
-    box-shadow: 0 0 12px rgba(100, 181, 246, .6);
-    transition: width .3s ease;
-}
-
-@keyframes shimmerBar {
-    to { background-position: 200% center; }
-}
-
-.loading-percent {
-    margin-top: 14px;
-    font-size: 13px;
-    color: #88A9C4;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 2px;
-    min-height: 18px;
-}
-
-.loading-percent::after {
-    content: '%';
-    margin-left: 2px;
-    opacity: .6;
-}
-
 /* ==================== МОДАЛКИ ==================== */
 #twoFactorScreen,
 #sedaActivationScreen,
@@ -2082,26 +2041,6 @@ input::placeholder, textarea::placeholder {
     animation: subtitleAppear 1.3s .25s both, fadeInOut 3s 1.6s ease-in-out infinite;
 }
 
-.loading-bar-wrap {
-    height: 3px;
-    width: min(260px, 68vw);
-    margin-top: 34px;
-    background: rgba(156, 199, 235, .09);
-    border: 1px solid rgba(156, 199, 235, .10);
-    box-shadow: 0 0 22px rgba(100, 181, 246, .06), inset 0 1px rgba(255,255,255,.04);
-}
-
-.loading-bar {
-    background: linear-gradient(90deg, #64b5f6, #a78bfa, #d8f3ff);
-    box-shadow: 0 0 18px rgba(100, 181, 246, .85);
-}
-
-.loading-percent {
-    color: rgba(193, 221, 245, .72);
-    font-size: 11px;
-    letter-spacing: .18em;
-}
-
 @keyframes logoReveal {
     from { opacity: 0; transform: scale(.72) rotate(-9deg); filter: blur(12px); }
     to { opacity: 1; transform: scale(1) rotate(0); filter: blur(0); }
@@ -2130,9 +2069,6 @@ input::placeholder, textarea::placeholder {
 
 /* ==================== ICEBERG: CINEMATIC LOADING + SOFT HANDOFF ==================== */
 /* Hide the old progress strip and numeric counter completely. */
-.loading-bar-wrap,
-.loading-percent { display: none !important; }
-
 #loadingScreen {
     transition: opacity .85s cubic-bezier(.22, 1, .36, 1),
                 filter .85s cubic-bezier(.22, 1, .36, 1),
@@ -2181,4 +2117,3 @@ input::placeholder, textarea::placeholder {
 
 
 /* Legacy progress markup is hidden as a fallback; the elements are also removed from index.html. */
-#loadingScreen .loading-bar-wrap, #loadingScreen .loading-bar, #loadingScreen .loading-percent { display: none !important; }
