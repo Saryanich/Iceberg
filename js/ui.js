@@ -565,6 +565,7 @@ async function ensureIcebergBaseKey(chatId, peerUid) {
     const handshakeId = 'base_' + chatId;
     const ref = doc(db, 'seda_handshakes', handshakeId);
     const existing = await getDoc(ref);
+    let privJwk, baseKey;
     if (cached?.startsWith('ICEBERGBASEKEY:')) {
         if (!existing.exists()) {
             if (uiState.currentChatId === chatId) uiState.currentSedaKey = cached;
@@ -572,13 +573,21 @@ async function ensureIcebergBaseKey(chatId, peerUid) {
         }
         const status = existing.data();
         if (status.mode === 'iceberg-base' && status.peerKeyStored === true) {
+            if (status.initiator === authState.user.uid) {
+                await updateDoc(ref, { initiatorAck: true, initiatorAckAt: Date.now() }).catch(() => {});
+            }
             if (uiState.currentChatId === chatId) uiState.currentSedaKey = cached;
             return cached;
         }
-        // Local secret exists, but do not send until the peer has confirmed local storage.
-        return null;
+        if (status.mode !== 'iceberg-base' || status.initiator !== authState.user.uid || status.peer !== peerUid) {
+            return null;
+        }
+        // Resume the pending initiator handshake after reload.
+        const saved = await DB.getECDHKeys(handshakeId);
+        if (!saved) throw new Error('Нет локального ключа рукопожатия');
+        privJwk = saved.privateKey;
+        baseKey = cached;
     }
-    let privJwk, baseKey;
     if (existing.exists()) {
         const data = existing.data();
         if (data.mode !== 'iceberg-base' || data.initiator !== authState.user.uid || data.peer !== peerUid) return null;
