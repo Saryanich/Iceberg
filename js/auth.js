@@ -17,6 +17,7 @@ export const authState = {
     pendingUser: null,
     awaitingTwoFactor: false,
     deviceFingerprint: null,
+    deviceToken: null,
     currentIP: null,
     loggingIn: false,
     sedaProActivated: false,
@@ -88,12 +89,35 @@ function clearAuthCache() { try { localStorage.removeItem(AUTH_CACHE_KEY); } cat
 // Один и тот же алгоритм отпечатка используется и при обычном входе,
 // и при быстром восстановлении сессии. Раньше здесь использовались два
 // разных хеша, поэтому уже сохранённое устройство распознавалось как новое.
+function getPersistentDeviceToken() {
+    const DEVICE_TOKEN_KEY = 'iceberg_device_token_v1';
+    try {
+        let token = localStorage.getItem(DEVICE_TOKEN_KEY);
+        if (token && /^dev_[a-f0-9]{64}$/.test(token)) return token;
+
+        const bytes = new Uint8Array(32);
+        if (globalThis.crypto?.getRandomValues) {
+            globalThis.crypto.getRandomValues(bytes);
+        } else {
+            // Compatibility fallback for older browsers; the token is still persisted locally.
+            for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+        }
+        token = 'dev_' + Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+        localStorage.setItem(DEVICE_TOKEN_KEY, token);
+        return token;
+    } catch {
+        // If storage is unavailable, fall back to a stable fingerprint for this session.
+        return null;
+    }
+}
+
 function collectDeviceInfoSync() {
     const n = navigator;
     const raw = `${n.userAgent}|${n.language}|${screen.width}x${screen.height}|${n.platform}|${n.hardwareConcurrency || 0}`;
     let h = 2166136261;
     for (let i = 0; i < raw.length; i++) { h ^= raw.charCodeAt(i); h = Math.imul(h, 16777619); }
     authState.deviceFingerprint = 'fp_' + (h >>> 0).toString(16);
+    authState.deviceToken = getPersistentDeviceToken();
     return authState.deviceFingerprint;
 }
 
@@ -117,10 +141,25 @@ function waitForAuthReady(timeoutMs = 3000) {
 
 async function isDeviceKnown(uid) {
     try {
-        const d = await getDoc(doc(db, 'users', uid));
+        const ref = doc(db, 'users', uid);
+        const d = await getDoc(ref);
         const devices = d.data()?.trustedDevices || [];
         if (devices.length === 0) return false;
-        return devices.some(x => x.fingerprint === authState.deviceFingerprint);
+
+        const token = authState.deviceToken;
+        if (token && devices.some(x => x.deviceToken === token)) return true;
+
+        // Backward compatibility: recognize an already trusted device by its old fingerprint,
+        // then attach the persistent token to that existing trusted-device record.
+        const legacyIndex = devices.findIndex(x => !x.deviceToken && x.fingerprint === authState.deviceFingerprint);
+        if (legacyIndex !== -1) {
+            if (token) {
+                const migrated = devices.map((x, i) => i === legacyIndex ? { ...x, deviceToken: token, lastUsed: new Date() } : x);
+                await updateDoc(ref, { trustedDevices: migrated });
+            }
+            return true;
+        }
+        return false;
     } catch (e) { return false; }
 }
 
@@ -135,6 +174,7 @@ async function addKnownDevice(uid) {
     try {
         await updateDoc(doc(db, 'users', uid), {
             trustedDevices: arrayUnion({
+                deviceToken: authState.deviceToken || null,
                 fingerprint: authState.deviceFingerprint, ip: authState.currentIP || 'unknown',
                 userAgent: navigator.userAgent, addedAt: new Date(), lastUsed: new Date()
             })
