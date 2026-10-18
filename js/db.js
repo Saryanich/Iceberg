@@ -31,8 +31,18 @@ function openDB() {
     if (_dbPromise) return _dbPromise;
     _dbPromise = new Promise((resolve, reject) => {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
-        req.onerror = () => reject(req.error);
-        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => {
+            _dbPromise = null;
+            reject(req.error || new Error('Не удалось открыть локальный кэш'));
+        };
+        req.onsuccess = () => {
+            const db = req.result;
+            db.onversionchange = () => {
+                db.close();
+                _dbPromise = null;
+            };
+            resolve(db);
+        };
         req.onupgradeneeded = (e) => {
             const db = e.target.result;
             for (const name of Object.values(STORES)) {
@@ -48,16 +58,35 @@ function openDB() {
 async function tx(store, mode, fn) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-        const t = db.transaction(store, mode);
-        const s = t.objectStore(store);
-        const req = fn(s);
-        if (req) {
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
-        } else {
-            t.oncomplete = () => resolve();
-            t.onerror = () => reject(t.error);
+        let result;
+        let request;
+        let settled = false;
+        const fail = (error) => {
+            if (settled) return;
+            settled = true;
+            reject(error || new Error('Ошибка локального кэша'));
+        };
+
+        let transaction;
+        try {
+            transaction = db.transaction(store, mode);
+            request = fn(transaction.objectStore(store));
+        } catch (error) {
+            fail(error);
+            return;
         }
+
+        if (request) {
+            request.onsuccess = () => { result = request.result; };
+            request.onerror = () => fail(request.error);
+        }
+        transaction.oncomplete = () => {
+            if (settled) return;
+            settled = true;
+            resolve(result);
+        };
+        transaction.onerror = () => fail(transaction.error);
+        transaction.onabort = () => fail(transaction.error || new Error('Операция кэша отменена'));
     });
 }
 
