@@ -129,6 +129,78 @@ function hideLoading() {
     }, remaining);
 }
 
+let offlineRetryInProgress = false;
+
+function showOfflineScreen(message = 'Не удалось связаться с сервисами Айсберга. Проверьте интернет и попробуйте снова.') {
+    const loading = document.getElementById('loadingScreen');
+    const offline = document.getElementById('offlineScreen');
+    const description = document.getElementById('offlineDescription');
+    const status = document.getElementById('offlineStatusText');
+    if (loading) {
+        if (loadingHideTimer) clearTimeout(loadingHideTimer);
+        loadingHideTimer = null;
+        loading.classList.add('hidden');
+        loading.classList.remove('loading-exit');
+    }
+    if (description) description.textContent = message;
+    if (status) status.textContent = navigator.onLine ? 'Сервис не ответил' : 'Интернет недоступен';
+    offline?.classList.remove('is-exiting', 'is-checking');
+    if (offline) offline.hidden = false;
+}
+
+async function retryConnection() {
+    if (offlineRetryInProgress) return;
+    offlineRetryInProgress = true;
+    const offline = document.getElementById('offlineScreen');
+    const button = document.getElementById('retryConnectionBtn');
+    const label = document.getElementById('retryConnectionLabel');
+    const status = document.getElementById('offlineStatusText');
+    if (button) button.disabled = true;
+    if (label) label.textContent = 'Проверяем соединение…';
+    if (status) status.textContent = 'Проверяем доступность сервиса';
+    offline?.classList.add('is-checking');
+
+    try {
+        if (!navigator.onLine) throw new Error('offline');
+        // Check the app host without relying on a cached response.
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 6500);
+        let response;
+        try {
+            response = await fetch('./manifest.json?connection-check=' + Date.now(), {
+                cache: 'no-store',
+                signal: controller.signal,
+                headers: { 'Cache-Control': 'no-cache' }
+            });
+        } finally {
+            clearTimeout(timeout);
+        }
+        if (!response.ok) throw new Error('app-host-unavailable');
+
+        if (label) label.textContent = 'Соединение восстановлено';
+        if (status) status.textContent = 'Перезапускаем Айсберг';
+        offline?.classList.remove('is-checking');
+        offline?.classList.add('is-exiting');
+        // Give the shutdown transition time to finish before restarting the app.
+        await new Promise(resolve => setTimeout(resolve, 460));
+        window.location.reload();
+    } catch (error) {
+        console.warn('[Connection retry] Сервис пока недоступен:', error);
+        offline?.classList.remove('is-checking', 'is-exiting');
+        if (status) status.textContent = navigator.onLine ? 'Сервис пока недоступен' : 'Интернет по-прежнему недоступен';
+        if (label) label.textContent = 'Повторить попытку';
+        if (document.getElementById('offlineDescription')) {
+            document.getElementById('offlineDescription').textContent = navigator.onLine
+                ? 'Сайт доступен не полностью или сервер пока не отвечает. Попробуйте ещё раз чуть позже.'
+                : 'Подключение всё ещё отсутствует. Проверьте Wi-Fi или мобильную сеть и повторите попытку.';
+        }
+    } finally {
+        offlineRetryInProgress = false;
+        if (button) button.disabled = false;
+        if (label && label.textContent === 'Проверяем соединение…') label.textContent = 'Повторить попытку';
+    }
+}
+
 function showAuthScreen() {
     document.getElementById('authForm').style.display = 'flex';
     document.getElementById('messengerApp').style.display = 'none';
@@ -432,6 +504,12 @@ function setupAuthSyncEvents() {
 }
 
 function bindUIEvents() {
+    document.getElementById('retryConnectionBtn')?.addEventListener('click', retryConnection);
+    window.addEventListener('online', () => {
+        const offline = document.getElementById('offlineScreen');
+        const status = document.getElementById('offlineStatusText');
+        if (offline && !offline.hidden && status) status.textContent = 'Интернет появился — нажмите «Повторить попытку»';
+    });
     document.getElementById('loginPassword')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') handleLoginClick();
     });
@@ -1039,8 +1117,9 @@ async function waitForFirebaseAuthAndRoute() {
             if (done) return;
             done = true;
             try { unsub(); } catch {}
-            hideLoading();
-            showAuthScreen();
+            showOfflineScreen(navigator.onLine
+                ? 'Сервисы Айсберга не ответили вовремя. Проверьте подключение и попробуйте снова.'
+                : 'Нет подключения к интернету. Когда сеть восстановится, нажмите «Повторить попытку».');
             resolve();
         }, 15000);
 
@@ -1105,6 +1184,12 @@ async function init() {
     setup2FAInputs();
     setupAuthSyncEvents();
     setupAuthState();
+
+    if (!navigator.onLine) {
+        showOfflineScreen('Нет подключения к интернету. Когда сеть восстановится, нажмите «Повторить попытку».');
+        initialAuthRouting = false;
+        return;
+    }
 
     // Не держим пользователя на заставке фиксированные 5 секунд.
     // Если Firebase уже восстановил сессию, сразу открываем мессенджер.
