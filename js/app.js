@@ -1152,7 +1152,7 @@ async function waitForFirebaseAuthAndRoute() {
                 ? 'Сервисы Айсберга не ответили вовремя. Проверьте подключение и попробуйте снова.'
                 : 'Нет подключения к интернету. Когда сеть восстановится, нажмите «Повторить попытку».');
             resolve();
-        }, 15000);
+        }, 5000);
 
         const unsub = subscribeAuthState(async (user) => {
             if (done) return;
@@ -1221,6 +1221,10 @@ async function init() {
     setupAuthState();
 
     if (!navigator.onLine) {
+        // Keep the branded startup screen visible for five seconds before showing offline mode.
+        const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+        const remaining = Math.max(0, 5000 - (now - loadingStartedAt));
+        await new Promise(resolve => setTimeout(resolve, remaining));
         showOfflineScreen('Нет подключения к интернету. Когда сеть восстановится, нажмите «Повторить попытку».');
         initialAuthRouting = false;
         return;
