@@ -1,775 +1,331 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Айсберг — Админ-панель</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-            min-height: 100vh;
-            background: radial-gradient(circle at 20% 20%, #1A0F2E 0%, #0A0F1E 50%, #000 100%);
-            color: #fff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        
-        .container {
-            background: rgba(15, 26, 42, 0.95);
-            border: 1px solid #2A3A4A;
-            border-radius: 28px;
-            padding: 32px 28px;
-            max-width: 640px;
-            width: 100%;
-            box-shadow: 0 25px 80px -12px rgba(0,0,0,0.8), 0 0 0 1px rgba(139, 92, 246, 0.2);
-            backdrop-filter: blur(20px);
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .container::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, #8b5cf6, #ec4899, #f59e0b, #8b5cf6);
-            background-size: 200% 100%;
-            animation: rainbow 3s linear infinite;
-        }
-        
-        @keyframes rainbow { to { background-position: 200% 0; } }
-        
-        .logo { text-align: center; margin-bottom: 24px; }
-        
-        .admin-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: linear-gradient(135deg, #8b5cf6, #ec4899);
-            color: white;
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 1.5px;
-            margin-bottom: 12px;
-            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.5);
-        }
-        
-        .logo h1 {
-            font-size: 26px;
-            background: linear-gradient(135deg, #f87171, #ec4899, #f59e0b);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-weight: 800;
-            letter-spacing: 1px;
-        }
-        
-        .logo p { font-size: 12px; color: #88A9C4; margin-top: 6px; }
-        
-        .danger-title {
-            color: #f87171;
-            font-size: 17px;
-            font-weight: 700;
-            text-align: center;
-            margin-bottom: 16px;
-        }
-        
-        .warning {
-            background: rgba(229, 57, 53, 0.12);
-            border: 1px solid rgba(229, 57, 53, 0.5);
-            border-radius: 16px;
-            padding: 16px;
-            margin-bottom: 20px;
-            font-size: 13px;
-            line-height: 1.6;
-            color: #fca5a5;
-        }
-        
-        .warning strong { color: #f87171; display: block; margin-bottom: 8px; font-size: 14px; }
-        .warning ul { margin: 8px 0 0 20px; }
-        .warning li { margin-bottom: 6px; }
-        
-        .form-group { margin-bottom: 14px; }
-        
-        .form-group label {
-            display: block;
-            font-size: 12px;
-            color: #88A9C4;
-            margin-bottom: 6px;
-            font-weight: 500;
-        }
-        
-        input {
-            width: 100%;
-            padding: 13px 16px;
-            border: 1px solid #2A3A4A;
-            border-radius: 12px;
-            font-size: 14px;
-            background: #0F1A2A;
-            color: #fff;
-            transition: all 0.25s;
-        }
-        
-        input:focus {
-            outline: none;
-            border-color: #f87171;
-            box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.15);
-        }
-        
-        .btn {
-            width: 100%;
-            padding: 14px 20px;
-            border: none;
-            border-radius: 12px;
-            font-size: 14px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-            margin-bottom: 10px;
-            letter-spacing: 0.5px;
-        }
-        
-        .btn:active { transform: scale(0.97); }
-        
-        .btn-danger {
-            background: linear-gradient(135deg, #ef4444, #b91c1c);
-            color: white;
-            box-shadow: 0 8px 24px -6px rgba(239, 68, 68, 0.5);
-        }
-        
-        .btn-danger:hover { box-shadow: 0 12px 32px -6px rgba(239, 68, 68, 0.8); transform: translateY(-1px); }
-        .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
-        
-        .btn-secondary {
-            background: transparent;
-            color: #64B5F6;
-            border: 1px solid #2A3A4A;
-        }
-        
-        .btn-secondary:hover { background: #1A2A3A; border-color: #64B5F6; }
-        
-        .status {
-            margin-top: 14px;
-            padding: 14px;
-            border-radius: 12px;
-            font-size: 12px;
-            line-height: 1.6;
-            display: none;
-            white-space: pre-wrap;
-            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
-            max-height: 240px;
-            overflow-y: auto;
-        }
-        
-        .status.show { display: block; animation: fadeIn 0.3s ease; }
-        .status.info { background: rgba(100, 181, 246, 0.1); border: 1px solid rgba(100, 181, 246, 0.4); color: #64B5F6; }
-        .status.success { background: rgba(76, 175, 80, 0.1); border: 1px solid rgba(76, 175, 80, 0.4); color: #4CAF50; }
-        .status.error { background: rgba(229, 57, 53, 0.1); border: 1px solid rgba(229, 57, 53, 0.4); color: #f87171; }
-        
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: #1A2A3A;
-            border-radius: 4px;
-            overflow: hidden;
-            margin-top: 14px;
-            display: none;
-        }
-        
-        .progress-bar.show { display: block; }
-        
-        .progress-fill {
-            height: 100%;
-            width: 0%;
-            background: linear-gradient(90deg, #8b5cf6, #ec4899, #f59e0b);
-            background-size: 200% 100%;
-            border-radius: 4px;
-            transition: width 0.4s ease;
-            animation: rainbow 2s linear infinite;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-top: 16px;
-        }
-        
-        .stat-item {
-            background: linear-gradient(135deg, #0F1A2A, #1A0F2A);
-            border: 1px solid #2A3A4A;
-            border-radius: 12px;
-            padding: 12px;
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .stat-item::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, #8b5cf6, #ec4899);
-        }
-        
-        .stat-value {
-            font-size: 24px;
-            font-weight: 800;
-            background: linear-gradient(135deg, #64B5F6, #a78bfa);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-family: 'SF Mono', Monaco, monospace;
-        }
-        
-        .stat-label {
-            font-size: 10px;
-            color: #88A9C4;
-            margin-top: 4px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        
-        .hidden { display: none !important; }
-        
-        .checkbox-label {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-            padding: 12px;
-            background: rgba(255, 152, 0, 0.08);
-            border: 1px solid rgba(255, 152, 0, 0.3);
-            border-radius: 12px;
-            font-size: 12px;
-            cursor: pointer;
-            margin-bottom: 14px;
-            color: #FF9800;
-            line-height: 1.5;
-        }
-        
-        .checkbox-label input {
-            width: 18px;
-            height: 18px;
-            margin-top: 1px;
-            accent-color: #f87171;
-            cursor: pointer;
-            flex-shrink: 0;
-        }
-        
-        .admin-info {
-            background: rgba(139, 92, 246, 0.08);
-            border: 1px solid rgba(139, 92, 246, 0.3);
-            border-radius: 12px;
-            padding: 12px 16px;
-            font-size: 11px;
-            color: #a78bfa;
-            margin-bottom: 16px;
-            text-align: center;
-            line-height: 1.6;
-        }
-        
-        .admin-info strong { color: #c4b5fd; }
-        
-        .admin-info code {
-            background: rgba(0,0,0,0.3);
-            padding: 2px 6px;
-            border-radius: 4px;
-            color: #f59e0b;
-            font-family: monospace;
-            font-size: 11px;
-        }
-        
-        .auth-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 14px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            margin-top: 8px;
-        }
-        
-        .auth-badge.verified { background: rgba(76, 175, 80, 0.2); color: #4CAF50; }
-        .auth-badge.denied { background: rgba(229, 57, 53, 0.2); color: #f87171; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Iceberg — глобальная очистка</title>
+  <style>
+    :root{color-scheme:dark;--bg:#070b14;--panel:#101827;--line:#26354a;--muted:#9ab0ca;--red:#f87171;--blue:#60a5fa;--green:#4ade80}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;padding:24px;display:grid;place-items:center;background:radial-gradient(circle at 15% 10%,#25133d 0,transparent 38%),linear-gradient(145deg,#070b14,#030509);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#eef5ff}
+    .panel{width:min(760px,100%);background:rgba(16,24,39,.97);border:1px solid var(--line);border-radius:24px;padding:clamp(20px,4vw,34px);box-shadow:0 28px 90px #0009;position:relative;overflow:hidden}
+    .panel:before{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,#8b5cf6,#ec4899,#f59e0b)}
+    .brand{text-align:center;margin-bottom:22px}.badge{display:inline-block;padding:6px 13px;border-radius:99px;background:#7c3aed33;border:1px solid #8b5cf688;color:#d8b4fe;font-size:11px;font-weight:800;letter-spacing:1.4px}
+    h1{font-size:clamp(24px,5vw,32px);margin:12px 0 5px;color:#fca5a5} .sub{font-size:12px;color:var(--muted)}
+    .warning{background:#7f1d1d26;border:1px solid #ef444477;border-radius:14px;padding:16px;margin:20px 0;color:#fecaca;font-size:13px;line-height:1.65}
+    .warning strong{display:block;margin-bottom:6px;color:#f87171}.warning ul{padding-left:21px;margin:8px 0 0}
+    .note{background:#17255466;border:1px solid #3b82f666;border-radius:12px;padding:13px;color:#bfdbfe;font-size:12px;line-height:1.6;margin-bottom:18px}
+    label.field{display:block;color:var(--muted);font-size:12px;margin:13px 0 6px}
+    input[type=email],input[type=password],input[type=text]{width:100%;padding:13px 14px;background:#080f1c;border:1px solid var(--line);border-radius:11px;color:white;font-size:14px}
+    input:focus{outline:2px solid #60a5fa55;border-color:var(--blue)}
+    .check{display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:11px;background:#78350f22;border:1px solid #f59e0b55;color:#fcd34d;font-size:12px;line-height:1.5;margin:16px 0}
+    .check input{margin-top:3px;accent-color:var(--red);flex-shrink:0}
+    button{width:100%;padding:14px;border:0;border-radius:11px;font-size:14px;font-weight:800;cursor:pointer;margin-top:9px}
+    button:disabled{opacity:.45;cursor:not-allowed}.danger{background:linear-gradient(120deg,#ef4444,#991b1b);color:white}.secondary{background:transparent;border:1px solid var(--line);color:#bfdbfe}
+    .progress{height:7px;border-radius:9px;background:#263247;overflow:hidden;margin-top:16px;display:none}.progress.show{display:block}.fill{height:100%;width:0;background:linear-gradient(90deg,#8b5cf6,#ec4899,#f59e0b);transition:width .2s}
+    .status{display:none;margin-top:15px;padding:14px;border-radius:11px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto;font:12px/1.6 ui-monospace,SFMono-Regular,monospace}.status.show{display:block}.status.info{background:#1d4ed81c;border:1px solid #60a5fa55;color:#bfdbfe}.status.success{background:#14532d33;border:1px solid #4ade8055;color:#bbf7d0}.status.error{background:#7f1d1d33;border:1px solid #f8717155;color:#fecaca}
+    .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}.stat{padding:12px 6px;border:1px solid var(--line);border-radius:10px;text-align:center;background:#080f1c}.num{font-size:22px;font-weight:800;color:#93c5fd}.label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+    @media(max-width:460px){body{padding:12px}.panel{border-radius:18px}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="logo">
-            <div class="admin-badge">🔐 ADMIN PANEL</div>
-            <h1>Айсберг</h1>
-            <p>ПОЛНАЯ ОЧИСТКА БАЗЫ ДАННЫХ</p>
-        </div>
-        
-        <div class="danger-title">⚠️ ГЛОБАЛЬНОЕ УДАЛЕНИЕ</div>
-        
-        <div class="warning">
-            <strong>Это удалит у ВСЕХ пользователей:</strong>
-            <ul>
-                <li>🗑 Все личные чаты</li>
-                <li>🗑 Всю историю сообщений</li>
-                <li>🗑 Все группы (документы + сообщения)</li>
-                <li>🗑 Все контакты</li>
-            </ul>
-            <br>
-            <strong style="color: #f87171;">Аккаунты Firebase Auth останутся. Сами документы users/* — тоже.</strong>
-        </div>
-        
-        <div class="admin-info">
-            <strong>⚙️ Доступ только для администраторов</strong><br>
-            Проверка: <code>users/{uid}.role === "admin"</code>
-        </div>
-        
-        <div class="form-group">
-            <label>Email администратора</label>
-            <input type="email" id="adminEmail" placeholder="admin@example.com" autocomplete="username">
-        </div>
-        
-        <div class="form-group">
-            <label>Пароль</label>
-            <input type="password" id="adminPassword" placeholder="Пароль" autocomplete="current-password">
-        </div>
-        
-        <div id="authStatus"></div>
-        
-        <div class="form-group">
-            <label>Напишите <strong style="color:#f87171;">УДАЛИТЬ ВСЁ У ВСЕХ</strong>:</label>
-            <input type="text" id="confirmText" placeholder="УДАЛИТЬ ВСЁ У ВСЕХ" autocomplete="off">
-        </div>
-        
-        <label class="checkbox-label">
-            <input type="checkbox" id="understand">
-            <span>Я понимаю, что это затронет ВСЕХ пользователей. Действие необратимо.</span>
-        </label>
-        
-        <button class="btn btn-danger" id="deleteBtn" onclick="startGlobalWipe()">
-            💥 УДАЛИТЬ ВСЁ У ВСЕХ ПОЛЬЗОВАТЕЛЕЙ
-        </button>
-        
-        <button class="btn btn-secondary" onclick="window.location.reload()">Отмена</button>
-        
-        <div class="progress-bar" id="progressBar">
-            <div class="progress-fill" id="progressFill"></div>
-        </div>
-        
-        <div class="status" id="status"></div>
-        
-        <div class="stats hidden" id="stats">
-            <div class="stat-item"><div class="stat-value" id="statUsers">0</div><div class="stat-label">Юзеров</div></div>
-            <div class="stat-item"><div class="stat-value" id="statChats">0</div><div class="stat-label">Чатов</div></div>
-            <div class="stat-item"><div class="stat-value" id="statMessages">0</div><div class="stat-label">Сообщений</div></div>
-            <div class="stat-item"><div class="stat-value" id="statGroups">0</div><div class="stat-label">Групп</div></div>
-            <div class="stat-item"><div class="stat-value" id="statContacts">0</div><div class="stat-label">Контактов</div></div>
-            <div class="stat-item"><div class="stat-value" id="statErrors">0</div><div class="stat-label">Ошибок</div></div>
-        </div>
-    </div>
+<main class="panel">
+  <header class="brand">
+    <span class="badge">ICEBERG · ADMIN TOOL</span>
+    <h1>Глобальная очистка</h1>
+    <div class="sub">Новая структура данных · Firestore</div>
+  </header>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { 
-            getFirestore, doc, getDoc, updateDoc, deleteDoc,
-            collection, getDocs, writeBatch
-        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  <section class="warning">
+    <strong>⚠️ Необратимое удаление данных у ВСЕХ пользователей</strong>
+    Эта операция удаляет историю сообщений и записи чатов, включая SEDA-чаты, группы и каналы. Аккаунты Firebase Authentication, документы профилей users/* и Global ID сохраняются.
+    <ul>
+      <li>Личные чаты и сообщения: messages/{chatId}/msgs/*</li>
+      <li>Группы и их история: group_{id}</li>
+      <li>Каналы и их история: channel_{id}</li>
+      <li>SEDA-чаты, их история и рукопожатия: seda_{...}, seda_handshakes/*</li>
+      <li>Списки chats, groups, channels и contacts в профилях всех пользователей</li>
+    </ul>
+  </section>
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyA6GGJxAiao77U7_9mBUEjftmS_FnSWbIw",
-            authDomain: "glob-data.firebaseapp.com",
-            projectId: "glob-data",
-            storageBucket: "glob-data.firebasestorage.app",
-            messagingSenderId: "122757049174",
-            appId: "1:122757049174:web:ebb425edd0e1a8ea9a44f7"
-        };
+  <div class="note">
+    <strong>Проверка администратора:</strong> после входа страница проверит users/{uid}.role === "admin". Firestore Rules также должны разрешать администратору читать список users и seda_handshakes и обновлять профили других пользователей. Само наличие этой страницы не даёт прав администратора.
+  </div>
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth();
-        const db = getFirestore();
+  <form id="wipeForm">
+    <label class="field" for="adminEmail">Email администратора</label>
+    <input id="adminEmail" type="email" autocomplete="username" required placeholder="admin@example.com">
+    <label class="field" for="adminPassword">Пароль администратора</label>
+    <input id="adminPassword" type="password" autocomplete="current-password" required placeholder="Пароль">
+    <label class="field" for="confirmText">Для подтверждения введите: УДАЛИТЬ ВСЁ У ВСЕХ</label>
+    <input id="confirmText" type="text" autocomplete="off" required placeholder="УДАЛИТЬ ВСЁ У ВСЕХ">
+    <label class="check"><input id="understand" type="checkbox" required><span>Я понимаю, что удаление затронет всех пользователей и не может быть отменено.</span></label>
+    <button class="danger" id="deleteBtn" type="submit">Удалить чаты, группы, SEDA и каналы у всех</button>
+    <button class="secondary" id="cancelBtn" type="button">Отмена / перезагрузить</button>
+  </form>
 
-        // ==================== ХЕЛПЕРЫ ДЛЯ РАБОТЫ С FIRESTORE-СТРУКТУРАМИ ====================
-        /**
-         * Firestore возвращает поля как:
-         * - array → настоящий массив [a, b, c]
-         * - map   → объект {0: a, 1: b, 2: c} или {key: value}
-         * - string, number, boolean
-         * - null / undefined
-         * 
-         * Эта функция приводит ЛЮБОЕ значение к массиву.
-         */
-        function toArray(value) {
-            if (!value) return [];
-            if (Array.isArray(value)) return value;
-            if (typeof value === 'object') return Object.values(value).filter(v => v != null);
-            return [];
+  <div class="progress" id="progress"><div class="fill" id="fill"></div></div>
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+  <div class="stats" id="stats" hidden>
+    <div class="stat"><div class="num" id="sUsers">0</div><div class="label">Профили</div></div>
+    <div class="stat"><div class="num" id="sChats">0</div><div class="label">Чаты</div></div>
+    <div class="stat"><div class="num" id="sMessages">0</div><div class="label">Сообщения</div></div>
+    <div class="stat"><div class="num" id="sGroups">0</div><div class="label">Группы</div></div>
+    <div class="stat"><div class="num" id="sChannels">0</div><div class="label">Каналы</div></div>
+    <div class="stat"><div class="num" id="sContacts">0</div><div class="label">Контакты</div></div>
+    <div class="stat"><div class="num" id="sHandshakes">0</div><div class="label">SEDA / handshakes</div></div>
+    <div class="stat"><div class="num" id="sErrors">0</div><div class="label">Ошибки</div></div>
+  </div>
+</main>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import {
+    getFirestore, doc, getDoc, updateDoc, deleteDoc,
+    collection, getDocs, writeBatch
+  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyA6GGJxAiao77U7_9mBUEjftmS_FnSWbIw",
+    authDomain: "glob-data.firebaseapp.com",
+    projectId: "glob-data",
+    storageBucket: "glob-data.firebasestorage.app",
+    messagingSenderId: "122757049174",
+    appId: "1:122757049174:web:ebb425edd0e1a8ea9a44f7"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const $ = id => document.getElementById(id);
+  const result = { users: 0, chats: 0, messages: 0, groups: 0, channels: 0, contacts: 0, handshakes: 0, errors: 0 };
+
+  function status(message, type = 'info') {
+    $('status').textContent = message;
+    $('status').className = 'status show ' + type;
+    $('status').scrollTop = $('status').scrollHeight;
+  }
+  function log(message) { $('status').textContent += '\n' + message; $('status').scrollTop = $('status').scrollHeight; }
+  function progress(percent) { $('progress').classList.add('show'); $('fill').style.width = Math.max(0, Math.min(100, percent)) + '%'; }
+  function showStats() {
+    $('stats').hidden = false;
+    for (const key of Object.keys(result)) $('s' + key[0].toUpperCase() + key.slice(1)).textContent = result[key];
+  }
+  function values(value) {
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === 'object') return Object.values(value);
+    return [];
+  }
+  function addChatId(set, value) {
+    if (typeof value === 'string' && value.trim()) set.add(value.trim());
+  }
+  function addGroupOrChannelId(set, item, prefix) {
+    if (!item || typeof item !== 'object') return;
+    const id = item.id || item.uid || item.groupId || item.channelId;
+    if (id != null && String(id).trim()) set.add(prefix + String(id).trim());
+  }
+
+  async function deleteCollectionInChunks(ref, label) {
+    let deleted = 0;
+    while (true) {
+      const snap = await getDocs(ref);
+      if (snap.empty) break;
+      const batch = writeBatch(db);
+      const docs = snap.docs.slice(0, 450);
+      docs.forEach(item => batch.delete(item.ref));
+      await batch.commit();
+      deleted += docs.length;
+      log('Удалено ' + label + ': ' + deleted);
+      if (docs.length < 450) break;
+    }
+    return deleted;
+  }
+
+  async function deleteMessagesForChat(chatId) {
+    const ref = collection(db, 'messages', chatId, 'msgs');
+    let deleted = 0;
+    while (true) {
+      const snap = await getDocs(ref);
+      if (snap.empty) break;
+      const docs = snap.docs.slice(0, 450);
+      const batch = writeBatch(db);
+      docs.forEach(item => batch.delete(item.ref));
+      await batch.commit();
+      deleted += docs.length;
+      if (docs.length < 450) break;
+    }
+    return deleted;
+  }
+
+  $('cancelBtn').addEventListener('click', () => window.location.reload());
+
+  $('wipeForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    if ($('confirmText').value.trim() !== 'УДАЛИТЬ ВСЁ У ВСЕХ') {
+      status('Подтверждение не совпадает. Ничего не удалено.', 'error'); return;
+    }
+    if (!$('understand').checked) {
+      status('Поставьте галочку подтверждения. Ничего не удалено.', 'error'); return;
+    }
+
+    const button = $('deleteBtn');
+    button.disabled = true;
+    $('cancelBtn').disabled = true;
+    Object.keys(result).forEach(key => result[key] = 0);
+    status('Входим в Firebase Authentication…');
+    progress(2);
+
+    try {
+      const credential = await signInWithEmailAndPassword(auth, $('adminEmail').value.trim(), $('adminPassword').value);
+      const adminUid = credential.user.uid;
+      const adminSnap = await getDoc(doc(db, 'users', adminUid));
+      if (!adminSnap.exists() || adminSnap.data().role !== 'admin') {
+        throw new Error('Доступ запрещён: для users/' + adminUid + ' требуется role = "admin".');
+      }
+      log('Администратор подтверждён: ' + adminUid);
+      progress(8);
+
+      status('Читаем профили пользователей…');
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const users = usersSnap.docs.map(snap => ({ uid: snap.id, data: snap.data(), ref: snap.ref }));
+      result.users = users.length;
+      log('Найдено профилей: ' + users.length);
+      progress(15);
+
+      const chatIds = new Set();
+      const groupIds = new Set();
+      const channelIds = new Set();
+      const profileUpdates = [];
+
+      for (const user of users) {
+        const data = user.data;
+        const chats = values(data.chats).filter(x => x && typeof x === 'object');
+        const groups = values(data.groups).filter(x => x && typeof x === 'object');
+        const channels = values(data.channels).filter(x => x && typeof x === 'object');
+        const contacts = values(data.contacts).filter(x => x && typeof x === 'object');
+
+        result.chats += chats.length;
+        result.groups += groups.length;
+        result.channels += channels.length;
+        result.contacts += contacts.length;
+
+        for (const chat of chats) {
+          if (chat.isGroup) addGroupOrChannelId(groupIds, chat, 'group_');
+          else if (chat.isChannel) addGroupOrChannelId(channelIds, chat, 'channel_');
+          else if (chat.isSeda && chat.sedaChatId) addChatId(chatIds, chat.sedaChatId);
+          else if (chat.uid) addChatId(chatIds, [user.uid, String(chat.uid)].sort().join('_'));
         }
+        for (const group of groups) addGroupOrChannelId(groupIds, group, 'group_');
+        for (const channel of channels) addGroupOrChannelId(channelIds, channel, 'channel_');
 
-        /**
-         * Извлекает чаты пользователя (поле chats — MAP, а не массив!)
-         */
-        function getUserChats(user) {
-            return toArray(user.chats).filter(c => c && typeof c === 'object');
+        profileUpdates.push({ ref: user.ref, uid: user.uid });
+      }
+
+      // IDs in the current application: group_{id}, channel_{id}, seda_{uid1_uid2},
+      // and direct chat IDs formed by sorting the two Firebase UIDs.
+      for (const id of groupIds) chatIds.add(id);
+      for (const id of channelIds) chatIds.add(id);
+
+      // Handshake documents contain SEDA Ultra and automatic base-encryption handshakes.
+      status('Читаем SEDA handshakes…');
+      const handshakesSnap = await getDocs(collection(db, 'seda_handshakes'));
+      const handshakeRefs = handshakesSnap.docs.map(d => d.ref);
+      const handshakeChatIds = new Set();
+      handshakesSnap.docs.forEach(d => {
+        const data = d.data();
+        if (data.chatId) addChatId(handshakeChatIds, data.chatId);
+        if (d.id.startsWith('seda_')) addChatId(handshakeChatIds, d.id);
+        if (d.id.startsWith('base_')) addChatId(handshakeChatIds, d.id.slice(5));
+      });
+      for (const id of handshakeChatIds) chatIds.add(id);
+      log('Чатов/историй к проверке: ' + chatIds.size);
+      progress(22);
+
+      let processed = 0;
+      for (const chatId of chatIds) {
+        try {
+          result.messages += await deleteMessagesForChat(chatId);
+        } catch (error) {
+          result.errors++;
+          log('Не удалось очистить messages/' + chatId + '/msgs: ' + (error.message || error));
         }
-
-        /**
-         * Извлекает контакты пользователя (поле contacts — ARRAY)
-         */
-        function getUserContacts(user) {
-            return toArray(user.contacts).filter(c => c && typeof c === 'object');
+        processed++;
+        progress(22 + (processed / Math.max(1, chatIds.size)) * 48);
+        if (processed % 10 === 0 || processed === chatIds.size) {
+          status('Удаляем сообщения…\nЧатов: ' + processed + ' / ' + chatIds.size + '\nСообщений удалено: ' + result.messages);
         }
+      }
 
-        /**
-         * Извлекает группы пользователя
-         */
-        function getUserGroups(user) {
-            return toArray(user.groups).filter(g => g && typeof g === 'object');
+      status('Удаляем документы SEDA handshakes…');
+      for (let i = 0; i < handshakeRefs.length; i += 450) {
+        const batch = writeBatch(db);
+        handshakeRefs.slice(i, i + 450).forEach(ref => batch.delete(ref));
+        await batch.commit();
+      }
+      result.handshakes = handshakeRefs.length;
+      progress(76);
+
+      status('Очищаем списки chats, groups, channels и contacts у пользователей…');
+      for (let i = 0; i < profileUpdates.length; i += 450) {
+        const chunk = profileUpdates.slice(i, i + 450);
+        const batch = writeBatch(db);
+        chunk.forEach(user => batch.update(user.ref, {
+          chats: [],
+          groups: [],
+          channels: [],
+          contacts: []
+        }));
+        try {
+          await batch.commit();
+        } catch (error) {
+          result.errors += chunk.length;
+          log('Не удалось обновить профильный пакет: ' + (error.message || error));
         }
+        progress(76 + ((i + chunk.length) / Math.max(1, profileUpdates.length)) * 22);
+      }
 
-        // ==================== UI ====================
-        const statusEl = document.getElementById('status');
-        const authStatusEl = document.getElementById('authStatus');
-        const progressBar = document.getElementById('progressBar');
-        const progressFill = document.getElementById('progressFill');
-        const deleteBtn = document.getElementById('deleteBtn');
-        const statsEl = document.getElementById('stats');
-
-        function setStatus(text, type = 'info') {
-            statusEl.textContent = text;
-            statusEl.className = `status show ${type}`;
-            statusEl.scrollTop = statusEl.scrollHeight;
+      // Remove legacy top-level groups/channels if present in this project.
+      for (const legacyName of ['groups', 'channels']) {
+        try {
+          const legacyRef = collection(db, legacyName);
+          const count = await deleteCollectionInChunks(legacyRef, legacyName);
+          if (legacyName === 'groups') result.groups += count;
+          else result.channels += count;
+        } catch (error) {
+          // These collections are not used by the current client structure; report access errors.
+          result.errors++;
+          log('Коллекция ' + legacyName + ' пропущена/недоступна: ' + (error.message || error));
         }
+      }
 
-        function appendStatus(text, type) {
-            statusEl.textContent += '\n' + text;
-            if (type) statusEl.className = `status show ${type}`;
-            statusEl.scrollTop = statusEl.scrollHeight;
-        }
+      progress(100);
+      showStats();
+      log('');
+      log('ЗАВЕРШЕНО. Аккаунты и документы users/* сохранены.');
+      log('Если указано ненулевое число ошибок, проверьте Rules и повторите очистку после исправления доступа.');
+      status($('status').textContent, result.errors ? 'error' : 'success');
+      button.textContent = result.errors ? 'Завершено с ошибками' : 'Очистка завершена';
+      try { await signOut(auth); } catch {}
+    } catch (error) {
+      console.error('[Iceberg global wipe]', error);
+      const code = error?.code || '';
+      let message = error?.message || String(error);
+      if (code === 'permission-denied' || /insufficient permissions/i.test(message)) {
+        message = 'Firestore отказал в доступе. Текущие Rules не разрешают администратору читать все users и seda_handshakes и обновлять чужие профили. Ничего нельзя считать очищенным.\n\nТребуется отдельное admin-only правило или серверная Cloud Function.';
+      } else if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+        message = 'Не удалось войти: проверьте email и пароль администратора.';
+      }
+      status('ОШИБКА\n' + message, 'error');
+      progress(0);
+      button.disabled = false;
+      $('cancelBtn').disabled = false;
+      try { await signOut(auth); } catch {}
+    }
+  });
 
-        function setAuthStatus(text, verified = false) {
-            authStatusEl.innerHTML = text 
-                ? `<div class="auth-badge ${verified ? 'verified' : 'denied'}">${text}</div>` 
-                : '';
-        }
-
-        function setProgress(percent) {
-            progressBar.classList.add('show');
-            progressFill.style.width = Math.min(100, Math.max(0, percent)) + '%';
-        }
-
-        function updateStats(obj) {
-            statsEl.classList.remove('hidden');
-            document.getElementById('statUsers').textContent = obj.users || 0;
-            document.getElementById('statChats').textContent = obj.chats || 0;
-            document.getElementById('statMessages').textContent = obj.messages || 0;
-            document.getElementById('statGroups').textContent = obj.groups || 0;
-            document.getElementById('statContacts').textContent = obj.contacts || 0;
-            document.getElementById('statErrors').textContent = obj.errors || 0;
-        }
-
-        // ==================== ПРОВЕРКА ПРАВ ====================
-        async function verifyAdminRights(uid) {
-            try {
-                const userSnap = await getDoc(doc(db, "users", uid));
-                
-                if (!userSnap.exists()) {
-                    return { ok: false, reason: 'Документ users/' + uid + ' не найден' };
-                }
-                
-                const userData = userSnap.data();
-                
-                // ✅ ПРАВИЛЬНАЯ ПРОВЕРКА: поле называется role
-                if (userData.role !== 'admin') {
-                    return { 
-                        ok: false, 
-                        reason: 'В документе users/' + uid + '\n' +
-                                'поле role = "' + (userData.role ?? 'отсутствует') + '"\n\n' +
-                                'Ожидается: role = "admin"' 
-                    };
-                }
-                
-                return { ok: true, userData };
-            } catch (e) {
-                console.error('Ошибка проверки прав:', e);
-                return { ok: false, reason: 'Ошибка чтения: ' + (e.message || 'неизвестная') };
-            }
-        }
-
-        // ==================== УДАЛЕНИЕ СООБЩЕНИЙ ====================
-        async function deleteAllMessages(chatId) {
-            let totalDeleted = 0;
-            let iterations = 0;
-            const MAX_ITER = 200;
-            
-            while (iterations < MAX_ITER) {
-                iterations++;
-                try {
-                    const messagesRef = collection(db, "messages", chatId, "msgs");
-                    const snapshot = await getDocs(messagesRef);
-                    
-                    if (snapshot.empty) break;
-                    
-                    const docs = snapshot.docs.slice(0, 500);
-                    const batch = writeBatch(db);
-                    docs.forEach(d => batch.delete(d.ref));
-                    await batch.commit();
-                    totalDeleted += docs.length;
-                    
-                    if (docs.length < 500) break;
-                    await new Promise(r => setTimeout(r, 50));
-                } catch (e) {
-                    console.warn(`Ошибка при удалении сообщений ${chatId}:`, e);
-                    break;
-                }
-            }
-            
-            return totalDeleted;
-        }
-
-        // ==================== ГЛАВНАЯ ФУНКЦИЯ ====================
-        window.startGlobalWipe = async function() {
-            const email = document.getElementById('adminEmail').value.trim();
-            const password = document.getElementById('adminPassword').value;
-            const confirmText = document.getElementById('confirmText').value.trim();
-            const understand = document.getElementById('understand').checked;
-
-            if (!email || !password) {
-                setStatus('❌ Введите email и пароль', 'error');
-                return;
-            }
-            if (confirmText !== 'УДАЛИТЬ ВСЁ У ВСЕХ') {
-                setStatus('❌ Введите точно: УДАЛИТЬ ВСЁ У ВСЕХ', 'error');
-                return;
-            }
-            if (!understand) {
-                setStatus('❌ Подтвердите, что понимаете последствия', 'error');
-                return;
-            }
-
-            deleteBtn.disabled = true;
-            setAuthStatus('');
-            
-            const result = { users: 0, chats: 0, messages: 0, groups: 0, contacts: 0, errors: 0 };
-
-            try {
-                // ============ ШАГ 1: Авторизация ============
-                setStatus('🔐 Авторизация...', 'info');
-                setProgress(2);
-                
-                const userCred = await signInWithEmailAndPassword(auth, email, password);
-                const adminUid = userCred.user.uid;
-                
-                appendStatus('✅ Вошли как: ' + email);
-                setProgress(5);
-
-                // ============ ШАГ 2: Проверка role:admin ============
-                setStatus('🛡 Проверка role === "admin"...', 'info');
-                setProgress(8);
-                
-                const rights = await verifyAdminRights(adminUid);
-                
-                if (!rights.ok) {
-                    throw new Error(
-                        '❌ ДОСТУП ЗАПРЕЩЁН\n\n' + rights.reason + '\n\n' +
-                        '─────────────────────────────\n' +
-                        'ЧТО НУЖНО СДЕЛАТЬ:\n' +
-                        '1. Firebase Console → Firestore\n' +
-                        '2. Откройте users/' + adminUid + '\n' +
-                        '3. Добавьте поле: role = "admin"\n' +
-                        '4. Сохраните и попробуйте снова'
-                    );
-                }
-                
-                setAuthStatus('✅ ПРАВА АДМИНИСТРАТОРА ПОДТВЕРЖДЕНЫ', true);
-                appendStatus('✅ role === "admin" ✓');
-                appendStatus('   UID: ' + adminUid);
-                setProgress(12);
-
-                // ============ ШАГ 3: Загрузка данных ============
-                setStatus('📂 Загрузка пользователей...', 'info');
-                
-                const usersSnap = await getDocs(collection(db, "users"));
-                const allUsers = usersSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
-                result.users = allUsers.length;
-                appendStatus(`✅ Пользователей: ${allUsers.length}`);
-                setProgress(16);
-
-                setStatus('📂 Загрузка групп...', 'info');
-                const groupsSnap = await getDocs(collection(db, "groups"));
-                const allGroups = groupsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                appendStatus(`✅ Групп: ${allGroups.length}`);
-                
-                setStatus('🔍 Сканирование чатов...', 'info');
-                const allChatIds = new Set();
-                
-                // ✅ ИСПОЛЬЗУЕМ getUserChats() — правильно обрабатывает MAP
-                for (const user of allUsers) {
-                    const chats = getUserChats(user);
-                    for (const chat of chats) {
-                        if (chat.isGroup || !chat.uid) continue;
-                        const chatId = [user.uid, chat.uid].sort().join('_');
-                        allChatIds.add(chatId);
-                    }
-                }
-                
-                for (const group of allGroups) {
-                    if (!group.id) continue;
-                    allChatIds.add(`group_${group.id}`);
-                }
-                
-                appendStatus(`✅ Уникальных чатов: ${allChatIds.size}`);
-                setProgress(20);
-
-                // ============ ШАГ 4: Удаление сообщений ============
-                setStatus(`🗑 Удаление сообщений из ${allChatIds.size} чатов...`, 'info');
-                
-                let processedChats = 0;
-                const totalChats = allChatIds.size;
-                
-                for (const chatId of allChatIds) {
-                    try {
-                        const deleted = await deleteAllMessages(chatId);
-                        result.messages += deleted;
-                        processedChats++;
-                        
-                        setProgress(20 + (processedChats / Math.max(1, totalChats)) * 45);
-                        
-                        if (processedChats % 10 === 0 || processedChats === totalChats) {
-                            setStatus(
-                                `🗑 Удаление сообщений...\n` +
-                                `Чатов: ${processedChats} / ${totalChats}\n` +
-                                `Сообщений: ${result.messages}`,
-                                'info'
-                            );
-                        }
-                    } catch (e) {
-                        result.errors++;
-                        console.warn(`Ошибка чата ${chatId}:`, e);
-                    }
-                }
-                
-                appendStatus(`✅ Сообщений удалено: ${result.messages}`);
-                setProgress(65);
-
-                // ============ ШАГ 5: Удаление групп ============
-                setStatus(`🗑 Удаление групп (${allGroups.length})...`, 'info');
-                
-                let processedGroups = 0;
-                for (const group of allGroups) {
-                    if (!group.id) continue;
-                    try {
-                        await deleteDoc(doc(db, "groups", group.id));
-                        result.groups++;
-                        processedGroups++;
-                        
-                        setProgress(65 + (processedGroups / Math.max(1, allGroups.length)) * 15);
-                    } catch (e) {
-                        result.errors++;
-                    }
-                }
-                
-                appendStatus(`✅ Групп удалено: ${result.groups}`);
-                setProgress(80);
-
-                // ============ ШАГ 6: Очистка users/* ============
-                setStatus('🧹 Очистка профилей пользователей...', 'info');
-                
-                let processedUsers = 0;
-                const batchSize = 100;
-                
-                for (let i = 0; i < allUsers.length; i += batchSize) {
-                    const chunk = allUsers.slice(i, i + batchSize);
-                    const batch = writeBatch(db);
-                    
-                    for (const user of chunk) {
-                        try {
-                            // ✅ Считаем через хелперы
-                            const contactsArr = getUserContacts(user);
-                            const chatsArr = getUserChats(user);
-                            
-                            result.contacts += contactsArr.length;
-                            result.chats += chatsArr.filter(c => !c.isGroup).length;
-                            
-                            // ✅ Обнуляем поля. НЕ трогаем role!
-                            batch.update(doc(db, "users", user.uid), {
-                                chats: {},
-                                groups: [],
-                                contacts: []
-                            });
-                        } catch (e) {
-                            result.errors++;
-                            console.warn('Ошибка юзера:', user.uid, e);
-                        }
-                    }
-                    
-                    try {
-                        await batch.commit();
-                        processedUsers += chunk.length;
-                    } catch (e) {
-                        result.errors++;
-                        console.error('Ошибка батча:', e);
-                    }
-                    
-                    setProgress(80 + (processedUsers / Math.max(1, allUsers.length)) * 18);
-                    setStatus(`🧹 Очистка: ${processedUsers} / ${allUsers.length}`, 'info');
-                }
-                
-                appendStatus(`✅ Очищено профилей: ${processedUsers}`);
-                setProgress(98);
-
-                // ============ ШАГ 7: Завершение ============
-                setProgress(100);
-                updateStats(result);
-                
-                appendStatus('');
-                appendStatus('═══════════════════════════════');
-                appendStatus('🎉 ОЧИСТКА ЗАВЕРШЕНА');
-                appendStatus('═══════════════════════════════');
-                appendStatus(`👥 Пользователей: ${result.users}`);
-                appendStatus(`💬 Личных чатов: ${result.chats}`);
-                appendStatus(`📨 Сообщений: ${result.messages}`);
-                appendStatus(`👥 Групп: ${result.groups}`);
-                appendStatus(`📇 Контактов: ${result.contacts}`);
-                appendStatus(`⚠️ Ошибок: ${result.errors}`);
-                
-                setStatus(statusEl.textContent, 'success');
-                deleteBtn.textContent = '✅ ГОТОВО';
-
-                setTimeout(async () => {
-                    try { await signOut(auth); } catch (e) {}
-                    setTimeout(() => window.location.reload(), 1000);
-                }, 5000);
-
-            } catch (error) {
-                console.error('КРИТИЧЕСКАЯ ОШИБКА:', error);
-                
-                let msg = '❌ ';
-                if (error.code === 'auth/wrong-password') msg += 'Неверный пароль';
-                else if (error.code === 'auth/user-not-found') msg += 'Пользователь не найден';
-                else if (error.code === 'auth/invalid-email') msg += 'Неверный email';
-                else if (error.code === 'permission-denied') msg += 'PERMISSION DENIED\nПравила Firestore не разрешают доступ.';
-                else msg += error.message || 'неизвестная ошибка';
-                
-                setStatus(msg, 'error');
-                setAuthStatus('❌ ДОСТУП ЗАПРЕЩЁН', false);
-                setProgress(0);
-                progressBar.classList.remove('show');
-                deleteBtn.disabled = false;
-                deleteBtn.textContent = '💥 УДАЛИТЬ ВСЁ У ВСЕХ ПОЛЬЗОВАТЕЛЕЙ';
-            }
-        };
-
-        setTimeout(() => document.getElementById('adminEmail').focus(), 300);
-    </script>
+  setTimeout(() => $('adminEmail').focus(), 250);
+</script>
 </body>
 </html>
