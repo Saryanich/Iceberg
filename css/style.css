@@ -2164,24 +2164,43 @@ input::placeholder, textarea::placeholder {
 
 
 /* ==================== ICEBERG OFFLINE / CONNECTION RECOVERY ==================== */
-/* Keep the original orbital circles, soft glow and loading ring. Only the
-   obsolete horizontal startup progress strip is disabled below. */
-.loading-logo-wrap::before {
-    animation: glowPulse 3s ease-in-out infinite !important;
+/* ==================== LOADING SCREEN FINAL FIX ==================== */
+/* Keep the two original orbital circles visible behind the logo. */
+#loadingScreen::before,
+#loadingScreen::after {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 0 !important;
+    pointer-events: none !important;
 }
-.loading-bar-wrap,
-.loading-bar,
-.loading-percent,
-#loadingBar,
-#loadingPercent {
+#loadingScreen > .loading-logo-wrap,
+#loadingScreen > .loading-title,
+#loadingScreen > .loading-subtitle {
+    position: relative;
+    z-index: 1;
+}
+/* Hide any legacy or dynamically inserted horizontal progress strip/counter. */
+#loadingScreen .loading-bar-wrap,
+#loadingScreen .loading-bar,
+#loadingScreen .loading-percent,
+#loadingScreen [id*="loadingBar" i],
+#loadingScreen [id*="loadingPercent" i],
+#loadingScreen [class*="loading-bar" i],
+#loadingScreen [class*="progress-bar" i],
+#loadingScreen [class*="progressbar" i],
+#loadingScreen [class*="loading-progress" i],
+#loadingScreen [id*="progress" i],
+#loadingScreen [class*="progress" i],
+#loadingScreen > :not(.loading-logo-wrap):not(.loading-title):not(.loading-subtitle) {
     display: none !important;
     visibility: hidden !important;
     width: 0 !important;
     height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    opacity: 0 !important;
     animation: none !important;
-}
-@media (prefers-reduced-motion: reduce) {
-    .loading-logo-wrap::before { animation: none !important; }
 }
 
 .offline-screen[hidden] { display: none !important; }
