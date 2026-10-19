@@ -2164,18 +2164,21 @@ input::placeholder, textarea::placeholder {
 
 
 /* ==================== ICEBERG OFFLINE / CONNECTION RECOVERY ==================== */
-#loadingScreen::before,
-#loadingScreen::after {
-    content: none !important;
-    animation: none !important;
-}
-.loading-ring,
-.loading-ring::before {
-    display: none !important;
-    animation: none !important;
-}
+/* Keep the original orbital circles, soft glow and loading ring. Only the
+   obsolete horizontal startup progress strip is disabled below. */
 .loading-logo-wrap::before {
     animation: glowPulse 3s ease-in-out infinite !important;
+}
+.loading-bar-wrap,
+.loading-bar,
+.loading-percent,
+#loadingBar,
+#loadingPercent {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    animation: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
     .loading-logo-wrap::before { animation: none !important; }
