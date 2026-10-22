@@ -15,6 +15,9 @@ import {
 import * as DB from './db.js';
 import { authState } from './auth.js';
 
+// Keep text messages comfortably below Firestore's document-size ceiling.
+const MAX_MESSAGE_LENGTH = 4000;
+
 export const uiState = {
     currentChat: null,
     currentChatId: null,
@@ -1139,8 +1142,13 @@ async function renderMessage(msg) {
 export async function sendMessage() {
     if (uiState.isSending) return;
     const input = document.getElementById('messageInput');
+    if (!(input instanceof HTMLTextAreaElement)) return;
     const text = input.value.trim();
     if (!text || !uiState.currentChatId) return;
+    if (Array.from(text).length > MAX_MESSAGE_LENGTH) {
+        showToast(`Сообщение слишком длинное. Максимум ${MAX_MESSAGE_LENGTH.toLocaleString('ru-RU')} символов`, 'error', 4000);
+        return;
+    }
 
     if (uiState.currentChannel && !uiState.currentChannel.isAdmin) {
         showToast('❌ Только администраторы', 'error');
@@ -1245,12 +1253,24 @@ export async function sendMessage() {
             showToast('Нет сети — сообщение ожидает отправки', 'info', 3500);
         }
         writePromise.then(async () => {
-            const ok = await updateChatLastMessage(originalText, chatContext);
-            if (ok) removePendingChatSync(pendingSyncId);
-        }).catch((e) => {
-            console.error('[Messages] Сообщение ожидает синхронизации:', e);
-            queueDirectChatSync(chatContext, originalText);
-            showToast('Сообщение ожидает подключения к сети', 'info', 4000);
+            // The message is persisted. Keep the existing queue entry if metadata
+            // synchronization fails so it can be retried without creating duplicates.
+            try {
+                const ok = await updateChatLastMessage(originalText, chatContext);
+                if (ok) removePendingChatSync(pendingSyncId);
+                else if (pendingSyncId) {
+                    showToast('Сообщение отправлено; обновление списка чатов повторится позже', 'info', 4000);
+                }
+            } catch (error) {
+                console.warn('[Messages] Сообщение сохранено, синхронизация списка чатов ожидает повтора:', error);
+                showToast('Сообщение отправлено; обновление списка чатов повторится позже', 'info', 4000);
+            }
+        }).catch((error) => {
+            // A rejected message write must not leave a metadata queue item behind:
+            // otherwise the chat can show a preview for a message that was never saved.
+            removePendingChatSync(pendingSyncId);
+            console.error('[Messages] Не удалось сохранить сообщение:', error);
+            showToast('Не удалось отправить сообщение. Проверьте соединение и попробуйте снова', 'error', 4000);
         });
     } catch (e) {
         console.error('Ошибка отправки:', e);
