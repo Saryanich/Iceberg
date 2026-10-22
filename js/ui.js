@@ -835,6 +835,28 @@ async function markChatRead(chat) {
 
 let messageLoadVersion = 0;
 
+/**
+ * Releases Firestore listeners and invalidates in-flight message rendering.
+ * Call this when leaving a chat session or signing out.
+ */
+export function cleanupChatSubscriptions() {
+    messageLoadVersion++;
+    for (const key of ['messagesUnsub', 'chatMetaUnsub', 'sedaHandshakeUnsub']) {
+        const unsubscribe = uiState[key];
+        if (typeof unsubscribe === 'function') {
+            try { unsubscribe(); } catch (error) {
+                console.warn(`[Chat cleanup] Не удалось закрыть подписку ${key}:`, error);
+            }
+        }
+        uiState[key] = null;
+    }
+    if (uiState.typingTimeout) {
+        clearTimeout(uiState.typingTimeout);
+        uiState.typingTimeout = null;
+    }
+}
+
+
 function cachedTimestampToFirestore(value) {
     if (!value) return null;
     if (typeof value.toMillis === 'function') return value;
