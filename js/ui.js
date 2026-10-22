@@ -15,6 +15,9 @@ import {
 import * as DB from './db.js';
 import { authState } from './auth.js';
 
+// Keep text messages comfortably below Firestore's document-size ceiling.
+const MAX_MESSAGE_LENGTH = 4000;
+
 export const uiState = {
     currentChat: null,
     currentChatId: null,
@@ -1139,8 +1142,13 @@ async function renderMessage(msg) {
 export async function sendMessage() {
     if (uiState.isSending) return;
     const input = document.getElementById('messageInput');
+    if (!(input instanceof HTMLTextAreaElement)) return;
     const text = input.value.trim();
     if (!text || !uiState.currentChatId) return;
+    if (Array.from(text).length > MAX_MESSAGE_LENGTH) {
+        showToast(`Сообщение слишком длинное. Максимум ${MAX_MESSAGE_LENGTH.toLocaleString('ru-RU')} символов`, 'error', 4000);
+        return;
+    }
 
     if (uiState.currentChannel && !uiState.currentChannel.isAdmin) {
         showToast('❌ Только администраторы', 'error');
