@@ -106,8 +106,6 @@ function getPersistentDeviceToken() {
             return authState.legacyDeviceToken;
         }
         if (!globalThis.crypto?.getRandomValues) return null;
-        const bytes = new Uint8Array(32);
-        shared = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
         const randomBytes = new Uint8Array(32);
         globalThis.crypto.getRandomValues(randomBytes);
         shared = Array.from(randomBytes, b => b.toString(16).padStart(2, '0')).join('');
