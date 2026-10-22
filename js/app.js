@@ -18,6 +18,7 @@ import * as DB from './db.js';
 
 import {
     uiState,
+    cleanupChatSubscriptions,
     showToast,
     setTheme,
     loadTheme,
@@ -493,6 +494,7 @@ function setupAuthSyncEvents() {
     });
 
     window.addEventListener('iceberg:force-logout', (e) => {
+        cleanupChatSubscriptions();
         const reason = e.detail?.reason;
         localStorage.removeItem('iceberg_authenticated');
         localStorage.removeItem('iceberg_auth_cache_v1');
