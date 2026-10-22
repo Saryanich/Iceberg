@@ -1,6 +1,6 @@
 import { auth, db, SEDA_ACTIVATION_CODE } from './config.js';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, serverTimestamp, arrayUnion, arrayRemove, limit, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, serverTimestamp, arrayUnion, arrayRemove, limit, runTransaction, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { hash2FACode, sha256Hex } from './crypto.js';
 
 const AUTH_CACHE_KEY = 'iceberg_auth_cache_v1';
@@ -86,6 +86,31 @@ function loadAuthCache() {
 }
 
 function clearAuthCache() { try { localStorage.removeItem(AUTH_CACHE_KEY); } catch {} }
+
+let deviceSessionUnsubscribe = null;
+function stopDeviceSessionWatcher() {
+    if (deviceSessionUnsubscribe) { try { deviceSessionUnsubscribe(); } catch {} deviceSessionUnsubscribe = null; }
+}
+function startDeviceSessionWatcher(uid) {
+    stopDeviceSessionWatcher();
+    const token = authState.deviceToken || getPersistentDeviceToken();
+    if (!uid || !token) return;
+    deviceSessionUnsubscribe = onSnapshot(doc(db, 'users', uid), async snap => {
+        if (!authState.user || authState.user.uid !== uid || !snap.exists()) return;
+        const data = snap.data() || {};
+        const revoked = (data.revokedDeviceTokens || []).includes(token);
+        if (data.accountLocked === true || revoked) {
+            stopDeviceSessionWatcher();
+            clearAuthCache();
+            authState.user = null; authState.userData = null;
+            authState.sedaProActivated = false; authState.restoredFromCache = false;
+            window.dispatchEvent(new CustomEvent('iceberg:force-logout', {
+                detail: { reason: revoked ? 'device-revoked' : 'locked' }
+            }));
+            try { await signOut(auth); } catch {}
+        }
+    }, error => console.warn('[Auth] Device session watcher error:', error));
+}
 
 // Один и тот же алгоритм отпечатка используется и при обычном входе,
 // и при быстром восстановлении сессии. Раньше здесь использовались два
@@ -270,6 +295,7 @@ export async function handleAuthLogin(user, callbacks = {}) {
 
             authState.user = user; authState.userData = data;
             authState.sedaProActivated = data.sedaProActivated || false;
+            startDeviceSessionWatcher(user.uid);
             saveAuthCache(user.uid, data);
             onSuccess?.(user, data);
         } else {
@@ -356,6 +382,7 @@ export async function verify2FA(code, trustDevice = false) {
     authState.awaitingTwoFactor = false;
     authState.user = user;
     authState.pendingUser = null;
+    startDeviceSessionWatcher(user.uid);
     const ud = await getDoc(userRef);
     authState.userData = ud.data();
     authState.sedaProActivated = authState.userData?.sedaProActivated || false;
@@ -493,6 +520,7 @@ export async function activateSedaPro(inputCode) {
 }
 
 export async function logout() {
+    stopDeviceSessionWatcher();
     try { 
         if (authState.user) {
             updateDoc(doc(db, 'users', authState.user.uid), { online: false, lastSeen: serverTimestamp() }).catch(() => {}); 
@@ -522,6 +550,7 @@ export function tryInstantRestore() {
     collectDeviceInfoSync();
     authState.user = fbUser; authState.userData = cached.data;
     authState.sedaProActivated = cached.data.sedaProActivated || false; authState.restoredFromCache = true;
+    startDeviceSessionWatcher(fbUser.uid);
     return cached.data;
 }
 
