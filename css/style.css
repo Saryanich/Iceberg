@@ -2376,7 +2376,6 @@ input::placeholder, textarea::placeholder {
 .message-bubble {
     max-width: min(78%, 52rem);
     white-space: pre-wrap;
-    contain: layout style;
 }
 
 .messages-area {
