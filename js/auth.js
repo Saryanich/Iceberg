@@ -1,6 +1,6 @@
 import { auth, db, SEDA_ACTIVATION_CODE } from './config.js';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, serverTimestamp, arrayUnion, limit, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, serverTimestamp, arrayUnion, arrayRemove, limit, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { hash2FACode, sha256Hex } from './crypto.js';
 
 const AUTH_CACHE_KEY = 'iceberg_auth_cache_v1';
@@ -18,6 +18,7 @@ export const authState = {
     awaitingTwoFactor: false,
     deviceFingerprint: null,
     deviceToken: null,
+    legacyDeviceToken: null,
     currentIP: null,
     loggingIn: false,
     sedaProActivated: false,
@@ -91,18 +92,30 @@ function clearAuthCache() { try { localStorage.removeItem(AUTH_CACHE_KEY); } cat
 // разных хеша, поэтому уже сохранённое устройство распознавалось как новое.
 function getPersistentDeviceToken() {
     const DEVICE_TOKEN_KEY = 'iceberg_device_token_v1';
+    const SHARED_TOKEN_KEY = 'itglobal_shared_device_token';
     try {
-        let token = localStorage.getItem(DEVICE_TOKEN_KEY);
-        if (token && /^dev_[a-f0-9]{64}$/.test(token)) return token;
+        let shared = localStorage.getItem(SHARED_TOKEN_KEY);
+        let legacy = localStorage.getItem(DEVICE_TOKEN_KEY);
+        authState.legacyDeviceToken = legacy && /^dev_[a-f0-9]{64}$/.test(legacy) ? legacy : null;
+        if (shared && /^[a-zA-Z0-9_-]{32,128}$/.test(shared)) return shared;
 
+        // Reuse the previous Iceberg token as the ecosystem-wide token when possible,
+        // preserving existing trusted-device records without forcing another 2FA.
+        if (authState.legacyDeviceToken) {
+            localStorage.setItem(SHARED_TOKEN_KEY, authState.legacyDeviceToken);
+            return authState.legacyDeviceToken;
+        }
         if (!globalThis.crypto?.getRandomValues) return null;
         const bytes = new Uint8Array(32);
-        globalThis.crypto.getRandomValues(bytes);
-        token = 'dev_' + Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
-        localStorage.setItem(DEVICE_TOKEN_KEY, token);
-        return token;
+        shared = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+        const randomBytes = new Uint8Array(32);
+        globalThis.crypto.getRandomValues(randomBytes);
+        shared = Array.from(randomBytes, b => b.toString(16).padStart(2, '0')).join('');
+        localStorage.setItem(SHARED_TOKEN_KEY, shared);
+        localStorage.setItem(DEVICE_TOKEN_KEY, 'dev_' + shared);
+        authState.legacyDeviceToken = 'dev_' + shared;
+        return shared;
     } catch {
-        // If storage is unavailable, fall back to a stable fingerprint for this session.
         return null;
     }
 }
@@ -139,11 +152,20 @@ async function isDeviceKnown(uid) {
     try {
         const ref = doc(db, 'users', uid);
         const d = await getDoc(ref);
-        const devices = d.data()?.trustedDevices || [];
-        if (devices.length === 0) return false;
-
+        const profile = d.data() || {};
+        const devices = profile.trustedDevices || [];
         const token = authState.deviceToken;
-        if (token && devices.some(x => x.deviceToken === token)) return true;
+        if (token && (profile.revokedDeviceTokens || []).includes(token)) return false;
+        if (devices.some(x => x.deviceToken === token)) return true;
+
+        // Migrate this browser's older Iceberg token to the shared IT Global token.
+        const oldIndex = authState.legacyDeviceToken ? devices.findIndex(x => x.deviceToken === authState.legacyDeviceToken) : -1;
+        if (oldIndex !== -1 && token) {
+            const migrated = devices.map((x, i) => i === oldIndex ? { ...x, deviceToken: token, lastUsed: new Date() } : x);
+            await updateDoc(ref, { trustedDevices: migrated });
+            return true;
+        }
+        if (devices.length === 0) return false;
 
         // Backward compatibility: recognize an already trusted device by its old fingerprint,
         // then attach the persistent token to that existing trusted-device record.
@@ -163,7 +185,9 @@ async function isAccountLocked(uid) {
     try {
         const d = await getDoc(doc(db, 'users', uid));
         // A missing profile or an unreadable lock state must not be treated as unlocked.
-        return !d.exists() || d.data()?.accountLocked === true;
+        if (!d.exists() || d.data()?.accountLocked === true) return true;
+        const token = authState.deviceToken || getPersistentDeviceToken();
+        return !!token && (d.data()?.revokedDeviceTokens || []).includes(token);
     } catch (e) {
         console.error('[Auth] Could not verify account lock state:', e);
         return true;
@@ -173,6 +197,7 @@ async function isAccountLocked(uid) {
 async function addKnownDevice(uid) {
     try {
         await updateDoc(doc(db, 'users', uid), {
+            revokedDeviceTokens: arrayRemove(authState.deviceToken),
             trustedDevices: arrayUnion({
                 deviceToken: authState.deviceToken || null,
                 fingerprint: authState.deviceFingerprint, ip: authState.currentIP || 'unknown',
