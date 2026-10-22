@@ -2346,3 +2346,85 @@ input::placeholder, textarea::placeholder {
     .offline-card, .offline-screen, .offline-screen.is-checking .retry-icon,
     .offline-screen.is-checking .offline-status-dot { animation: none !important; transition: none !important; }
 }
+
+
+/* Stability hardening: long names, URLs, emoji sequences and narrow viewports. */
+.chat-item,
+.contact-item,
+.group-item,
+.channel-item,
+.info-small,
+.name-row,
+.item-name,
+.item-subtitle,
+.messages-area,
+.message-bubble,
+.chat-msg-reply,
+.file-info {
+    min-width: 0;
+}
+
+.item-name,
+.item-subtitle,
+.message-bubble,
+.chat-msg-reply,
+.file-name {
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+.message-bubble {
+    max-width: min(78%, 52rem);
+    white-space: pre-wrap;
+    contain: layout style;
+}
+
+.messages-area {
+    overscroll-behavior: contain;
+    overflow-anchor: auto;
+    scrollbar-gutter: stable;
+}
+
+.chat-msg-photo,
+.chat-msg-video,
+.chat-msg-audio {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+}
+
+@media (max-width: 560px) {
+    .messages-area {
+        padding: 10px 8px;
+        gap: 6px;
+    }
+
+    .message-bubble {
+        max-width: 88%;
+        padding: 8px 10px;
+    }
+
+    .chat-item,
+    .contact-item,
+    .group-item,
+    .channel-item {
+        max-width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .message-bubble,
+    .btn-icon.seda-active {
+        animation: none !important;
+    }
+
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}
