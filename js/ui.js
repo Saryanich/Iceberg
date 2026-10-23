@@ -2,7 +2,7 @@ import { db, auth, STICKERS, REACTION_EMOJIS, MAX_MEDIA_SIZE, MAX_PHOTO_DIMENSIO
 import {
     collection, doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc,
     query, where, getDocs, onSnapshot, orderBy, limit, serverTimestamp, Timestamp,
-    arrayUnion, arrayRemove, writeBatch
+    arrayUnion, arrayRemove, writeBatch, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
  
 import {
@@ -919,14 +919,26 @@ async function ensureIcebergBaseKey(chatId, peerUid) {
         const pub = await exportPublicKey(pair);
         privJwk = await exportPrivateKey(pair);
         baseKey = generateIcebergBaseKey();
+
+        // Two users may open the same empty chat at the same time. Claim the
+        // deterministic handshake document transactionally so there is only one
+        // initiator and the two sides never overwrite each other's public keys.
+        const created = await runTransaction(db, async transaction => {
+            const current = await transaction.get(ref);
+            if (current.exists()) return false;
+            transaction.set(ref, {
+                mode: 'iceberg-base', chatId, initiator: authState.user.uid, peer: peerUid,
+                initiatorPublicKey: pub, peerPublicKey: null, encryptedBaseKey: null,
+                peerKeyStored: false, initiatorAck: false, createdAt: Date.now(),
+                expiresAt: Date.now() + 10 * 60 * 1000
+            });
+            return true;
+        });
+        if (!created) {
+            return null;
+        }
         await DB.saveECDHKeys(handshakeId, pub, privJwk);
         await DB.saveSedaKey(chatId, baseKey);
-        await setDoc(ref, {
-            mode: 'iceberg-base', chatId, initiator: authState.user.uid, peer: peerUid,
-            initiatorPublicKey: pub, peerPublicKey: null, encryptedBaseKey: null,
-            peerKeyStored: false, initiatorAck: false, createdAt: Date.now(),
-            expiresAt: Date.now() + 10 * 60 * 1000
-        });
     }
     const listenerId = handshakeId + ':' + authState.user.uid;
     if (!baseHandshakeListeners.has(listenerId)) {
