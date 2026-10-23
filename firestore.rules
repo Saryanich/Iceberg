@@ -44,6 +44,11 @@ service cloud.firestore {
         (data.keys().hasAny(['participants']) && hasUid(data.participants))
         || (data.keys().hasAny(['memberIds']) && hasUid(data.memberIds))
         || (data.keys().hasAny(['members']) && hasUid(data.members))
+        // Legacy group documents stored member maps instead of memberIds. Let only
+        // the original creator read them long enough to migrate the schema.
+        || (!data.keys().hasAny(['memberIds'])
+          && data.keys().hasAny(['createdBy'])
+          && data.createdBy == request.auth.uid)
       );
     }
 
