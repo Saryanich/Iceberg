@@ -968,6 +968,29 @@ function messageTimestampMillis(message) {
     return 0;
 }
 
+async function getHistoryClearedAt(chatId) {
+    if (!authState.user?.uid || !chatId) return 0;
+    try {
+        const snap = await getDoc(doc(db, 'chat_clears', authState.user.uid, 'items', chatId));
+        if (!snap.exists()) return 0;
+        const value = snap.data().clearedAt;
+        if (value && typeof value.toMillis === 'function') return value.toMillis();
+        if (value instanceof Date) return value.getTime();
+        const n = Number(value);
+        return Number.isFinite(n) ? n : 0;
+    } catch (err) {
+        console.warn('[History] Не удалось прочитать отметку очистки:', err);
+        return 0;
+    }
+}
+
+async function markHistoryCleared(chatId) {
+    await setDoc(doc(db, 'chat_clears', authState.user.uid, 'items', chatId), {
+        clearedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+    }, { merge: true });
+}
+
 export async function loadMessages() {
     if (uiState.messagesUnsub) {
         try { uiState.messagesUnsub(); } catch {}
@@ -978,6 +1001,9 @@ export async function loadMessages() {
     const loadVersion = ++messageLoadVersion;
     const area = document.getElementById('messagesArea');
     if (!chatId || !area) return;
+
+    const historyClearedAt = await getHistoryClearedAt(chatId);
+    if (loadVersion !== messageLoadVersion || uiState.currentChatId !== chatId) return;
 
     area.innerHTML = '';
     const loading = showOperationIndicator(chatId, 'Подключаем чат…', 'loading');
@@ -990,7 +1016,8 @@ export async function loadMessages() {
             removeOperationIndicator(loading);
             return;
         }
-        cachedMessages = Array.isArray(cached) ? cached : [];
+        cachedMessages = (Array.isArray(cached) ? cached : [])
+            .filter(message => messageTimestampMillis(message) > historyClearedAt);
         hasCache = cachedMessages.length > 0;
         if (hasCache) {
             const rendered = await renderMessagesSequentially(area, cachedMessages, loadVersion, chatId);
@@ -1025,6 +1052,7 @@ export async function loadMessages() {
             let incoming = [];
             snap.forEach(d => incoming.push({ id: d.id, ...d.data() }));
             incoming.reverse();
+            incoming = incoming.filter(message => messageTimestampMillis(message) > historyClearedAt);
 
             let msgs;
             if (incrementalQuery) {
@@ -2378,48 +2406,39 @@ export async function notifyTyping() {
     } catch {}
 }
 
-async function permanentlyDeleteMessages(chatId) {
-    // Firestore does not cascade-delete subcollection documents. Delete in bounded batches.
-    const mRef = collection(db, 'messages', chatId, 'msgs');
-    while (true) {
-        const snap = await getDocs(query(mRef, limit(450)));
-        if (snap.empty) break;
-        const batch = writeBatch(db);
-        snap.docs.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-        if (snap.size < 450) break;
-    }
-    await DB.clearCachedMessages(chatId);
-    await DB.deleteSedaKey(chatId);
-}
-
-export async function clearChatById(uid, sedaChatId, explicitChatId = '') {
-    // Channels use channel_<channel document id>; never derive their id from a user uid.
+export async function clearChatById(uid, sedaChatId, explicitChatId = '', kind = 'chat') {
+    // History clearing is per-user: never try to delete messages sent by the other participant.
     const chatId = explicitChatId || (sedaChatId ? sedaChatId : [authState.user.uid, uid].sort().join('_'));
-    if (!confirm('Очистить историю?')) return;
+    if (!chatId || !authState.user?.uid) return;
+    if (!confirm('Очистить историю только у вас? У других участников она останется.')) return;
     try {
-        await permanentlyDeleteMessages(chatId);
+        await markHistoryCleared(chatId);
+        await DB.clearCachedMessages(chatId);
         if (uiState.currentChatId === chatId) {
             if (uiState.messagesUnsub) { try { uiState.messagesUnsub(); } catch {} uiState.messagesUnsub = null; }
             ++messageLoadVersion;
             const area = document.getElementById('messagesArea');
-            if (area) area.innerHTML = '<div class="empty-state">Нет сообщений. Напишите первое!</div>';
-            // Reconnect only after the delete has committed, so a stale snapshot cannot restore cached rows.
+            if (area) area.innerHTML = '<div class="empty-state">История очищена. Новые сообщения появятся здесь.</div>';
             await loadMessages();
         }
-        const historyKind = uiState.currentChannel ? 'канала' : uiState.currentGroup ? 'группы' : 'чата';
-        showToast(`История ${historyKind} очищена`, 'success');
+        const contextKind = uiState.currentChannel && uiState.currentChatId === chatId
+            ? 'канала'
+            : uiState.currentGroup && uiState.currentChatId === chatId
+                ? 'группы'
+                : (kind === 'channel' ? 'канала' : kind === 'group' ? 'группы' : 'чата');
+        showToast(`История ${contextKind} очищена`, 'success');
     } catch (e) {
-        console.error('[Chat clear] Не удалось удалить историю:', e);
-        showToast('Не удалось удалить историю. Проверьте права доступа и повторите попытку.', 'error');
+        console.error('[Chat clear] Не удалось очистить историю:', e);
+        showToast('Не удалось очистить историю. Проверьте доступ к Firestore и повторите попытку.', 'error');
     }
 }
 
 export async function deleteChatById(uid, sedaChatId) {
-    if (!confirm('Удалить чат и его историю?')) return;
+    if (!confirm('Удалить чат из списка и скрыть его старую историю только у вас?')) return;
     try {
         const chatId = sedaChatId || [authState.user.uid, uid].sort().join('_');
-        await permanentlyDeleteMessages(chatId);
+        await markHistoryCleared(chatId);
+        await DB.clearCachedMessages(chatId);
         const chats = ensureArray(authState.userData.chats).filter(c => {
             if (sedaChatId && c.sedaChatId === sedaChatId) return false;
             if (!sedaChatId && c.uid === uid && !c.isGroup && !c.isSeda) return false;
@@ -2430,7 +2449,7 @@ export async function deleteChatById(uid, sedaChatId) {
         await DB.Lists.setChats(authState.user.uid, chats);
         if (uiState.currentChatId === chatId) closeChat();
         loadChats();
-        showToast('Чат и его история удалены', 'success');
+        showToast('Чат удалён из списка. Старая история скрыта у вас.', 'success');
     } catch (e) {
         console.error('[Chat delete] Не удалось удалить чат:', e);
         showToast('Не удалось удалить чат. Проверьте права доступа и повторите попытку.', 'error');
