@@ -1035,23 +1035,39 @@ async function ensureIcebergBaseKey(chatId, peerUid) {
 async function ensureMessageThread(chatId, membership) {
     if (!authState.user?.uid || !chatId || !membership) return;
     const threadRef = doc(db, 'messages', chatId);
-    // Never overwrite ACL metadata on an existing thread just because a participant opened it.
-    const existing = await getDoc(threadRef);
-    if (existing.exists()) return;
-
     const uid = authState.user.uid;
-    const payload = { kind: membership.kind || 'direct', createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
-    if (membership.kind === 'group') {
-        const ids = Array.from(new Set((membership.memberIds || [uid]).filter(Boolean)));
-        if (!ids.includes(uid)) ids.push(uid);
-        payload.memberIds = ids;
-        payload.adminIds = Array.from(new Set((membership.adminIds || []).filter(Boolean)));
+    const isGroup = membership.kind === 'group';
+    const isChannel = membership.kind === 'channel';
+    const memberIds = Array.from(new Set((membership.memberIds || [uid]).filter(Boolean)));
+    if (!memberIds.includes(uid)) memberIds.push(uid);
+    const adminIds = Array.from(new Set((membership.adminIds || []).filter(Boolean)));
+    const existing = await getDoc(threadRef);
+
+    if (existing.exists()) {
+        // Synchronize ACL metadata only if this user is an administrator. Firestore
+        // Rules also compare the proposed lists with the authoritative root document.
+        if (isGroup && (membership.createdBy === uid || adminIds.includes(uid))) {
+            await updateDoc(threadRef, { memberIds, adminIds, updatedAt: serverTimestamp() });
+        } else if (isChannel && (membership.createdBy === uid || adminIds.includes(uid))) {
+            await updateDoc(threadRef, { members: memberIds, admins: adminIds, updatedAt: serverTimestamp() });
+        }
+        return;
+    }
+
+    const payload = {
+        kind: membership.kind || 'direct',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+    };
+    if (isGroup) {
+        payload.resourceId = membership.resourceId;
+        payload.memberIds = memberIds;
+        payload.adminIds = adminIds;
         if (membership.createdBy) payload.createdBy = membership.createdBy;
-    } else if (membership.kind === 'channel') {
-        const ids = Array.from(new Set((membership.memberIds || [uid]).filter(Boolean)));
-        if (!ids.includes(uid)) ids.push(uid);
-        payload.members = ids;
-        payload.admins = Array.from(new Set((membership.adminIds || []).filter(Boolean)));
+    } else if (isChannel) {
+        payload.resourceId = membership.resourceId;
+        payload.members = memberIds;
+        payload.admins = adminIds;
         if (membership.createdBy) payload.createdBy = membership.createdBy;
     } else {
         payload.participants = Array.from(new Set([uid, ...(membership.participants || [])].filter(Boolean))).sort();
@@ -1181,6 +1197,7 @@ export async function selectGroup(group) {
         const ids = freshGroup.memberIds || (Array.isArray(freshGroup.members) ? freshGroup.members.map(m => typeof m === 'string' ? m : m?.uid).filter(Boolean) : []);
         await ensureMessageThread(uiState.currentChatId, {
             kind: 'group',
+            resourceId: freshGroup.id,
             memberIds: ids,
             adminIds: freshGroup.adminIds || (Array.isArray(freshGroup.members) ? freshGroup.members.filter(m => m?.role === 'admin').map(m => m.uid) : []),
             createdBy: freshGroup.createdBy
@@ -1234,6 +1251,7 @@ export async function selectChannel(channel) {
         const channelMembers = Array.isArray(freshChannel.members) ? freshChannel.members : [authState.user.uid];
         await ensureMessageThread(uiState.currentChatId, {
             kind: 'channel',
+            resourceId: freshChannel.id,
             memberIds: channelMembers,
             adminIds: freshChannel.admins || [],
             createdBy: freshChannel.createdBy
