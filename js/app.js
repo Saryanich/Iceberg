@@ -60,7 +60,14 @@ import {
     closeAutoDelete,
     switchTab,
     initStickerPicker,
-    notifyTyping
+    notifyTyping,
+    compressImage,
+    showContactCard,
+    loadOwnStories,
+    uploadOwnStories,
+    openUserStories,
+    moveStory,
+    deleteCurrentStory
 } from './ui.js';
 
 import {
@@ -728,30 +735,7 @@ function bindUIEvents() {
     document.getElementById('clearChatBtn').onclick = clearCurrentChat;
     document.getElementById('deleteChatBtn').onclick = deleteCurrentChat;
     document.getElementById('groupInfoBtn').onclick = showGroupInfo;
-    document.getElementById('channelManageBtn').onclick = () => {
-        const channel = uiState.currentChannel;
-        if (!channel || !channel.isAdmin) {
-            showToast('Управление каналом доступно только администратору', 'error');
-            return;
-        }
-        const modal = document.getElementById('channelManageModal');
-        const title = document.getElementById('channelManageTitle');
-        const body = document.getElementById('channelManageContent');
-        if (!modal || !body || !title) {
-            showToast('Не удалось открыть настройки канала', 'error');
-            return;
-        }
-        title.textContent = 'Настройки канала';
-        body.replaceChildren();
-        const name = document.createElement('p');
-        name.textContent = 'Название: ' + (channel.name || 'Без названия');
-        const description = document.createElement('p');
-        description.textContent = 'Описание: ' + (channel.description || 'Не указано');
-        const warning = document.createElement('p');
-        warning.textContent = 'Очистить историю можно кнопкой корзины в заголовке канала.';
-        body.append(name, description, warning);
-        modal.classList.add('active');
-    };
+    document.getElementById('channelManageBtn').onclick = showChannelSettings;
 
     document.getElementById('chatSend').onclick = sendMessage;
     document.getElementById('messageInput').addEventListener('keydown', (e) => {
@@ -852,9 +836,25 @@ function bindUIEvents() {
     };
     document.getElementById('createGroupBtn').onclick = createGroupFromModal;
     document.getElementById('createChannelBtn').onclick = createChannelFromModal;
-    document.getElementById('clearGroupBtn').onclick = () => showToast('В разработке', 'info');
-    document.getElementById('leaveGroupBtn').onclick = () => showToast('В разработке', 'info');
-    document.getElementById('deleteGroupFromListBtn').onclick = () => showToast('В разработке', 'info');
+
+    document.getElementById('addStoryBtn').onclick = () => document.getElementById('storyUploadInput').click();
+    document.getElementById('storyUploadInput').onchange = async function () {
+        const files = this.files;
+        this.value = '';
+        await uploadOwnStories(files);
+    };
+    document.getElementById('prevStoryBtn').onclick = () => moveStory(-1);
+    document.getElementById('nextStoryBtn').onclick = () => moveStory(1);
+    document.getElementById('deleteStoryBtn').onclick = deleteCurrentStory;
+    document.getElementById('closeStoryViewerBtn').onclick = () => {
+        document.getElementById('storyViewerModal').classList.remove('active');
+    };
+    document.getElementById('clearGroupBtn').onclick = async () => {
+        document.getElementById('groupInfoModal').classList.remove('active');
+        await clearCurrentChat();
+    };
+    document.getElementById('leaveGroupBtn').onclick = leaveCurrentGroup;
+    document.getElementById('deleteGroupFromListBtn').onclick = leaveCurrentGroup;
     document.getElementById('closeChannelManageBtn').onclick = () => {
         document.getElementById('channelManageModal').classList.remove('active');
     };
@@ -882,7 +882,7 @@ function renderFilteredList(containerId, list, type) {
         info.appendChild(n);
         div.appendChild(av);
         div.appendChild(info);
-        div.onclick = () => type === 'chat' ? selectChat(item) : openChatWithContact(item);
+        div.onclick = () => type === 'chat' ? selectChat(item) : showContactCard(item);
         c.appendChild(div);
     }
 }
@@ -957,9 +957,10 @@ function openScanner() {
     }
 }
 
-function openStories() {
+async function openStories() {
     document.getElementById('plusMenu').classList.remove('show');
     document.getElementById('storiesModal').classList.add('active');
+    await loadOwnStories();
 }
 
 async function searchByGlobalId() {
@@ -1122,58 +1123,412 @@ async function createChannelFromModal() {
 }
 
 async function showGroupInfo() {
-    if (!uiState.currentGroup) return;
+    const selected = uiState.currentGroup;
+    if (!selected?.id) return;
     try {
-        const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+        const { doc, getDoc, updateDoc, deleteDoc, serverTimestamp } =
+            await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
         const { db } = await import('./config.js');
-        const d = await getDoc(doc(db, 'groups', uiState.currentGroup.id));
-        if (!d.exists()) return;
-        const g = d.data();
-
-        document.getElementById('groupInfoTitle').textContent = g.name;
-        const content = document.getElementById('groupInfoContent');
-        content.innerHTML = '';
-
-        const header = document.createElement('div');
-        header.style.cssText = 'text-align:center;margin-bottom:16px;';
-        const emoji = document.createElement('div');
-        emoji.style.fontSize = '56px';
-        emoji.textContent = '👥';
-        const nameEl = document.createElement('div');
-        nameEl.style.cssText = 'font-weight:bold;font-size:18px;color:var(--text-primary);';
-        nameEl.textContent = g.name;
-        const countEl = document.createElement('div');
-        countEl.style.cssText = 'font-size:12px;color:var(--text-secondary);';
-        countEl.textContent = `${g.memberCount || g.members?.length || 0} участников`;
-        header.appendChild(emoji);
-        header.appendChild(nameEl);
-        header.appendChild(countEl);
-        content.appendChild(header);
-
-        for (const m of (g.members || [])) {
-            const row = document.createElement('div');
-            row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid var(--border);';
-            const av = document.createElement('div');
-            av.className = 'avatar-small';
-            av.style.cssText = 'width:36px;height:36px;font-size:14px;';
-            av.textContent = (m.nickname || 'U').charAt(0).toUpperCase();
-            const info = document.createElement('div');
-            info.style.cssText = 'flex:1;';
-            const n = document.createElement('div');
-            n.style.cssText = 'font-weight:500;color:var(--text-primary);font-size:13px;';
-            n.textContent = m.nickname || m.globalId || 'Пользователь';
-            const r = document.createElement('div');
-            r.style.cssText = 'font-size:10px;color:var(--text-muted);';
-            r.textContent = m.role === 'admin' ? '👑 Админ' : '👤 Участник';
-            info.appendChild(n);
-            info.appendChild(r);
-            row.appendChild(av);
-            row.appendChild(info);
-            content.appendChild(row);
+        const snap = await getDoc(doc(db, 'groups', selected.id));
+        if (!snap.exists()) {
+            showToast('Группа больше не существует', 'error');
+            return;
         }
-        document.getElementById('groupInfoModal').classList.add('active');
-    } catch (e) {
-        showToast('Ошибка', 'error');
+        const group = { ...snap.data(), id: selected.id };
+        uiState.currentGroup = { ...selected, ...group };
+        const uid = authState.user.uid;
+        const members = Array.isArray(group.members) ? group.members : [];
+        const memberIds = Array.isArray(group.memberIds)
+            ? group.memberIds
+            : members.map(m => typeof m === 'string' ? m : m?.uid).filter(Boolean);
+        const adminIds = Array.isArray(group.adminIds)
+            ? group.adminIds
+            : members.filter(m => m?.role === 'admin').map(m => m.uid);
+        const canManage = group.createdBy === uid || adminIds.includes(uid)
+            || members.some(m => m?.uid === uid && m.role === 'admin');
+
+        const modal = document.getElementById('groupInfoModal');
+        const content = document.getElementById('groupInfoContent');
+        document.getElementById('groupInfoTitle').textContent = group.name || 'Группа';
+        content.replaceChildren();
+
+        const head = document.createElement('div');
+        head.className = 'group-settings-profile';
+        const avatar = document.createElement('div');
+        avatar.className = 'group-settings-avatar';
+        if (group.avatar) {
+            const img = document.createElement('img');
+            img.src = group.avatar;
+            img.alt = 'Аватар группы';
+            avatar.appendChild(img);
+        } else avatar.textContent = '👥';
+        const name = document.createElement('h3');
+        name.textContent = group.name || 'Группа';
+        const count = document.createElement('p');
+        count.textContent = `${memberIds.length || members.length} участников`;
+        head.append(avatar, name, count);
+        content.appendChild(head);
+
+        if (canManage) {
+            const form = document.createElement('div');
+            form.className = 'group-settings-form';
+            const nameLabel = document.createElement('label');
+            nameLabel.textContent = 'Название';
+            const nameInput = document.createElement('input');
+            nameInput.maxLength = 80;
+            nameInput.value = group.name || '';
+            const descriptionLabel = document.createElement('label');
+            descriptionLabel.textContent = 'Описание';
+            const descriptionInput = document.createElement('textarea');
+            descriptionInput.maxLength = 300;
+            descriptionInput.rows = 2;
+            descriptionInput.value = group.description || '';
+            const avatarLabel = document.createElement('label');
+            avatarLabel.textContent = 'Аватар группы';
+            const avatarInput = document.createElement('input');
+            avatarInput.type = 'file';
+            avatarInput.accept = 'image/*';
+            const save = document.createElement('button');
+            save.type = 'button';
+            save.className = 'btn btn-primary';
+            save.textContent = 'Сохранить изменения';
+            save.onclick = async () => {
+                const newName = nameInput.value.trim();
+                if (!newName) return showToast('Название группы не может быть пустым', 'error');
+                try {
+                    let newAvatar = group.avatar || null;
+                    if (avatarInput.files?.[0]) newAvatar = await compressImage(avatarInput.files[0], 300 * 1024);
+                    const patch = { name: newName, description: descriptionInput.value.trim(), avatar: newAvatar };
+                    await updateDoc(doc(db, 'groups', selected.id), patch);
+                    uiState.currentGroup = { ...uiState.currentGroup, ...patch };
+                    document.getElementById('chatName').textContent = newName;
+                    await loadGroups();
+                    showToast('Настройки группы сохранены', 'success');
+                    await showGroupInfo();
+                } catch (err) {
+                    console.error('[Group settings] Save failed:', err);
+                    showToast('Не удалось сохранить группу. Проверьте права Firestore.', 'error');
+                }
+            };
+            form.append(nameLabel, nameInput, descriptionLabel, descriptionInput, avatarLabel, avatarInput, save);
+            content.appendChild(form);
+        }
+
+        const membersHeading = document.createElement('h4');
+        membersHeading.className = 'settings-section-title';
+        membersHeading.textContent = 'Участники';
+        content.appendChild(membersHeading);
+
+        const memberList = document.createElement('div');
+        memberList.className = 'group-member-list';
+        for (const raw of members) {
+            const member = typeof raw === 'string' ? { uid: raw } : raw;
+            if (!member?.uid) continue;
+            const row = document.createElement('div');
+            row.className = 'group-member-row';
+            const info = document.createElement('div');
+            info.className = 'group-member-info';
+            const label = document.createElement('strong');
+            label.textContent = member.nickname || member.globalId || member.uid;
+            const role = document.createElement('span');
+            role.textContent = (member.role === 'admin' || adminIds.includes(member.uid)) ? 'Администратор' : 'Участник';
+            info.append(label, role);
+            row.appendChild(info);
+            if (canManage && member.uid !== group.createdBy && member.uid !== uid) {
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'action-btn danger';
+                remove.textContent = '−';
+                remove.setAttribute('aria-label', 'Удалить участника');
+                remove.onclick = async () => {
+                    if (!confirm(`Удалить ${member.nickname || 'участника'} из группы?`)) return;
+                    try {
+                        const nextMembers = members.filter(m => (typeof m === 'string' ? m : m?.uid) !== member.uid);
+                        const nextIds = memberIds.filter(id => id !== member.uid);
+                        const nextAdmins = adminIds.filter(id => id !== member.uid);
+                        await updateDoc(doc(db, 'groups', selected.id), {
+                            members: nextMembers, memberIds: nextIds, adminIds: nextAdmins,
+                            memberCount: nextIds.length
+                        });
+                        uiState.currentGroup = { ...uiState.currentGroup, members: nextMembers, memberIds: nextIds, adminIds: nextAdmins, memberCount: nextIds.length };
+                        await loadGroups();
+                        await showGroupInfo();
+                        showToast('Участник удалён', 'success');
+                    } catch (err) {
+                        console.error('[Group member remove]', err);
+                        showToast('Не удалось удалить участника. Проверьте права Firestore.', 'error');
+                    }
+                };
+                row.appendChild(remove);
+            }
+            memberList.appendChild(row);
+        }
+        content.appendChild(memberList);
+
+        if (canManage) {
+            const available = (authState.userData.contacts || []).filter(contact => contact?.uid && !memberIds.includes(contact.uid));
+            if (available.length) {
+                const addRow = document.createElement('div');
+                addRow.className = 'group-add-member';
+                const select = document.createElement('select');
+                select.setAttribute('aria-label', 'Выберите контакт для добавления');
+                for (const contact of available) {
+                    const option = document.createElement('option');
+                    option.value = contact.uid;
+                    option.textContent = contact.nickname || contact.globalId || 'Контакт';
+                    select.appendChild(option);
+                }
+                const add = document.createElement('button');
+                add.type = 'button';
+                add.className = 'btn btn-secondary';
+                add.textContent = 'Добавить';
+                add.onclick = async () => {
+                    const contact = available.find(item => item.uid === select.value);
+                    if (!contact) return;
+                    try {
+                        const nextMembers = [...members, {
+                            uid: contact.uid,
+                            globalId: contact.globalId || '',
+                            nickname: contact.nickname || contact.globalId || 'Пользователь',
+                            role: 'member'
+                        }];
+                        const nextIds = [...new Set([...memberIds, contact.uid])];
+                        await updateDoc(doc(db, 'groups', selected.id), {
+                            members: nextMembers, memberIds: nextIds, memberCount: nextIds.length
+                        });
+                        uiState.currentGroup = { ...uiState.currentGroup, members: nextMembers, memberIds: nextIds, memberCount: nextIds.length };
+                        await loadGroups();
+                        await showGroupInfo();
+                        showToast('Участник добавлен', 'success');
+                    } catch (err) {
+                        console.error('[Group member add]', err);
+                        showToast('Не удалось добавить участника. Проверьте права Firestore.', 'error');
+                    }
+                };
+                addRow.append(select, add);
+                content.appendChild(addRow);
+            }
+        }
+
+        document.getElementById('clearGroupBtn').style.display = 'block';
+        document.getElementById('leaveGroupBtn').style.display = 'block';
+        document.getElementById('deleteGroupFromListBtn').textContent = '🚪 Выйти из группы';
+        document.getElementById('deleteGroupFromListBtn').style.display = 'block';
+        modal.classList.add('active');
+    } catch (err) {
+        console.error('[Group settings] Failed to load:', err);
+        showToast('Не удалось загрузить настройки группы. Проверьте права Firestore.', 'error');
+    }
+}
+
+async function leaveCurrentGroup() {
+    const selected = uiState.currentGroup;
+    if (!selected?.id || !authState.user?.uid) return;
+    if (!confirm('Выйти из этой группы?')) return;
+    try {
+        const { doc, getDoc, updateDoc, deleteDoc } =
+            await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+        const { db } = await import('./config.js');
+        const ref = doc(db, 'groups', selected.id);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) return;
+        const group = snap.data();
+        const uid = authState.user.uid;
+        const members = (group.members || []).filter(m => (typeof m === 'string' ? m : m?.uid) !== uid);
+        const memberIds = (group.memberIds || (group.members || []).map(m => typeof m === 'string' ? m : m?.uid).filter(Boolean)).filter(id => id !== uid);
+        let adminIds = (group.adminIds || []).filter(id => id !== uid);
+        if (!memberIds.length) {
+            await deleteDoc(ref);
+        } else {
+            if (!adminIds.length) {
+                adminIds = [memberIds[0]];
+                const promoted = members.map(m => {
+                    if ((typeof m === 'string' ? m : m?.uid) !== memberIds[0]) return m;
+                    return typeof m === 'string' ? { uid: m, role: 'admin' } : { ...m, role: 'admin' };
+                });
+                await updateDoc(ref, { members: promoted, memberIds, adminIds, memberCount: memberIds.length });
+            } else {
+                await updateDoc(ref, { members, memberIds, adminIds, memberCount: memberIds.length });
+            }
+        }
+        authState.userData.groups = (authState.userData.groups || []).filter(g => g.id !== selected.id);
+        await updateDoc(doc(db, 'users', uid), { groups: authState.userData.groups });
+        await DB.Lists.setGroups(uid, authState.userData.groups);
+        document.getElementById('groupInfoModal').classList.remove('active');
+        closeChat();
+        await loadGroups();
+        showToast('Вы вышли из группы', 'success');
+    } catch (err) {
+        console.error('[Group leave]', err);
+        showToast('Не удалось выйти из группы. Проверьте права Firestore.', 'error');
+    }
+}
+
+async function showChannelSettings() {
+    const selected = uiState.currentChannel;
+    if (!selected?.id) return;
+    try {
+        const { doc, getDoc, updateDoc } =
+            await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+        const { db } = await import('./config.js');
+        const snap = await getDoc(doc(db, 'channels', selected.id));
+        if (!snap.exists()) return showToast('Канал больше не существует', 'error');
+        const channel = { ...selected, ...snap.data(), id: selected.id };
+        const uid = authState.user.uid;
+        const admins = Array.isArray(channel.admins) ? channel.admins : [];
+        const members = Array.isArray(channel.members) ? channel.members : [];
+        const canManage = admins.includes(uid) || channel.createdBy === uid;
+        if (!canManage) return showToast('Управление каналом доступно только администраторам', 'error');
+
+        uiState.currentChannel = { ...channel, isAdmin: true };
+        const modal = document.getElementById('channelManageModal');
+        const title = document.getElementById('channelManageTitle');
+        const body = document.getElementById('channelManageContent');
+        title.textContent = 'Настройки канала';
+        body.replaceChildren();
+
+        const avatar = document.createElement('div');
+        avatar.className = 'group-settings-avatar';
+        if (channel.avatar) {
+            const img = document.createElement('img');
+            img.src = channel.avatar;
+            img.alt = 'Аватар канала';
+            avatar.appendChild(img);
+        } else avatar.textContent = '📢';
+        body.appendChild(avatar);
+
+        const form = document.createElement('div');
+        form.className = 'group-settings-form';
+        const nameLabel = document.createElement('label');
+        nameLabel.textContent = 'Название канала';
+        const nameInput = document.createElement('input');
+        nameInput.maxLength = 80;
+        nameInput.value = channel.name || '';
+        const descLabel = document.createElement('label');
+        descLabel.textContent = 'Описание';
+        const descInput = document.createElement('textarea');
+        descInput.rows = 2;
+        descInput.maxLength = 300;
+        descInput.value = channel.description || '';
+        const avatarLabel = document.createElement('label');
+        avatarLabel.textContent = 'Аватар канала';
+        const avatarInput = document.createElement('input');
+        avatarInput.type = 'file';
+        avatarInput.accept = 'image/*';
+        const save = document.createElement('button');
+        save.className = 'btn btn-primary';
+        save.type = 'button';
+        save.textContent = 'Сохранить изменения';
+        save.onclick = async () => {
+            const name = nameInput.value.trim();
+            if (!name) return showToast('Название канала не может быть пустым', 'error');
+            try {
+                let avatarUrl = channel.avatar || null;
+                if (avatarInput.files?.[0]) avatarUrl = await compressImage(avatarInput.files[0], 300 * 1024);
+                const patch = { name, description: descInput.value.trim(), avatar: avatarUrl };
+                await updateDoc(doc(db, 'channels', channel.id), patch);
+                uiState.currentChannel = { ...uiState.currentChannel, ...patch };
+                const channelList = (authState.userData.channels || []).map(item => item.id === channel.id ? { ...item, ...patch } : item);
+                authState.userData.channels = channelList;
+                await updateDoc(doc(db, 'users', uid), { channels: channelList });
+                await DB.Lists.setChannels(uid, channelList);
+                document.getElementById('chatName').textContent = '📢 ' + name;
+                await loadChannels();
+                showToast('Настройки канала сохранены', 'success');
+                await showChannelSettings();
+            } catch (err) {
+                console.error('[Channel settings] Save failed:', err);
+                showToast('Не удалось сохранить канал. Проверьте права Firestore.', 'error');
+            }
+        };
+        form.append(nameLabel, nameInput, descLabel, descInput, avatarLabel, avatarInput, save);
+        body.appendChild(form);
+
+        const heading = document.createElement('h4');
+        heading.className = 'settings-section-title';
+        heading.textContent = 'Подписчики';
+        body.appendChild(heading);
+        const memberList = document.createElement('div');
+        memberList.className = 'group-member-list';
+        for (const memberUid of members) {
+            const contact = (authState.userData.contacts || []).find(c => c.uid === memberUid);
+            const row = document.createElement('div');
+            row.className = 'group-member-row';
+            const info = document.createElement('div');
+            info.className = 'group-member-info';
+            const name = document.createElement('strong');
+            name.textContent = contact?.nickname || contact?.globalId || (memberUid === uid ? 'Вы' : 'Участник');
+            const role = document.createElement('span');
+            role.textContent = admins.includes(memberUid) ? 'Администратор' : 'Подписчик';
+            info.append(name, role);
+            row.appendChild(info);
+            if (memberUid !== channel.createdBy && memberUid !== uid) {
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'action-btn danger';
+                remove.textContent = '−';
+                remove.setAttribute('aria-label', 'Удалить подписчика');
+                remove.onclick = async () => {
+                    if (!confirm('Удалить пользователя из канала?')) return;
+                    try {
+                        const nextMembers = members.filter(id => id !== memberUid);
+                        const nextAdmins = admins.filter(id => id !== memberUid);
+                        await updateDoc(doc(db, 'channels', channel.id), {
+                            members: nextMembers, admins: nextAdmins, memberCount: nextMembers.length
+                        });
+                        await loadChannels();
+                        await showChannelSettings();
+                        showToast('Подписчик удалён', 'success');
+                    } catch (err) {
+                        console.error('[Channel member remove]', err);
+                        showToast('Не удалось удалить подписчика. Проверьте права Firestore.', 'error');
+                    }
+                };
+                row.appendChild(remove);
+            }
+            memberList.appendChild(row);
+        }
+        body.appendChild(memberList);
+
+        const available = (authState.userData.contacts || []).filter(contact => contact?.uid && !members.includes(contact.uid));
+        if (available.length) {
+            const addRow = document.createElement('div');
+            addRow.className = 'group-add-member';
+            const select = document.createElement('select');
+            select.setAttribute('aria-label', 'Выберите подписчика');
+            for (const contact of available) {
+                const option = document.createElement('option');
+                option.value = contact.uid;
+                option.textContent = contact.nickname || contact.globalId || 'Контакт';
+                select.appendChild(option);
+            }
+            const add = document.createElement('button');
+            add.className = 'btn btn-secondary';
+            add.type = 'button';
+            add.textContent = 'Добавить';
+            add.onclick = async () => {
+                const contact = available.find(item => item.uid === select.value);
+                if (!contact) return;
+                try {
+                    const nextMembers = [...new Set([...members, contact.uid])];
+                    await updateDoc(doc(db, 'channels', channel.id), {
+                        members: nextMembers, memberCount: nextMembers.length
+                    });
+                    await loadChannels();
+                    await showChannelSettings();
+                    showToast('Подписчик добавлен', 'success');
+                } catch (err) {
+                    console.error('[Channel member add]', err);
+                    showToast('Не удалось добавить подписчика. Проверьте права Firestore.', 'error');
+                }
+            };
+            addRow.append(select, add);
+            body.appendChild(addRow);
+        }
+        modal.classList.add('active');
+    } catch (err) {
+        console.error('[Channel settings] Failed to load:', err);
+        showToast('Не удалось загрузить настройки канала. Проверьте права Firestore.', 'error');
     }
 }
 
