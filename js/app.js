@@ -24,6 +24,7 @@ import {
     loadTheme,
     renderUserProfile,
     loadChats,
+    subscribeDirectChatUpdates,
     loadContacts,
     loadGroups,
     loadChannels,
@@ -380,6 +381,7 @@ async function bootMessenger(user, userData) {
         uiState.autoDeleteHours = authState.userData?.autoDeleteHours || 0;
 
         loadChats();
+        subscribeDirectChatUpdates();
         loadGroups();
         loadChannels();
         loadContacts();
@@ -1056,7 +1058,7 @@ async function createGroupFromModal() {
     const name = document.getElementById('groupName').value.trim();
     if (!name) return showToast('Введите название', 'error');
     try {
-        const { addDoc, collection, doc, setDoc, updateDoc, getDoc, arrayUnion, serverTimestamp } =
+        const { addDoc, collection, doc, updateDoc, getDoc, arrayUnion, serverTimestamp } =
             await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
         const { db } = await import('./config.js');
 
@@ -1083,24 +1085,9 @@ async function createGroupFromModal() {
             lastMessageTime: null
         });
 
-        // Дополнительная ACL-карточка в новой коллекции iceberg.
-        // Не меняет старую схему groups/users и не мешает работе старых клиентов.
-        await setDoc(doc(db, 'iceberg', 'group_' + ref.id), {
-            type: 'group',
-            resourceId: ref.id,
-            ownerId: authState.user.uid,
-            memberUids: members.map(m => m.uid),
-            adminUids: [authState.user.uid],
-            createdAt: serverTimestamp(),
-            schemaVersion: 1
-        }).catch(e => console.warn('[Iceberg ACL] Не удалось сохранить ACL группы:', e));
-
-        for (const m of members) {
-            const uRef = doc(db, 'users', m.uid);
-            await updateDoc(uRef, {
-                groups: arrayUnion({ id: ref.id, name, memberCount: members.length, role: m.role })
-            }).catch(() => {});
-        }
+        // /groups/{id} is the authoritative membership record. Each member's
+        // own list is refreshed from that collection, without writing another
+        // person's private /users/{uid} document.
 
         document.getElementById('createGroupModal').classList.remove('active');
         showToast(`✅ Группа "${name}" создана!`, 'success');
@@ -1118,7 +1105,7 @@ async function createChannelFromModal() {
     const description = document.getElementById('channelDescription').value.trim();
     if (!name) return showToast('Введите название', 'error');
     try {
-        const { addDoc, collection, doc, setDoc, updateDoc, arrayUnion, serverTimestamp } =
+        const { addDoc, collection, doc, updateDoc, arrayUnion, serverTimestamp } =
             await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
         const { db } = await import('./config.js');
 
@@ -1133,22 +1120,21 @@ async function createChannelFromModal() {
             memberCount: 1
         });
 
-        // Дополнительная ACL-карточка; старые поля channels/users остаются без изменений.
-        await setDoc(doc(db, 'iceberg', 'channel_' + ref.id), {
-            type: 'channel',
-            resourceId: ref.id,
-            ownerId: authState.user.uid,
-            memberUids: [authState.user.uid],
-            adminUids: [authState.user.uid],
-            createdAt: serverTimestamp(),
-            schemaVersion: 1
-        }).catch(e => console.warn('[Iceberg ACL] Не удалось сохранить ACL канала:', e));
-
         const channelEntry = {
-            id: ref.id, name, description, isAdmin: true,
-            memberCount: 1, unread: false, lastMessage: '', lastMessageTime: null
+            id: ref.id,
+            name,
+            description,
+            avatar: null,
+            createdBy: authState.user.uid,
+            admins: [authState.user.uid],
+            members: [authState.user.uid],
+            isChannel: true,
+            isAdmin: true,
+            memberCount: 1,
+            unread: false,
+            lastMessage: '',
+            lastMessageTime: null
         };
-
         await updateDoc(doc(db, 'users', authState.user.uid), {
             channels: arrayUnion(channelEntry)
         });
