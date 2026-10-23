@@ -1380,7 +1380,7 @@ async function showChannelSettings() {
     const selected = uiState.currentChannel;
     if (!selected?.id) return;
     try {
-        const { doc, getDoc, updateDoc } =
+        const { doc, getDoc, updateDoc, serverTimestamp } =
             await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
         const { db } = await import('./config.js');
         const snap = await getDoc(doc(db, 'channels', selected.id));
