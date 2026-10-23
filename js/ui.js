@@ -1192,17 +1192,27 @@ function renderChatHeader() {
             ? '🔮 SEDA Pro активен'
             : (c.mood || '🔒 Личный чат');
     } else if (g) {
-        nameEl.textContent = g.name;
-        avEl.textContent = '👥';
+        nameEl.textContent = g.name || 'Группа';
+        if (g.avatar) {
+            const img = document.createElement('img');
+            img.src = g.avatar;
+            img.alt = 'Аватар группы';
+            avEl.appendChild(img);
+        } else avEl.textContent = '👥';
         statusEl.textContent = uiState.sedaEnabledForCurrentChat
             ? '🔮 SEDA Pro активен'
-            : `👥 ${g.memberCount || 0} участников`;
+            : `👥 ${g.memberCount || g.memberIds?.length || 0} участников`;
     } else if (ch) {
-        nameEl.textContent = '📢 ' + ch.name;
-        avEl.textContent = '📢';
+        nameEl.textContent = ch.name || 'Канал';
+        if (ch.avatar) {
+            const img = document.createElement('img');
+            img.src = ch.avatar;
+            img.alt = 'Аватар канала';
+            avEl.appendChild(img);
+        } else avEl.textContent = '📢';
         statusEl.textContent = ch.isAdmin
             ? '👑 Вы администратор'
-            : `📢 ${ch.memberCount || 0} подписчиков`;
+            : `📢 ${ch.memberCount || ch.members?.length || 0} подписчиков`;
     }
 }
 
@@ -1967,17 +1977,13 @@ export async function sendMediaFile(input) {
             mediaEncrypted = true;
             chatContext.sedaKey = keyStr;
             if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = keyStr;
-        } else if (chatContext.currentChat?.isSeda && chatContext.sedaEnabled && authState.sedaProActivated) {
-            let keyStr = chatContext.sedaKey;
-            if (!keyStr) {
-                keyStr = serializeKey(generateSedaKey());
-                await DB.saveSedaKey(chatContext.chatId, keyStr);
-                chatContext.sedaKey = keyStr;
-                if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = keyStr;
+        } else if (chatContext.currentChat?.isSeda && authState.sedaProActivated) {
+            const keyStr = chatContext.sedaKey;
+            if (!keyStr?.startsWith('SEDAKEY:')) {
+                showToast('Ключ SEDA ещё не получен. Повторите отправку после установки соединения.', 'info');
+                return;
             }
-            mediaToSend = chatContext.currentChat?.isSeda
-                ? await sedaUltraEncryptWithKey(dataUrl, keyStr)
-                : await icebergBaseEncrypt(dataUrl, keyStr);
+            mediaToSend = await sedaUltraEncryptWithKey(dataUrl, keyStr);
             mediaEncrypted = true;
         }
 
@@ -2084,17 +2090,13 @@ export async function toggleVoiceRecording() {
                         mediaEncrypted = true;
                         chatContext.sedaKey = keyStr;
                         if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = keyStr;
-                    } else if (chatContext.currentChat?.isSeda && chatContext.sedaEnabled && authState.sedaProActivated) {
-                        let keyStr = chatContext.sedaKey;
-                        if (!keyStr) {
-                            keyStr = serializeKey(generateSedaKey());
-                            await DB.saveSedaKey(chatContext.chatId, keyStr);
-                            chatContext.sedaKey = keyStr;
-                            if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = keyStr;
+                    } else if (chatContext.currentChat?.isSeda && authState.sedaProActivated) {
+                        const keyStr = chatContext.sedaKey;
+                        if (!keyStr?.startsWith('SEDAKEY:')) {
+                            showToast('Ключ SEDA ещё не получен. Запись не отправлена.', 'info');
+                            return;
                         }
-                        dataUrl = chatContext.currentChat?.isSeda
-                            ? await sedaUltraEncryptWithKey(dataUrl, keyStr)
-                            : await icebergBaseEncrypt(dataUrl, keyStr);
+                        dataUrl = await sedaUltraEncryptWithKey(dataUrl, keyStr);
                         mediaEncrypted = true;
                     }
                     const preview = '🎤 Голосовое';
