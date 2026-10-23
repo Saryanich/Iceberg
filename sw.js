@@ -4,8 +4,8 @@
 // ⚠️ ОБЯЗАТЕЛЬНО в корне репозитория (не в js/)
 // ==================================================================
 
-const CACHE_NAME = 'iceberg-v2.0.7';
-const RUNTIME_CACHE = 'iceberg-runtime-v2.0.7';
+const CACHE_NAME = 'iceberg-v2.0.8';
+const RUNTIME_CACHE = 'iceberg-runtime-v2.0.8';
 
 // Файлы, которые кэшируем при установке (app shell)
 const PRECACHE_URLS = [
@@ -113,7 +113,9 @@ self.addEventListener('fetch', (event) => {
         || url.pathname.endsWith('index.html');
 
     if (isStatic) {
-        event.respondWith(cacheFirst(request));
+        // Refresh app shell from the network first when online; use cached files offline.
+        // This prevents a permanently cached broken startup script from trapping the user.
+        event.respondWith(networkFirst(request));
     } else {
         event.respondWith(networkFirst(request));
     }
