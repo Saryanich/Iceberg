@@ -707,12 +707,46 @@ function bindUIEvents() {
         }
     });
 
-    document.getElementById('plusBtn').onclick = (e) => {
-        e.stopPropagation();
-        document.getElementById('plusMenu').classList.toggle('show');
+    const plusButton = document.getElementById('plusBtn');
+    const plusMenu = document.getElementById('plusMenu');
+    const positionPlusMenu = () => {
+        if (!plusButton || !plusMenu) return;
+        const rect = plusButton.getBoundingClientRect();
+        const width = Math.max(220, Math.min(252, window.innerWidth - 24));
+        plusMenu.style.position = 'fixed';
+        plusMenu.style.width = width + 'px';
+        plusMenu.style.maxWidth = 'calc(100vw - 24px)';
+        plusMenu.style.right = 'auto';
+        const left = Math.max(12, Math.min(rect.right - width, window.innerWidth - width - 12));
+        plusMenu.style.left = left + 'px';
+        const menuHeight = plusMenu.scrollHeight || 270;
+        let top = rect.bottom + 8;
+        if (top + menuHeight > window.innerHeight - 12) top = Math.max(12, rect.top - menuHeight - 8);
+        plusMenu.style.top = top + 'px';
+    };
+    plusButton.onclick = (event) => {
+        event.stopPropagation();
+        if (plusMenu.classList.contains('show')) {
+            plusMenu.classList.remove('show');
+            plusButton.setAttribute('aria-expanded', 'false');
+        } else {
+            positionPlusMenu();
+            plusMenu.classList.add('show');
+            plusButton.setAttribute('aria-expanded', 'true');
+        }
     };
     document.addEventListener('click', () => {
-        document.getElementById('plusMenu').classList.remove('show');
+        plusMenu.classList.remove('show');
+        plusButton.setAttribute('aria-expanded', 'false');
+    });
+    window.addEventListener('resize', () => {
+        if (plusMenu.classList.contains('show')) positionPlusMenu();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && plusMenu.classList.contains('show')) {
+            plusMenu.classList.remove('show');
+            plusButton.setAttribute('aria-expanded', 'false');
+        }
     });
 
     document.querySelectorAll('.plus-menu-item').forEach((el, i) => {
@@ -729,6 +763,7 @@ function bindUIEvents() {
         el.onclick = (event) => {
             event.stopPropagation();
             document.getElementById('plusMenu').classList.remove('show');
+            document.getElementById('plusBtn').setAttribute('aria-expanded', 'false');
             actions[i]?.();
         };
     });
