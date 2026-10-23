@@ -912,7 +912,7 @@ export async function loadChannels() {
 const baseHandshakeListeners = new Map();
 async function ensureIcebergBaseKey(chatId, peerUid) {
     if (!authState.user?.uid || !chatId || !peerUid || uiState.currentChat?.isSeda) return null;
-    const cached = await DB.getSedaKey(chatId);
+    let cached = await DB.getSedaKey(chatId);
     const handshakeId = 'base_' + chatId;
     const ref = doc(db, 'seda_handshakes', handshakeId);
     let existing = await getDoc(ref);
@@ -928,26 +928,43 @@ async function ensureIcebergBaseKey(chatId, peerUid) {
             await deleteDoc(ref);
             await DB.deleteECDHKeys(handshakeId);
             await DB.deleteSedaKey(chatId);
+            cached = null;
             existing = await getDoc(ref);
         }
     }
     let privJwk, baseKey, pendingHandshake = false;
     if (cached?.startsWith('ICEBERGBASEKEY:')) {
         if (!existing.exists()) {
-            if (uiState.currentChatId === chatId) uiState.currentSedaKey = cached;
-            return cached;
-        }
-        const status = existing.data();
-        if (status.mode === 'iceberg-base' && status.peerKeyStored === true) {
-            if (status.initiator === authState.user.uid) {
-                await updateDoc(ref, { initiatorAck: true, initiatorAckAt: Date.now() }).catch(() => {});
+            if (await DB.isSedaKeyShared(chatId)) {
+                if (uiState.currentChatId === chatId) uiState.currentSedaKey = cached;
+                return cached;
             }
-            if (uiState.currentChatId === chatId) uiState.currentSedaKey = cached;
-            return cached;
+            // A legacy/local-only Base key was never confirmed by the peer.
+            // Discard it and negotiate a fresh shared key instead of silently using it.
+            await DB.deleteSedaKey(chatId);
+            await DB.deleteECDHKeys(handshakeId);
+            cached = null;
+            if (uiState.currentChatId === chatId) uiState.currentSedaKey = null;
+        } else {
+            const status = existing.data();
+            if (status.mode === 'iceberg-base' && status.peerKeyStored === true) {
+                // Both peers reported the handshake complete; mark older cache entries as shared.
+                await DB.markSedaKeyShared(chatId);
+                if (status.initiator === authState.user.uid) {
+                    await updateDoc(ref, { initiatorAck: true, initiatorAckAt: Date.now() }).catch(() => {});
+                }
+                if (uiState.currentChatId === chatId) uiState.currentSedaKey = cached;
+                return cached;
+            }
+            if (status.mode !== 'iceberg-base' || status.initiator !== authState.user.uid || status.peer !== peerUid) {
+                // The other participant is initiating a fresh exchange. A stale local key must
+                // not remain usable while the responder listener installs the new one.
+                await DB.deleteSedaKey(chatId);
+                if (uiState.currentChatId === chatId) uiState.currentSedaKey = null;
+                return null;
+            }
         }
-        if (status.mode !== 'iceberg-base' || status.initiator !== authState.user.uid || status.peer !== peerUid) {
-            return null;
-        }
+    }
         // Resume the pending initiator handshake after reload.
         const saved = await DB.getECDHKeys(handshakeId);
         if (!saved) throw new Error('Нет локального ключа рукопожатия');
@@ -1006,6 +1023,7 @@ async function ensureIcebergBaseKey(chatId, peerUid) {
                 const privateKey = await crypto.subtle.importKey('jwk', privJwk,
                     { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
                 if (data.peerKeyStored) {
+                    await DB.markSedaKeyShared(chatId);
                     await updateDoc(ref, { initiatorAck: true, initiatorAckAt: Date.now() });
                     if (uiState.currentChatId === chatId) {
                         uiState.currentSedaKey = baseKey;
