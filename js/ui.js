@@ -948,13 +948,23 @@ async function ensureIcebergBaseKey(chatId, peerUid) {
         } else {
             const status = existing.data();
             if (status.mode === 'iceberg-base' && status.peerKeyStored === true) {
-                // Both peers reported the handshake complete; mark older cache entries as shared.
-                await DB.markSedaKeyShared(chatId);
                 if (status.initiator === authState.user.uid) {
+                    // The initiator generated this exact key and the peer confirmed storing it.
+                    await DB.markSedaKeyShared(chatId);
                     await updateDoc(ref, { initiatorAck: true, initiatorAckAt: Date.now() }).catch(() => {});
+                    if (uiState.currentChatId === chatId) uiState.currentSedaKey = cached;
+                    return cached;
                 }
-                if (uiState.currentChatId === chatId) uiState.currentSedaKey = cached;
-                return cached;
+                // As the responder, trust only a key that this device itself persisted
+                // after decrypting the handshake. If the marker is missing, recover below.
+                if (await DB.isSedaKeyShared(chatId)) {
+                    if (uiState.currentChatId === chatId) uiState.currentSedaKey = cached;
+                    return cached;
+                }
+                await DB.deleteSedaKey(chatId);
+                cached = null;
+                if (uiState.currentChatId === chatId) uiState.currentSedaKey = null;
+                return null;
             }
             if (status.mode !== 'iceberg-base' || status.initiator !== authState.user.uid || status.peer !== peerUid) {
                 // The other participant is initiating a fresh exchange. A stale local key must
