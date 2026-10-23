@@ -582,6 +582,19 @@ export async function showContactCard(contact) {
     modal.classList.add('active');
 }
 
+async function pruneExpiredStories(uid) {
+    const q = query(
+        collection(db, 'user_stories', uid, 'items'),
+        where('expiresAt', '<=', Timestamp.fromMillis(Date.now())),
+        limit(50)
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) return;
+    const batch = writeBatch(db);
+    snap.docs.forEach(story => batch.delete(story.ref));
+    await batch.commit();
+}
+
 async function fetchUserStories(uid) {
     const q = query(
         collection(db, 'user_stories', uid, 'items'),
@@ -645,6 +658,7 @@ export async function loadOwnStories() {
     list.replaceChildren();
     let items = [];
     try {
+        await pruneExpiredStories(authState.user.uid);
         items = await fetchUserStories(authState.user.uid);
     } catch (err) {
         console.warn('[Stories] Не удалось загрузить свои истории:', err);
@@ -693,6 +707,7 @@ export async function loadOwnStories() {
 export async function uploadOwnStories(files) {
     if (!authState.user?.uid || !files?.length) return;
     try {
+        await pruneExpiredStories(authState.user.uid);
         const current = await fetchUserStories(authState.user.uid);
         const remaining = MAX_STORIES - current.length;
         if (remaining <= 0) {
