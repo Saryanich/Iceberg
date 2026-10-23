@@ -35,7 +35,6 @@
     <!-- ЭКРАН ЗАГРУЗКИ -->
 <div id="loadingScreen" role="status" aria-live="polite">
     <div class="loading-logo-wrap">
-        <div class="loading-ring" aria-hidden="true"></div>
         <img src="https://i.ibb.co/8JY0bXs/IMG-0335.jpg" alt="Айсберг" class="loading-logo">
     </div>
     <div class="loading-title">АЙСБЕРГ</div>
@@ -521,7 +520,8 @@
         const showStartupError = () => {
             const loading = document.getElementById('loadingScreen');
             const offline = document.getElementById('offlineScreen');
-            if (!loading || !offline || loading.classList.contains('hidden')) return;
+            if (window.__icebergStartupResolved || !loading || !offline || loading.classList.contains('hidden')) return;
+            window.__icebergStartupResolved = true;
             loading.classList.add('hidden');
             offline.hidden = false;
             const heading = offline.querySelector('h1');
