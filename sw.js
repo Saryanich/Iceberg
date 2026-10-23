@@ -4,8 +4,8 @@
 // ⚠️ ОБЯЗАТЕЛЬНО в корне репозитория (не в js/)
 // ==================================================================
 
-const CACHE_NAME = 'iceberg-v2.0.6';
-const RUNTIME_CACHE = 'iceberg-runtime-v2.0.6';
+const CACHE_NAME = 'iceberg-v2.0.7';
+const RUNTIME_CACHE = 'iceberg-runtime-v2.0.7';
 
 // Файлы, которые кэшируем при установке (app shell)
 const PRECACHE_URLS = [
@@ -20,6 +20,12 @@ const PRECACHE_URLS = [
     './js/ui.js',
     './js/push.js',
     './js/app.js',
+    // Cache Firebase SDK modules so the app can boot offline after its first online load.
+    'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js',
+    'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js',
+    'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js',
+    'https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js',
+    'https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging.js',
     'https://i.ibb.co/8JY0bXs/IMG-0335.jpg'
 ];
 
@@ -119,7 +125,7 @@ async function cacheFirst(request) {
 
     try {
         const response = await fetch(request);
-        if (response && response.status === 200 && response.type === 'basic') {
+        if (response && response.ok && response.type !== 'opaque') {
             const cache = await caches.open(RUNTIME_CACHE);
             cache.put(request, response.clone());
         }
@@ -137,7 +143,7 @@ async function cacheFirst(request) {
 async function networkFirst(request) {
     try {
         const response = await fetch(request);
-        if (response && response.status === 200 && response.type === 'basic') {
+        if (response && response.ok && response.type !== 'opaque') {
             const cache = await caches.open(RUNTIME_CACHE);
             cache.put(request, response.clone());
         }
