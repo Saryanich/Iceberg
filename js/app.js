@@ -1327,7 +1327,8 @@ async function showGroupInfo() {
         }
 
         document.getElementById('clearGroupBtn').style.display = 'block';
-        document.getElementById('leaveGroupBtn').style.display = 'block';
+        // Keep one unambiguous leave action instead of showing two identical buttons.
+        document.getElementById('leaveGroupBtn').style.display = 'none';
         document.getElementById('deleteGroupFromListBtn').textContent = '🚪 Выйти из группы';
         document.getElementById('deleteGroupFromListBtn').style.display = 'block';
         modal.classList.add('active');
@@ -1354,6 +1355,9 @@ async function leaveCurrentGroup() {
         const memberIds = (group.memberIds || (group.members || []).map(m => typeof m === 'string' ? m : m?.uid).filter(Boolean)).filter(id => id !== uid);
         let adminIds = (group.adminIds || []).filter(id => id !== uid);
         if (!memberIds.length) {
+            // Remove the access-control parent too. Firestore does not cascade-delete
+            // the nested message documents, but without this parent they are inaccessible.
+            await deleteDoc(doc(db, 'messages', 'group_' + selected.id)).catch(() => {});
             await deleteDoc(ref);
         } else {
             if (!adminIds.length) {
