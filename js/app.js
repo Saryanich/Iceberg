@@ -1688,9 +1688,7 @@ async function waitForFirebaseAuthAndRoute() {
             if (done) return;
             done = true;
             try { unsub(); } catch {}
-            showOfflineScreen(navigator.onLine
-                ? 'Сервисы Айсберга не ответили вовремя. Проверьте подключение и попробуйте снова.'
-                : 'Нет подключения к интернету. Когда сеть восстановится, нажмите «Повторить попытку».');
+            showOfflineScreen('Ошибка подключения к серверу, попробуйте позже или проверьте подключение к интернету.');
             resolve();
         }, 5000);
 
