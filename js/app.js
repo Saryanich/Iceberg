@@ -341,10 +341,29 @@ async function handle2FACancel() {
     showAuthScreen();
 }
 
+async function syncPublicProfile(user = authState.user, profile = authState.userData) {
+    if (!user?.uid || !profile) return;
+    const { doc, setDoc, serverTimestamp } =
+        await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+    const { db } = await import('./config.js');
+    const publicProfile = {
+        uid: user.uid,
+        globalId: profile.globalId || '',
+        nickname: profile.nickname || 'Пользователь',
+        avatar: profile.avatar || null,
+        mood: profile.mood || '',
+        updatedAt: serverTimestamp()
+    };
+    await setDoc(doc(db, 'public_profiles', user.uid), publicProfile, { merge: true });
+}
+
 async function bootMessenger(user, userData) {
     try {
         authState.user = user;
         if (userData) authState.userData = userData;
+        syncPublicProfile(user, authState.userData).catch(err =>
+            console.warn('[Public profile] Не удалось обновить публичный профиль:', err)
+        );
 
         loadTheme();
         initStickerPicker();
@@ -572,7 +591,7 @@ function bindUIEvents() {
         if (!file) return;
         try {
             const { compressImage } = await import('./ui.js');
-            const dataUrl = await compressImage(file, 1024 * 1024);
+            const dataUrl = await compressImage(file, 300 * 1024);
             authState.userData.avatar = dataUrl;
 
             const av = document.getElementById('profileAvatarBig');
@@ -584,6 +603,7 @@ function bindUIEvents() {
             const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
             const { db } = await import('./config.js');
             await updateDoc(doc(db, 'users', authState.user.uid), { avatar: dataUrl });
+            await syncPublicProfile();
             await DB.setCachedProfile(authState.user.uid, authState.userData);
             renderUserProfile();
             showToast('✅ Аватар обновлён', 'success');
@@ -608,6 +628,7 @@ function bindUIEvents() {
             authState.userData.lastName = ln;
             authState.userData.mood = mood;
             authState.userData.nickname = nick;
+            await syncPublicProfile();
             await DB.setCachedProfile(authState.user.uid, authState.userData);
             renderUserProfile();
             showToast('✅ Профиль сохранён', 'success');
