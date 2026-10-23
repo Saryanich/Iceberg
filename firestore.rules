@@ -426,6 +426,9 @@ service cloud.firestore {
           && resource.data.peerPublicKey == null)
         || (request.auth.uid == resource.data.peer
           && resource.data.initiatorAck == true)
+        || (request.auth.uid == resource.data.initiator
+          && resource.data.expiresAt is number
+          && resource.data.expiresAt < request.time.toMillis())
       );
     }
 
