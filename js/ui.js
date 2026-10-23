@@ -2745,25 +2745,37 @@ export function updateSedaUI() {
 }
 
 function startChatMetaListener(chat) {
-    if (uiState.chatMetaUnsub) uiState.chatMetaUnsub();
+    if (uiState.chatMetaUnsub) {
+        try { uiState.chatMetaUnsub(); } catch {}
+        uiState.chatMetaUnsub = null;
+    }
     if (!chat || !chat.uid || chat.isSeda) return;
 
-    uiState.chatMetaUnsub = onSnapshot(doc(db, 'users', chat.uid), (snap) => {
-        if (!snap.exists()) return;
-        const d = snap.data();
-        const statusEl = document.getElementById('chatStatus');
-        if (!statusEl) return;
-
-        if (d.typing && d.typingUntil > Date.now()) {
-            statusEl.textContent = 'печатает...';
+    // Presence is intentionally separate from the private /users document.
+    uiState.chatMetaUnsub = onSnapshot(doc(db, 'presence', chat.uid), (snap) => {
+        if (!snap.exists()) {
+            const statusEl = document.getElementById('chatStatus');
+            if (statusEl) statusEl.textContent = chat.mood || '🔒 Личный чат';
             return;
         }
-        if (d.online) {
-            statusEl.textContent = 'в сети';
-        } else if (d.lastSeen) {
-            const t = d.lastSeen.toDate?.();
-            statusEl.textContent = 'был(а) ' + (t ? formatTime(t) : '');
+        const data = snap.data();
+        const statusEl = document.getElementById('chatStatus');
+        if (!statusEl || uiState.currentChat?.uid !== chat.uid) return;
+
+        if (data.typing && data.typingUntil > Date.now()) {
+            statusEl.textContent = 'печатает…';
+            return;
         }
+        if (data.online) {
+            statusEl.textContent = 'в сети';
+        } else if (data.lastSeen) {
+            const time = data.lastSeen.toDate?.();
+            statusEl.textContent = 'был(а) ' + (time ? formatTime(time) : '');
+        } else {
+            statusEl.textContent = chat.mood || 'не в сети';
+        }
+    }, error => {
+        console.warn('[Presence] Не удалось загрузить статус собеседника:', error);
     });
 }
 
@@ -2771,15 +2783,30 @@ export async function notifyTyping() {
     if (!uiState.currentChat || !uiState.currentChat.uid) return;
     if (uiState.typingTimeout) clearTimeout(uiState.typingTimeout);
     try {
-        await updateDoc(doc(db, 'users', authState.user.uid), {
-            typing: true,
-            typingUntil: Date.now() + 2000
-        }).catch(() => {});
+        const typingUntil = Date.now() + 2000;
+        await Promise.all([
+            updateDoc(doc(db, 'users', authState.user.uid), {
+                typing: true,
+                typingUntil
+            }).catch(() => {}),
+            setDoc(doc(db, 'presence', authState.user.uid), {
+                uid: authState.user.uid,
+                typing: true,
+                typingUntil,
+                updatedAt: serverTimestamp()
+            }, { merge: true }).catch(() => {})
+        ]);
         uiState.typingTimeout = setTimeout(() => {
             updateDoc(doc(db, 'users', authState.user.uid), {
                 typing: false,
                 typingUntil: 0
             }).catch(() => {});
+            setDoc(doc(db, 'presence', authState.user.uid), {
+                uid: authState.user.uid,
+                typing: false,
+                typingUntil: 0,
+                updatedAt: serverTimestamp()
+            }, { merge: true }).catch(() => {});
         }, 2000);
     } catch {}
 }
