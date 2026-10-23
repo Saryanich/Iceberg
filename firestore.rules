@@ -98,7 +98,9 @@ service cloud.firestore {
     // Public-facing profile fields only; never mirror email or security metadata here.
     match /public_profiles/{uid} {
       allow get: if signedIn();
-      allow list: if false;
+      // Only public display fields are stored here; permit exact nickname queries
+      // used by the in-app contact finder. Private /users documents remain unlistable.
+      allow list: if signedIn();
       allow create, update: if isOwner(uid)
         && request.resource.data.uid == uid
         && request.resource.data.keys().hasOnly([
