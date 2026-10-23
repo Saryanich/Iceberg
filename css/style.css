@@ -2217,13 +2217,8 @@ input::placeholder, textarea::placeholder {
         radial-gradient(ellipse at 50% 28%, rgba(39, 105, 164, .24), transparent 44%),
         linear-gradient(145deg, #050914 0%, #0a1427 52%, #050812 100%);
     opacity: 1;
-    transition: opacity .42s ease, filter .42s ease, transform .42s ease;
-}
-.offline-screen.is-exiting {
-    opacity: 0;
-    filter: blur(12px);
-    transform: scale(1.025);
-    pointer-events: none;
+    animation: offlineScreenIn .38s ease-out both;
+    transition: background-color .25s ease;
 }
 .offline-card {
     width: min(100%, 430px);
@@ -2266,13 +2261,6 @@ input::placeholder, textarea::placeholder {
     transform: translate(-50%, -50%) rotate(45deg);
 }
 .offline-mark span::after { transform: translate(-50%, -50%) rotate(-45deg); }
-.offline-eyebrow {
-    margin-bottom: 12px;
-    color: #80cfff;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: .24em;
-}
 .offline-card h1 {
     margin: 0 0 12px;
     color: #f2f8ff;
@@ -2285,27 +2273,6 @@ input::placeholder, textarea::placeholder {
     color: #a8bbd1;
     font-size: 14px;
     line-height: 1.65;
-}
-.offline-status {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
-    margin: 23px 0 20px;
-    color: #a8bbd1;
-    font-size: 12px;
-}
-.offline-status-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #ff8e9b;
-    box-shadow: 0 0 12px rgba(255, 100, 125, .45);
-}
-.offline-screen.is-checking .offline-status-dot {
-    background: #80cfff;
-    box-shadow: 0 0 12px rgba(100, 181, 246, .6);
-    animation: offlinePulse 1s ease-in-out infinite;
 }
 .offline-retry {
     width: 100%;
@@ -2336,15 +2303,17 @@ input::placeholder, textarea::placeholder {
     color: #7188a2;
     font-size: 11px;
 }
+@keyframes offlineScreenIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
 @keyframes offlineCardIn {
     from { opacity: 0; transform: translateY(12px) scale(.985); }
     to { opacity: 1; transform: translateY(0) scale(1); }
 }
-@keyframes offlinePulse { 50% { opacity: .35; } }
 @keyframes retrySpin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
-    .offline-card, .offline-screen, .offline-screen.is-checking .retry-icon,
-    .offline-screen.is-checking .offline-status-dot { animation: none !important; transition: none !important; }
+    .offline-card, .offline-screen, .offline-screen.is-checking .retry-icon { animation: none !important; transition: none !important; }
 }
 
 
