@@ -943,25 +943,36 @@ function openStories() {
 
 async function searchByGlobalId() {
     const gid = document.getElementById('searchGlobalIdInput').value.trim();
-    if (!gid) return showToast('Введите Global ID', 'error');
+    if (!/^[0-9a-zA-Z]{22}$/.test(gid)) {
+        return showToast('Введите корректный Global ID из 22 символов', 'error');
+    }
     try {
-        const { collection, query, where, getDocs, doc, updateDoc, arrayUnion, limit } =
+        const { doc, getDoc, updateDoc, arrayUnion, setDoc, serverTimestamp } =
             await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
         const { db } = await import('./config.js');
-        const q = query(collection(db, 'users'), where('globalId', '==', gid), limit(1));
-        const snap = await getDocs(q);
-        if (snap.empty) return showToast('Не найден', 'error');
-        const u = snap.docs[0];
-        const ud = u.data();
-        if (u.id === authState.user.uid) return showToast('Это вы', 'error');
 
+        // Never list the private users collection. Resolve one Global ID, then read
+        // only the deliberately-public profile projection.
+        const globalIdSnap = await getDoc(doc(db, 'global_ids', gid));
+        if (!globalIdSnap.exists()) return showToast('Пользователь не найден', 'error');
+        const uid = globalIdSnap.data()?.uid;
+        if (!uid) return showToast('У записи Global ID отсутствует UID', 'error');
+        if (uid === authState.user.uid) return showToast('Это вы', 'error');
+
+        const publicSnap = await getDoc(doc(db, 'public_profiles', uid));
+        const publicData = publicSnap.exists() ? publicSnap.data() : {};
         const contact = {
-            uid: u.id, globalId: ud.globalId, nickname: ud.nickname,
-            email: ud.email, avatar: ud.avatar || null, mood: ud.mood || null
+            uid,
+            globalId: publicData.globalId || gid,
+            nickname: publicData.nickname || gid,
+            avatar: publicData.avatar || null,
+            mood: publicData.mood || ''
         };
-        if (!(authState.userData.contacts || []).some(c => c.uid === contact.uid)) {
+
+        const contacts = Array.isArray(authState.userData.contacts) ? authState.userData.contacts : [];
+        if (!contacts.some(existing => existing.uid === uid)) {
             await updateDoc(doc(db, 'users', authState.user.uid), { contacts: arrayUnion(contact) });
-            authState.userData.contacts = [...(authState.userData.contacts || []), contact];
+            authState.userData.contacts = [...contacts, contact];
             await DB.Lists.setContacts(authState.user.uid, authState.userData.contacts);
         }
         document.getElementById('searchModal').classList.remove('active');
@@ -970,7 +981,10 @@ async function searchByGlobalId() {
         showToast(`✅ ${contact.nickname || contact.globalId} добавлен`, 'success');
         await openChatWithContact(contact);
     } catch (e) {
-        showToast('Ошибка поиска', 'error');
+        console.error('[Global ID search]', { code: e?.code || 'unknown', message: e?.message || String(e) });
+        showToast(e?.code === 'permission-denied'
+            ? 'Нет доступа к публичному профилю. Обновите Firestore Rules.'
+            : 'Не удалось найти пользователя. Проверьте Global ID и подключение.', 'error', 4500);
     }
 }
 
@@ -990,9 +1004,19 @@ async function createGroupFromModal() {
             }).filter(Boolean)
         ];
 
+        const memberIds = members.map(member => member.uid);
         const ref = await addDoc(collection(db, 'groups'), {
-            name, createdAt: serverTimestamp(), createdBy: authState.user.uid,
-            members, memberCount: members.length
+            name,
+            description: '',
+            avatar: null,
+            createdAt: serverTimestamp(),
+            createdBy: authState.user.uid,
+            adminIds: [authState.user.uid],
+            memberIds,
+            members,
+            memberCount: members.length,
+            lastMessage: '',
+            lastMessageTime: null
         });
 
         // Дополнительная ACL-карточка в новой коллекции iceberg.
@@ -1035,8 +1059,14 @@ async function createChannelFromModal() {
         const { db } = await import('./config.js');
 
         const ref = await addDoc(collection(db, 'channels'), {
-            name, description, createdAt: serverTimestamp(), createdBy: authState.user.uid,
-            admins: [authState.user.uid], members: [authState.user.uid], memberCount: 1
+            name,
+            description,
+            avatar: null,
+            createdAt: serverTimestamp(),
+            createdBy: authState.user.uid,
+            admins: [authState.user.uid],
+            members: [authState.user.uid],
+            memberCount: 1
         });
 
         // Дополнительная ACL-карточка; старые поля channels/users остаются без изменений.
