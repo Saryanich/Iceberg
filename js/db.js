@@ -210,13 +210,30 @@ export async function deleteECDHKeys(chatId) {
 // ===================================================================
 // SEDA КЛЮЧИ
 // ===================================================================
-export async function saveSedaKey(chatId, key, encrypted = false) {
-    return await cachePut(STORES.sedaKeys, { chatId, key, encrypted, savedAt: Date.now() });
+export async function saveSedaKey(chatId, key, encrypted = false, shared = false) {
+    return await cachePut(STORES.sedaKeys, {
+        chatId, key, encrypted, shared: !!shared,
+        savedAt: Date.now()
+    });
 }
 
 export async function getSedaKey(chatId) {
     const entry = await cacheGet(STORES.sedaKeys, chatId);
     return entry ? entry.key : null;
+}
+
+// A key is not considered ready for chat encryption until the peer confirms that
+// the same key was derived/decrypted and persisted on the other device.
+export async function isSedaKeyShared(chatId) {
+    const entry = await cacheGet(STORES.sedaKeys, chatId);
+    return entry?.shared === true;
+}
+
+export async function markSedaKeyShared(chatId) {
+    const entry = await cacheGet(STORES.sedaKeys, chatId);
+    if (!entry?.key) return false;
+    await cachePut(STORES.sedaKeys, { ...entry, shared: true, sharedAt: Date.now() });
+    return true;
 }
 
 export async function deleteSedaKey(chatId) {
