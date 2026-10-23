@@ -3365,6 +3365,17 @@ export async function openChatWithContact(contact) {
             authState.userData.chats = chats;
         } catch {}
     }
+    // Explicitly opening a contact re-opens a locally hidden direct chat.
+    try {
+        const chatId = [authState.user.uid, contact.uid].sort().join('_');
+        const hideRef = doc(db, 'chat_clears', authState.user.uid, 'items', chatId);
+        const hideSnap = await getDoc(hideRef);
+        if (hideSnap.exists() && hideSnap.data().hidden === true) {
+            await updateDoc(hideRef, { hidden: false, updatedAt: serverTimestamp() });
+        }
+    } catch (error) {
+        console.debug('[Chat open] Could not clear local hide marker:', error?.code || '');
+    }
     await selectChat(chat);
     loadChats();
     switchTab('chats');
