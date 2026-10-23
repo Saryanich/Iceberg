@@ -1073,11 +1073,16 @@ export async function selectChat(chat) {
         uiState.sedaEnabledForCurrentChat = !!(
             authState.sedaProActivated && uiState.currentSedaKey?.startsWith('SEDAKEY:')
         );
+        if (authState.sedaProActivated && !uiState.currentSedaKey?.startsWith('SEDAKEY:')) {
+            // The initiator may have opened this chat before the peer responded,
+            // then left/reloaded. Resume its pending handshake using the saved private key.
+            watchSedaInitiatorHandshake(chat.sedaChatId);
+        }
     } else {
         uiState.currentChatId = [authState.user.uid, chat.uid].sort().join('_');
         uiState.sedaEnabledForCurrentChat = false;
         uiState.currentSedaKey = await DB.getSedaKey(uiState.currentChatId);
-        if (!uiState.currentSedaKey) {
+        if (!uiState.currentSedaKey?.startsWith('ICEBERGBASEKEY:')) {
             const openingChatId = uiState.currentChatId;
             ensureIcebergBaseKey(openingChatId, chat.uid).then(async key => {
                 if (uiState.currentChatId !== openingChatId) return;
@@ -2764,8 +2769,65 @@ export function startSedaHandshakeListener() {
                 }
                 continue;
             }
-            // Инициатор подтвердил сохранение ключа на устройстве. Удаляем рукопожатие:
-            // после подтверждения ключи уже находятся локально у обеих сторон.
+            // Recover older/incomplete SEDA handshakes where the peer public key was
+            // published but the local IndexedDB write did not finish before a reload.
+            if (data.initiatorPublicKey && data.peerPublicKey && data.encryptedSedaKey
+                && data.peerKeyStored !== true && !uiState.processedHandshakes.has(d.id)) {
+                uiState.processedHandshakes.add(d.id);
+                try {
+                    const saved = await DB.getECDHKeys(d.id);
+                    if (!saved?.privateKey) throw new Error('Нет сохранённого ключа для восстановления SEDA');
+                    const privateKey = await crypto.subtle.importKey(
+                        'jwk', saved.privateKey,
+                        { name: 'ECDH', namedCurve: 'P-256' },
+                        true, ['deriveKey', 'deriveBits']
+                    );
+                    const initiatorPublic = await importPublicKey(data.initiatorPublicKey);
+                    const shared = await deriveSharedKey(privateKey, initiatorPublic);
+                    const recoveredKey = await aesDecrypt(data.encryptedSedaKey, shared);
+                    if (!recoveredKey?.startsWith('SEDAKEY:')) throw new Error('Некорректный восстановленный ключ SEDA');
+                    await DB.saveSedaKey(d.id, recoveredKey);
+                    await updateDoc(d.ref, { peerKeyStored: true, peerKeyStoredAt: Date.now() });
+
+                    if (uiState.currentChatId === d.id) {
+                        uiState.currentSedaKey = recoveredKey;
+                        uiState.sedaEnabledForCurrentChat = !!authState.sedaProActivated;
+                        updateSedaUI();
+                        await loadMessages();
+                    }
+                    const initiatorContact = ensureArray(authState.userData?.contacts)
+                        .find(contact => contact.uid === data.initiator);
+                    if (initiatorContact) {
+                        const chats = ensureArray(authState.userData?.chats);
+                        if (!chats.some(chat => chat.sedaChatId === d.id)) {
+                            const nextChats = [...chats, {
+                                uid: data.initiator,
+                                globalId: initiatorContact.globalId || '',
+                                nickname: initiatorContact.nickname || '',
+                                avatar: initiatorContact.avatar || null,
+                                mood: initiatorContact.mood || null,
+                                isGroup: false,
+                                isSeda: true,
+                                sedaChatId: d.id,
+                                unread: true,
+                                lastMessage: '🔮 SEDA-чат восстановлен',
+                                lastMessageTime: new Date()
+                            }];
+                            authState.userData.chats = nextChats;
+                            await updateDoc(doc(db, 'users', authState.user.uid), { chats: nextChats });
+                            await DB.Lists.setChats(authState.user.uid, nextChats);
+                            loadChats();
+                        }
+                    }
+                    showToast('🔮 Ключ SEDA восстановлен', 'success');
+                } catch (err) {
+                    console.error('[SEDA recovery]', err);
+                    uiState.processedHandshakes.delete(d.id);
+                }
+                continue;
+            }
+
+            // The initiator may acknowledge immediately; only delete after recovery checks above.
             if (data.initiatorAck === true && data.mode !== 'iceberg-base') {
                 await deleteDoc(d.ref).catch(err => console.warn('[SEDA] Не удалось удалить рукопожатие:', err));
                 continue;
@@ -2787,14 +2849,16 @@ export function startSedaHandshakeListener() {
                 const mySedaKey = serializeKey(generateSedaKey());
                 const encryptedMyKey = await aesEncrypt(mySedaKey, sharedKey);
 
+                // Persist the exchanged key locally before telling the initiator it is stored.
+                // This keeps a fast acknowledgement/reload from deleting the only recovery copy.
+                await DB.saveSedaKey(d.id, mySedaKey);
                 await updateDoc(d.ref, {
                     peerPublicKey: myPub,
                     encryptedSedaKey: encryptedMyKey,
                     respondedAt: Date.now(),
-                    peerKeyStored: true
+                    peerKeyStored: true,
+                    peerKeyStoredAt: Date.now()
                 });
-
-                await DB.saveSedaKey(d.id, mySedaKey);
 
                 const initiatorUid = data.initiator;
                 const contact = ensureArray(authState.userData.contacts).find(c => c.uid === initiatorUid);
