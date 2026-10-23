@@ -915,7 +915,22 @@ async function ensureIcebergBaseKey(chatId, peerUid) {
     const cached = await DB.getSedaKey(chatId);
     const handshakeId = 'base_' + chatId;
     const ref = doc(db, 'seda_handshakes', handshakeId);
-    const existing = await getDoc(ref);
+    let existing = await getDoc(ref);
+    if (existing.exists()) {
+        const previous = existing.data();
+        const expired = Number(previous.expiresAt) > 0 && Number(previous.expiresAt) <= Date.now();
+        // Only the initiator replaces an expired unfinished handshake. This avoids
+        // both users deleting/recreating the deterministic document at the same time.
+        if (previous.mode === 'iceberg-base'
+            && previous.initiator === authState.user.uid
+            && expired
+            && previous.peerKeyStored !== true) {
+            await deleteDoc(ref);
+            await DB.deleteECDHKeys(handshakeId);
+            await DB.deleteSedaKey(chatId);
+            existing = await getDoc(ref);
+        }
+    }
     let privJwk, baseKey, pendingHandshake = false;
     if (cached?.startsWith('ICEBERGBASEKEY:')) {
         if (!existing.exists()) {
@@ -2656,6 +2671,11 @@ export function startSedaHandshakeListener() {
             const data = d.data();
             if (data.mode === 'iceberg-base') {
                 if (data.initiatorAck === true) { await deleteDoc(d.ref).catch(() => {}); continue; }
+                if (Number(data.expiresAt) > 0 && Number(data.expiresAt) <= Date.now()
+                    && data.peerKeyStored !== true) {
+                    // Let the original initiator replace expired unfinished Base attempts.
+                    continue;
+                }
                 if (!data.initiatorPublicKey) continue;
                 if (data.peerPublicKey && data.encryptedBaseKey && !data.peerKeyStored && !uiState.processedHandshakes.has(d.id)) {
                     uiState.processedHandshakes.add(d.id);
