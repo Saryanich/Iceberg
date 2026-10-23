@@ -2427,3 +2427,86 @@ input::placeholder, textarea::placeholder {
         animation-iteration-count: 1 !important;
     }
 }
+
+
+/* iPhone/iPad: keep header actions clear of the iOS status and control areas. */
+.chat-screen {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+}
+
+.chat-header {
+    padding-top: max(12px, env(safe-area-inset-top));
+}
+
+.header-buttons {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.header-buttons .btn-icon {
+    flex: 0 0 auto;
+    min-width: 42px;
+    min-height: 42px;
+    touch-action: manipulation;
+}
+
+@media (max-width: 560px) {
+    .chat-header {
+        display: grid;
+        grid-template-columns: auto 42px minmax(0, 1fr);
+        gap: 8px;
+        padding-left: max(10px, env(safe-area-inset-left));
+        padding-right: max(10px, env(safe-area-inset-right));
+        align-items: center;
+    }
+
+    .chat-header .back-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 36px;
+        min-height: 42px;
+        padding: 4px;
+    }
+
+    .chat-header .chat-avatar {
+        grid-column: 2;
+        grid-row: 1;
+        width: 42px;
+        height: 42px;
+    }
+
+    .chat-header .chat-info {
+        grid-column: 3;
+        grid-row: 1;
+        min-width: 0;
+    }
+
+    .chat-header .header-buttons {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        width: 100%;
+        justify-content: flex-end;
+        padding-top: 2px;
+    }
+
+    .chat-header .header-buttons .btn-icon {
+        font-size: 16px;
+        padding: 8px 10px;
+    }
+
+    .chat-screen {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .chat-input-area {
+        padding-bottom: max(8px, env(safe-area-inset-bottom));
+    }
+}
