@@ -1,0 +1,370 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function userDocumentExists() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return userDocumentExists() && userRole() == 'admin';
+    }
+
+    function isStaff() {
+      return userDocumentExists() && userRole() in ['admin', 'employee'];
+    }
+
+    function ownsRecord() {
+      return signedIn() && (
+        resource.data.userId == request.auth.uid
+        || resource.data.uid == request.auth.uid
+      );
+    }
+
+    function hasUid(listValue) {
+      return listValue is list && request.auth.uid in listValue;
+    }
+
+    function isChatMember(data) {
+      return signedIn() && data != null && (
+        (data.keys().hasAny(['participants']) && hasUid(data.participants))
+        || (data.keys().hasAny(['memberIds']) && hasUid(data.memberIds))
+        || (data.keys().hasAny(['members']) && hasUid(data.members))
+        || (data.keys().hasAny(['createdBy']) && data.createdBy == request.auth.uid)
+      );
+    }
+
+    function groupAdmin(data) {
+      return signedIn() && data != null && (
+        (data.keys().hasAny(['createdBy']) && data.createdBy == request.auth.uid)
+        || (data.keys().hasAny(['adminIds']) && hasUid(data.adminIds))
+        || (data.keys().hasAny(['members']) && data.members is list
+          && data.members.hasAny([{'uid': request.auth.uid, 'role': 'admin'}]))
+      );
+    }
+
+    function channelAdmin(data) {
+      return signedIn() && data != null && (
+        (data.keys().hasAny(['createdBy']) && data.createdBy == request.auth.uid)
+        || (data.keys().hasAny(['admins']) && hasUid(data.admins))
+      );
+    }
+
+    // Users: private documents remain private to their owner and app admins.
+    match /users/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(uid) && request.resource.data.role == 'user';
+      allow update: if isAdmin()
+        || (isOwner(uid)
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasNone(['role', 'uid', 'isAdmin']));
+      allow delete: if isAdmin();
+    }
+
+    // Global ID is a public, direct lookup only; listing is disabled.
+    match /global_ids/{globalId} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && globalId.matches('^[0-9a-zA-Z]{22}$');
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && globalId.matches('^[0-9a-zA-Z]{22}$');
+      allow delete: if false;
+    }
+
+    // Public-facing profile fields only; never mirror email or security metadata here.
+    match /public_profiles/{uid} {
+      allow get, list: if signedIn();
+      allow create, update: if isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'globalId', 'nickname', 'avatar', 'mood', 'updatedAt'
+        ]);
+      allow delete: if isOwner(uid) || isAdmin();
+    }
+
+    // Stories are split into one document per image to stay under Firestore's document limit.
+    match /user_stories/{uid}/items/{storyId} {
+      allow get, list: if signedIn() && resource.data.expiresAt > request.time;
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['image', 'createdAt', 'expiresAt'])
+        && request.resource.data.image is string
+        && request.resource.data.image.size() < 700000
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(24, 'h');
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['image', 'createdAt', 'expiresAt']);
+      allow delete: if isOwner(uid) || isAdmin();
+    }
+
+    // Per-user history markers: clear/delete a chat locally without deleting the other
+    // participant's copy or requiring permission to erase messages sent by that person.
+    match /chat_clears/{uid}/items/{chatId} {
+      allow get, list: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['clearedAt', 'updatedAt'])
+        && request.resource.data.clearedAt is timestamp;
+      allow delete: if isOwner(uid);
+    }
+
+    match /site_orders/{orderId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll(['createdAt', 'globalId', 'productName'])
+        && request.resource.data.keys().hasOnly([
+          'createdAt', 'globalId', 'productName', 'fullName',
+          'phoneNumber', 'snils', 'message', 'read'
+        ])
+        && request.resource.data.globalId is string
+        && request.resource.data.productName is string
+        && request.resource.data.createdAt != null;
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isStaff();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /task_assignments/{assignmentId} {
+      allow get: if isAdmin() || ownsRecord();
+      allow list: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /points_transactions/{transactionId} {
+      allow get: if isAdmin() || ownsRecord();
+      allow list: if isAdmin() || (signedIn()
+        && (resource.data.userId == request.auth.uid || resource.data.uid == request.auth.uid));
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /join_requests/{requestId} {
+      allow get, list: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if signedIn()
+        && (!request.resource.data.keys().hasAny(['uid'])
+          || request.resource.data.uid == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /employee_training/{trainingId} {
+      allow read: if isStaff();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /loans/{loanId} {
+      allow get, list: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin()
+        || (signedIn()
+          && resource.data.userId == request.auth.uid
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['userSignature', 'status']));
+      allow delete: if isAdmin();
+    }
+
+    match /arcade_games/{gameId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+      match /ratings/{uid} {
+        allow read: if signedIn();
+        allow create, update: if isOwner(uid);
+        allow delete: if isOwner(uid) || isAdmin();
+      }
+    }
+
+    match /games/{gameId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /arcade_players/{playerId} {
+      allow get: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow list: if isAdmin();
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid;
+      allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+    }
+
+    match /contacts/{contactId} {
+      allow get, list: if isAdmin() || ownsRecord();
+      allow create: if signedIn()
+        && (request.resource.data.uid == request.auth.uid
+          || request.resource.data.userId == request.auth.uid);
+      allow update: if isAdmin()
+        || (ownsRecord()
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.userId == resource.data.userId);
+      allow delete: if isAdmin() || ownsRecord();
+    }
+
+    match /chats/{chatId} {
+      allow get, list: if isAdmin() || isChatMember(resource.data);
+      allow create: if signedIn() && isChatMember(request.resource.data);
+      allow update: if isAdmin()
+        || (isChatMember(resource.data) && isChatMember(request.resource.data));
+      allow delete: if isAdmin();
+    }
+
+    match /groups/{groupId} {
+      allow get, list: if isAdmin() || isChatMember(resource.data);
+      allow create: if signedIn() && isChatMember(request.resource.data)
+        && groupAdmin(request.resource.data);
+      allow update: if isAdmin()
+        || (groupAdmin(resource.data)
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.adminIds is list
+          && request.resource.data.memberIds is list)
+        || (isChatMember(resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['lastMessage', 'lastMessageTime', 'unread']));
+      allow delete: if isAdmin() || groupAdmin(resource.data);
+    }
+
+    match /channels/{channelId} {
+      allow get, list: if isAdmin() || isChatMember(resource.data);
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && hasUid(request.resource.data.members)
+        && hasUid(request.resource.data.admins);
+      allow update: if isAdmin()
+        || (channelAdmin(resource.data)
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.members is list
+          && request.resource.data.admins is list);
+      allow delete: if isAdmin() || channelAdmin(resource.data);
+    }
+
+    match /messages/{chatId} {
+      allow get, list: if isAdmin() || isChatMember(resource.data);
+      allow create: if signedIn() && isChatMember(request.resource.data);
+      allow update: if isAdmin()
+        || (isChatMember(resource.data) && isChatMember(request.resource.data));
+      allow delete: if isAdmin() || isChatMember(resource.data);
+
+      function parentChat() {
+        return get(/databases/$(database)/documents/messages/$(chatId)).data;
+      }
+
+      function chatModerator() {
+        return groupAdmin(parentChat()) || channelAdmin(parentChat());
+      }
+
+      match /msgs/{messageId} {
+        allow get, list: if isAdmin() || isChatMember(parentChat());
+        allow create: if signedIn()
+          && isChatMember(parentChat())
+          && (!request.resource.data.keys().hasAny(['senderId'])
+            || request.resource.data.senderId == request.auth.uid);
+        allow update: if isAdmin()
+          || (isChatMember(parentChat())
+            && (
+              (!resource.data.keys().hasAny(['senderId'])
+                || resource.data.senderId == request.auth.uid)
+              || (request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['read', 'readAt'])
+                && request.resource.data.senderId == resource.data.senderId)
+            ));
+        allow delete: if isAdmin()
+          || (isChatMember(parentChat())
+            && (
+              !resource.data.keys().hasAny(['senderId'])
+              || resource.data.senderId == request.auth.uid
+              || chatModerator()
+            ));
+      }
+    }
+
+    // ECDH handshakes for Base and SEDA. A missing-document get is allowed only
+    // so a participant can check whether a new handshake must be created.
+    match /seda_handshakes/{handshakeId} {
+      function participant() {
+        return signedIn() && resource.data != null
+          && (resource.data.initiator == request.auth.uid
+            || resource.data.peer == request.auth.uid);
+      }
+
+      function handshakeKeysValid() {
+        return request.resource.data.keys().hasOnly([
+          'mode', 'chatId', 'initiator', 'peer', 'initiatorPublicKey',
+          'peerPublicKey', 'encryptedBaseKey', 'encryptedSedaKey',
+          'peerKeyStored', 'peerKeyStoredAt', 'initiatorAck', 'initiatorAckAt',
+          'createdAt', 'expiresAt', 'baseKeySentAt', 'peerRespondedAt',
+          'respondedAt', 'completed'
+        ])
+        && request.resource.data.initiator is string
+        && request.resource.data.peer is string
+        && request.resource.data.initiatorPublicKey is string;
+      }
+
+      allow get: if signedIn() && (resource.data == null || participant());
+      allow list: if participant();
+
+      allow create: if signedIn()
+        && handshakeKeysValid()
+        && request.resource.data.initiator == request.auth.uid
+        && request.resource.data.peer != request.auth.uid
+        && request.resource.data.peerPublicKey == null
+        && request.resource.data.keys().hasAll([
+          'initiator', 'peer', 'initiatorPublicKey', 'peerPublicKey', 'createdAt'
+        ]);
+
+      allow update: if participant()
+        && request.resource.data.initiator == resource.data.initiator
+        && request.resource.data.peer == resource.data.peer
+        && handshakeKeysValid()
+        && (
+          (request.auth.uid == resource.data.initiator
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly([
+                'encryptedBaseKey', 'baseKeySentAt', 'initiatorAck',
+                'initiatorAckAt', 'completed', 'expiresAt'
+              ]))
+          || (request.auth.uid == resource.data.peer
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly([
+                'peerPublicKey', 'encryptedBaseKey', 'encryptedSedaKey',
+                'peerKeyStored', 'peerKeyStoredAt', 'peerRespondedAt',
+                'respondedAt', 'completed'
+              ]))
+        );
+
+      allow delete: if participant() && (
+        (request.auth.uid == resource.data.initiator
+          && resource.data.peerPublicKey == null)
+        || (request.auth.uid == resource.data.peer
+          && resource.data.initiatorAck == true)
+      );
+    }
+
+    // Admin data cleanup is retained, but never includes Global ID records.
+    match /{rootCollection}/{document=**} {
+      allow read: if isAdmin() && rootCollection != 'global_ids';
+      allow delete: if isAdmin() && rootCollection != 'global_ids';
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
