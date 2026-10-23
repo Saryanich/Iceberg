@@ -303,44 +303,116 @@ service cloud.firestore {
     }
 
     match /messages/{chatId} {
-      // Allow a one-time existence check so a participant can create a missing ACL parent.
-      allow get: if resource == null || isAdmin() || isChatMember(resource.data);
-      allow list: if isAdmin() || isChatMember(resource.data);
-      allow create: if signedIn() && isChatMember(request.resource.data);
-      allow update: if isAdmin()
-        || ((groupAdmin(resource.data) || channelAdmin(resource.data))
-          && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['memberIds', 'adminIds', 'members', 'admins', 'updatedAt']))
-        || (isChatMember(resource.data)
-          && resource.data.memberIds is list
-          && request.auth.uid in resource.data.memberIds
-          && !(request.auth.uid in request.resource.data.memberIds)
-          && request.resource.data.memberIds is list
-          && request.resource.data.memberIds.size() == resource.data.memberIds.size() - 1
-          && resource.data.memberIds.hasAll(request.resource.data.memberIds)
-          && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['members', 'memberIds', 'updatedAt']))
-        || (isChatMember(resource.data)
-          && isChatMember(request.resource.data)
-          && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['lastMessage', 'lastMessageTime', 'unread', 'updatedAt']));
-      allow delete: if isAdmin() || groupAdmin(resource.data) || channelAdmin(resource.data);
-
       function parentChat() {
         return get(/databases/$(database)/documents/messages/$(chatId)).data;
       }
 
+      function sourceGroup(data) {
+        return data != null
+          && data.keys().hasAny(['resourceId'])
+          && data.resourceId is string
+          && exists(/databases/$(database)/documents/groups/$(data.resourceId))
+          ? get(/databases/$(database)/documents/groups/$(data.resourceId)).data
+          : null;
+      }
+
+      function sourceChannel(data) {
+        return data != null
+          && data.keys().hasAny(['resourceId'])
+          && data.resourceId is string
+          && exists(/databases/$(database)/documents/channels/$(data.resourceId))
+          ? get(/databases/$(database)/documents/channels/$(data.resourceId)).data
+          : null;
+      }
+
+      // Actual group/channel documents are authoritative. A stale ACL copy cannot
+      // retain access after someone is removed or a group is deleted.
+      function currentThreadMember(data) {
+        return signedIn() && data != null && (
+          ((data.kind == 'direct' || data.kind == 'seda') && isChatMember(data))
+          || (data.kind == 'group' && isChatMember(sourceGroup(data)))
+          || (data.kind == 'channel' && isChatMember(sourceChannel(data)))
+        );
+      }
+
+      function threadModerator(data) {
+        return signedIn() && data != null && (
+          (data.kind == 'group' && groupAdmin(sourceGroup(data)))
+          || (data.kind == 'channel' && channelAdmin(sourceChannel(data)))
+        );
+      }
+
+      function validThreadCreate(data) {
+        return signedIn() && data != null && (
+          (
+            (data.kind == 'direct' || data.kind == 'seda')
+            && data.keys().hasAny(['participants'])
+            && data.participants is list
+            && data.participants.size() == 2
+            && request.auth.uid in data.participants
+            && data.participants[0] is string
+            && data.participants[1] is string
+            && data.participants[0] < data.participants[1]
+            && chatId == (data.kind == 'seda' ? 'seda_' : '')
+              + data.participants[0] + '_' + data.participants[1]
+          )
+          || (
+            data.kind == 'group'
+            && data.keys().hasAll(['resourceId', 'memberIds', 'adminIds'])
+            && data.resourceId is string
+            && chatId == 'group_' + data.resourceId
+            && sourceGroup(data) != null
+            && isChatMember(sourceGroup(data))
+            && data.memberIds == sourceGroup(data).memberIds
+            && data.adminIds == sourceGroup(data).adminIds
+          )
+          || (
+            data.kind == 'channel'
+            && data.keys().hasAll(['resourceId', 'members', 'admins'])
+            && data.resourceId is string
+            && chatId == 'channel_' + data.resourceId
+            && sourceChannel(data) != null
+            && isChatMember(sourceChannel(data))
+            && data.members == sourceChannel(data).members
+            && data.admins == sourceChannel(data).admins
+          )
+        );
+      }
+
+      // Allow a one-time existence check when a thread parent has not been created yet.
+      allow get: if resource == null || isAdmin() || currentThreadMember(resource.data);
+      allow list: if isAdmin() || currentThreadMember(resource.data);
+      // Never accept client-supplied group/channel membership as authoritative.
+      allow create: if validThreadCreate(request.resource.data);
+      allow update: if isAdmin()
+        || (threadModerator(resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['memberIds', 'adminIds', 'members', 'admins', 'updatedAt'])
+          && (
+            (resource.data.kind == 'group'
+              && request.resource.data.memberIds == sourceGroup(resource.data).memberIds
+              && request.resource.data.adminIds == sourceGroup(resource.data).adminIds)
+            || (resource.data.kind == 'channel'
+              && request.resource.data.members == sourceChannel(resource.data).members
+              && request.resource.data.admins == sourceChannel(resource.data).admins)
+          ))
+        || (currentThreadMember(resource.data)
+          && currentThreadMember(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['lastMessage', 'lastMessageTime', 'unread', 'updatedAt']));
+      allow delete: if isAdmin() || threadModerator(resource.data);
+
       function chatModerator() {
-        return groupAdmin(parentChat()) || channelAdmin(parentChat());
+        return threadModerator(parentChat());
       }
 
       match /msgs/{messageId} {
-        allow get, list: if isAdmin() || isChatMember(parentChat());
+        allow get, list: if isAdmin() || currentThreadMember(parentChat());
         allow create: if signedIn()
-          && isChatMember(parentChat())
+          && currentThreadMember(parentChat())
           && request.resource.data.senderId == request.auth.uid;
         allow update: if isAdmin()
-          || (isChatMember(parentChat())
+          || (currentThreadMember(parentChat())
             && (
               (resource.data.keys().hasAny(['senderId'])
                 && resource.data.senderId == request.auth.uid
@@ -358,7 +430,7 @@ service cloud.firestore {
                 && request.resource.data.senderId == resource.data.senderId)
             ));
         allow delete: if isAdmin()
-          || (isChatMember(parentChat())
+          || (currentThreadMember(parentChat())
             && (
               (resource.data.keys().hasAny(['senderId'])
                 && resource.data.senderId == request.auth.uid)
