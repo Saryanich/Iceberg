@@ -1250,6 +1250,9 @@ async function showGroupInfo() {
                             members: nextMembers, memberIds: nextIds, adminIds: nextAdmins,
                             memberCount: nextIds.length
                         });
+                        await updateDoc(doc(db, 'messages', 'group_' + selected.id), {
+                            memberIds: nextIds, adminIds: nextAdmins, updatedAt: serverTimestamp()
+                        }).catch(() => {});
                         uiState.currentGroup = { ...uiState.currentGroup, members: nextMembers, memberIds: nextIds, adminIds: nextAdmins, memberCount: nextIds.length };
                         await loadGroups();
                         await showGroupInfo();
@@ -1296,6 +1299,9 @@ async function showGroupInfo() {
                         await updateDoc(doc(db, 'groups', selected.id), {
                             members: nextMembers, memberIds: nextIds, memberCount: nextIds.length
                         });
+                        await updateDoc(doc(db, 'messages', 'group_' + selected.id), {
+                            memberIds: nextIds, updatedAt: serverTimestamp()
+                        }).catch(() => {});
                         uiState.currentGroup = { ...uiState.currentGroup, members: nextMembers, memberIds: nextIds, memberCount: nextIds.length };
                         await loadGroups();
                         await showGroupInfo();
@@ -1326,7 +1332,7 @@ async function leaveCurrentGroup() {
     if (!selected?.id || !authState.user?.uid) return;
     if (!confirm('Выйти из этой группы?')) return;
     try {
-        const { doc, getDoc, updateDoc, deleteDoc } =
+        const { doc, getDoc, updateDoc, deleteDoc, serverTimestamp } =
             await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
         const { db } = await import('./config.js');
         const ref = doc(db, 'groups', selected.id);
@@ -1347,8 +1353,14 @@ async function leaveCurrentGroup() {
                     return typeof m === 'string' ? { uid: m, role: 'admin' } : { ...m, role: 'admin' };
                 });
                 await updateDoc(ref, { members: promoted, memberIds, adminIds, memberCount: memberIds.length });
+                await updateDoc(doc(db, 'messages', 'group_' + selected.id), {
+                    members: promoted, memberIds, adminIds, updatedAt: serverTimestamp()
+                }).catch(() => {});
             } else {
                 await updateDoc(ref, { members, memberIds, adminIds, memberCount: memberIds.length });
+                await updateDoc(doc(db, 'messages', 'group_' + selected.id), {
+                    members, memberIds, adminIds, updatedAt: serverTimestamp()
+                }).catch(() => {});
             }
         }
         authState.userData.groups = (authState.userData.groups || []).filter(g => g.id !== selected.id);
@@ -1476,6 +1488,9 @@ async function showChannelSettings() {
                         await updateDoc(doc(db, 'channels', channel.id), {
                             members: nextMembers, admins: nextAdmins, memberCount: nextMembers.length
                         });
+                        await updateDoc(doc(db, 'messages', 'channel_' + channel.id), {
+                            members: nextMembers, admins: nextAdmins, updatedAt: serverTimestamp()
+                        }).catch(() => {});
                         await loadChannels();
                         await showChannelSettings();
                         showToast('Подписчик удалён', 'success');
@@ -1514,6 +1529,9 @@ async function showChannelSettings() {
                     await updateDoc(doc(db, 'channels', channel.id), {
                         members: nextMembers, memberCount: nextMembers.length
                     });
+                    await updateDoc(doc(db, 'messages', 'channel_' + channel.id), {
+                        members: nextMembers, admins, updatedAt: serverTimestamp()
+                    }).catch(() => {});
                     await loadChannels();
                     await showChannelSettings();
                     showToast('Подписчик добавлен', 'success');
