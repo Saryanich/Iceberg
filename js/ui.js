@@ -756,7 +756,29 @@ export async function loadGroups() {
             const snap = await getDocs(query(collection(db, 'groups'), where('memberIds', 'array-contains', uid), limit(100)));
             // When online, trust the authoritative membership query. Merging stale
             // profile copies here would keep removed users seeing a group forever.
-            groups = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+            const remoteGroups = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+            const remoteIds = new Set(remoteGroups.map(group => group.id));
+            // Keep legacy groups only after the server verifies that this user is
+            // still a member, or is the legacy creator who can migrate the schema.
+            for (const legacy of ensureArray(authState.userData?.groups)) {
+                if (!legacy?.id || remoteIds.has(legacy.id)) continue;
+                try {
+                    const legacySnap = await getDoc(doc(db, 'groups', legacy.id));
+                    if (!legacySnap.exists()) continue;
+                    const data = legacySnap.data();
+                    if (Array.isArray(data.memberIds) && data.memberIds.includes(uid)) {
+                        remoteGroups.push({ ...data, id: legacy.id });
+                        remoteIds.add(legacy.id);
+                    } else if (!Array.isArray(data.memberIds) && data.createdBy === uid) {
+                        remoteGroups.push({ ...data, id: legacy.id });
+                        remoteIds.add(legacy.id);
+                    }
+                } catch {
+                    // A removed user cannot read the group, so a stale profile item
+                    // is deliberately not shown as an active membership.
+                }
+            }
+            groups = remoteGroups;
             if (authState.userData) authState.userData.groups = groups;
             await DB.Lists.setGroups(uid, groups).catch(() => {});
         } catch (err) {
@@ -1085,9 +1107,29 @@ export async function selectGroup(group) {
     let freshGroup = group;
     try {
         const groupSnap = await getDoc(doc(db, 'groups', group.id));
-        if (groupSnap.exists()) freshGroup = { ...group, ...groupSnap.data(), id: group.id };
+        if (groupSnap.exists()) {
+            freshGroup = { ...group, ...groupSnap.data(), id: group.id };
+            // Migrate legacy groups once from creator-controlled metadata to explicit
+            // member/admin UID arrays so Firestore Rules can enforce membership correctly.
+            if (freshGroup.createdBy === authState.user.uid && !Array.isArray(freshGroup.memberIds)) {
+                const oldMembers = Array.isArray(freshGroup.members) ? freshGroup.members : [];
+                const memberIds = Array.from(new Set(oldMembers
+                    .map(member => typeof member === 'string' ? member : member?.uid)
+                    .filter(Boolean)));
+                if (!memberIds.includes(authState.user.uid)) memberIds.push(authState.user.uid);
+                const adminIds = Array.from(new Set([
+                    freshGroup.createdBy,
+                    ...(freshGroup.adminIds || []),
+                    ...oldMembers.filter(member => member?.role === 'admin').map(member => member.uid)
+                ].filter(Boolean)));
+                await updateDoc(doc(db, 'groups', group.id), {
+                    memberIds, adminIds, memberCount: memberIds.length
+                });
+                freshGroup = { ...freshGroup, memberIds, adminIds, memberCount: memberIds.length };
+            }
+        }
     } catch (err) {
-        console.warn('[Group] Не удалось обновить данные группы:', err);
+        console.warn('[Group] Не удалось обновить данные/участников группы:', err);
     }
 
     uiState.currentGroup = freshGroup;
