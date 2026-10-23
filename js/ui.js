@@ -625,17 +625,48 @@ async function ensureIcebergBaseKey(chatId, peerUid) {
                     { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
                 if (data.peerKeyStored) {
                     await updateDoc(ref, { initiatorAck: true, initiatorAckAt: Date.now() });
+                    try { unsub(); } catch {}
+                    baseHandshakeListeners.delete(listenerId);
                     return;
                 }
                 if (!data.peerPublicKey || data.encryptedBaseKey) return;
                 const peerPublic = await importPublicKey(data.peerPublicKey);
                 const shared = await deriveSharedKey(privateKey, peerPublic, 'iceberg-base-handshake-v1');
                 await updateDoc(ref, { encryptedBaseKey: await aesEncrypt(baseKey, shared), baseKeySentAt: Date.now() });
-            } catch (err) { console.error('[Iceberg Base initiator]', err); }
+            } catch (err) {
+                console.error('[Iceberg Base initiator]', err);
+            }
+        }, err => {
+            console.error('[Iceberg Base listener]', { code: err?.code || 'unknown', message: err?.message || String(err) });
+            try { unsub(); } catch {}
+            baseHandshakeListeners.delete(listenerId);
         });
         baseHandshakeListeners.set(listenerId, unsub);
     }
     return pendingHandshake ? null : baseKey;
+}
+
+
+// Ensure the parent document exists: Firestore rules for message subcollections
+// must be able to verify membership against messages/{chatId}.
+async function ensureMessageThread(chatId, membership) {
+    if (!authState.user?.uid || !chatId || !membership) return;
+    const uid = authState.user.uid;
+    const payload = { kind: membership.kind || 'direct', updatedAt: serverTimestamp() };
+    if (membership.kind === 'group') {
+        const ids = Array.from(new Set((membership.memberIds || [uid]).filter(Boolean)));
+        if (!ids.includes(uid)) ids.push(uid);
+        payload.memberIds = ids;
+        payload.createdBy = membership.createdBy || uid;
+    } else if (membership.kind === 'channel') {
+        const ids = Array.from(new Set((membership.memberIds || [uid]).filter(Boolean)));
+        if (!ids.includes(uid)) ids.push(uid);
+        payload.members = ids;
+        payload.createdBy = membership.createdBy || uid;
+    } else {
+        payload.participants = Array.from(new Set([uid, ...(membership.participants || [])].filter(Boolean))).sort();
+    }
+    await setDoc(doc(db, 'messages', chatId), payload, { merge: true });
 }
 
 export async function selectChat(chat) {
@@ -677,6 +708,16 @@ export async function selectChat(chat) {
 
     renderChatHeader();
 
+    try {
+        await ensureMessageThread(uiState.currentChatId, {
+            kind: 'direct',
+            participants: [chat.uid]
+        });
+    } catch (err) {
+        console.error('[Messages] Не удалось подготовить личный чат:', err);
+        showToast('Не удалось подготовить историю чата. Проверьте права Firestore.', 'error', 4000);
+    }
+
     document.getElementById('chatInputArea').style.display = 'flex';
     document.getElementById('clearChatBtn').style.display = 'inline-block';
     document.getElementById('deleteChatBtn').style.display = 'inline-block';
@@ -705,6 +746,13 @@ export async function selectGroup(group) {
     uiState.currentSedaKey = savedKey;
 
     renderChatHeader();
+    try {
+        const ids = group.memberIds || (Array.isArray(group.members) ? group.members.map(m => typeof m === 'string' ? m : m?.uid).filter(Boolean) : []);
+        await ensureMessageThread(uiState.currentChatId, { kind: 'group', memberIds: ids, createdBy: group.createdBy });
+    } catch (err) {
+        console.error('[Messages] Не удалось подготовить группу:', err);
+        showToast('Не удалось подготовить историю группы. Проверьте права Firestore.', 'error', 4000);
+    }
     document.getElementById('chatInputArea').style.display = 'flex';
     document.getElementById('groupInfoBtn').style.display = 'inline-block';
     document.getElementById('channelManageBtn').style.display = 'none';
@@ -721,12 +769,41 @@ export async function selectChannel(channel) {
     if (!channel) return;
     closeCurrentSubscriptions();
 
-    uiState.currentChannel = channel;
+    let freshChannel = channel;
+    try {
+        const channelSnap = await getDoc(doc(db, 'channels', channel.id));
+        if (channelSnap.exists()) {
+            const remote = channelSnap.data();
+            freshChannel = {
+                ...channel,
+                ...remote,
+                id: channel.id,
+                isAdmin: Array.isArray(remote.admins) && remote.admins.includes(authState.user.uid)
+                    ? true : !!channel.isAdmin
+            };
+        }
+    } catch (err) {
+        console.warn('[Channel] Не удалось обновить данные канала:', err);
+    }
+
+    uiState.currentChannel = freshChannel;
     uiState.currentChat = null;
     uiState.currentGroup = null;
-    uiState.currentChatId = `channel_${channel.id}`;
+    uiState.currentChatId = `channel_${freshChannel.id}`;
     uiState.sedaEnabledForCurrentChat = false;
     uiState.currentSedaKey = null;
+
+    try {
+        const channelMembers = Array.isArray(freshChannel.members) ? freshChannel.members : [authState.user.uid];
+        await ensureMessageThread(uiState.currentChatId, {
+            kind: 'channel',
+            memberIds: channelMembers,
+            createdBy: freshChannel.createdBy
+        });
+    } catch (err) {
+        console.error('[Messages] Не удалось подготовить канал:', err);
+        showToast('Не удалось подготовить историю канала. Проверьте права Firestore.', 'error', 4000);
+    }
 
     renderChatHeader();
     document.getElementById('groupInfoBtn').style.display = 'none';
