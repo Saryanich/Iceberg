@@ -301,54 +301,120 @@ export function renderUserProfile() {
 
 export async function loadChats(forceRefresh = false) {
     const uid = authState.user?.uid;
-    const c = document.getElementById('chatsList');
-    if (!c || !uid) return;
+    const container = document.getElementById('chatsList');
+    if (!container || !uid) return;
 
     const rawChats = authState.userData?.chats;
-    let chats = ensureArray(rawChats);
-
-    if (!Array.isArray(rawChats) || chats.length !== rawChats.length) {
-        console.warn('[loadChats] Некорректная структура chats; повреждённые записи пропущены');
-        if (authState.userData) authState.userData.chats = chats;
-        // Не затираем валидные записи, если старый формат был объектом.
-        try {
-            await updateDoc(doc(db, 'users', uid), { chats });
-            await DB.Lists.setChats(uid, chats);
-        } catch (e) {}
+    const profileChats = ensureArray(rawChats);
+    const cachedChats = ensureArray(await DB.Lists.getChats(uid).catch(() => []));
+    const identity = chat => chat?.isSeda && chat.sedaChatId
+        ? 'seda:' + chat.sedaChatId
+        : (chat?.isGroup ? 'group:' + (chat.id || chat.uid || '') : 'direct:' + (chat?.uid || ''));
+    const merged = new Map();
+    for (const chat of [...cachedChats, ...profileChats]) {
+        if (!chat || chat.isChannel || !identity(chat).split(':').pop()) continue;
+        const key = identity(chat);
+        merged.set(key, { ...(merged.get(key) || {}), ...chat });
     }
-
-    if (!chats.length || forceRefresh) {
-        const cached = await DB.Lists.getChats(uid);
-        const cachedArr = ensureArray(cached);
-        if (cachedArr.length && !forceRefresh) {
-            chats = cachedArr;
-        }
-    }
-
-    chats = chats.filter(x => x && !x.isChannel);
-
-    if (!chats.length) {
-        c.innerHTML = '<div class="empty-state">Нет чатов</div>';
-        return;
-    }
-
+    let chats = [...merged.values()].filter(chat => !chat.isChannel);
+    let didChange = false;
     const toMillis = value => {
         if (value && typeof value.toMillis === 'function') return value.toMillis();
         if (value && typeof value.toDate === 'function') return value.toDate().getTime();
+        if (value && typeof value.seconds === 'number') return value.seconds * 1000 + Number(value.nanoseconds || 0) / 1e6;
         const n = value instanceof Date ? value.getTime() : (typeof value === 'number' ? value : Date.parse(value || ''));
         return Number.isFinite(n) ? n : 0;
     };
-    const sorted = [...chats].sort((a, b) => {
-        const activityDiff = toMillis(b.lastMessageTime) - toMillis(a.lastMessageTime);
-        if (activityDiff) return activityDiff;
-        return (a.nickname || a.globalId || '').localeCompare(b.nickname || b.globalId || '', 'ru');
-    });
 
-    c.innerHTML = '';
-    for (const chat of sorted) {
-        c.appendChild(renderChatItem(chat));
+    if (navigator.onLine) {
+        try {
+            // Recover direct chats from the shared thread index rather than writing
+            // into the other participant's private /users document.
+            const threads = await getDocs(query(
+                collection(db, 'messages'),
+                where('kind', '==', 'direct'),
+                where('participants', 'array-contains', uid),
+                limit(100)
+            ));
+            for (const thread of threads.docs) {
+                const data = thread.data();
+                const participants = Array.isArray(data.participants) ? data.participants : [];
+                const peerUid = participants.find(participant => typeof participant === 'string' && participant !== uid);
+                if (!peerUid) continue;
+                let index = chats.findIndex(chat => chat.uid === peerUid && !chat.isGroup && !chat.isSeda);
+                let publicProfile = {};
+                if (index === -1 || !(chats[index].nickname || chats[index].globalId)) {
+                    try {
+                        const profileSnap = await getDoc(doc(db, 'public_profiles', peerUid));
+                        if (profileSnap.exists()) publicProfile = profileSnap.data();
+                    } catch (error) {
+                        console.debug('[loadChats] Public profile unavailable:', error?.code || '');
+                    }
+                }
+                if (index === -1) {
+                    chats.push({
+                        uid: peerUid,
+                        globalId: publicProfile.globalId || '',
+                        nickname: publicProfile.nickname || (publicProfile.globalId ? '@' + publicProfile.globalId : 'Пользователь'),
+                        avatar: publicProfile.avatar || null,
+                        mood: publicProfile.mood || '',
+                        isGroup: false,
+                        isSeda: false,
+                        unread: !!(data.lastMessageSenderId && data.lastMessageSenderId !== uid),
+                        lastMessage: data.lastMessage || '',
+                        lastMessageTime: data.lastMessageTime || data.updatedAt || data.createdAt || null
+                    });
+                    didChange = true;
+                    continue;
+                }
+                const existing = chats[index];
+                const remoteTime = toMillis(data.lastMessageTime);
+                const localTime = toMillis(existing.lastMessageTime);
+                const next = {
+                    ...existing,
+                    globalId: existing.globalId || publicProfile.globalId || '',
+                    nickname: existing.nickname || publicProfile.nickname ||
+                        (publicProfile.globalId ? '@' + publicProfile.globalId : 'Пользователь'),
+                    avatar: existing.avatar || publicProfile.avatar || null,
+                    mood: existing.mood || publicProfile.mood || ''
+                };
+                if (data.lastMessageTime && remoteTime >= localTime) {
+                    next.lastMessage = data.lastMessage || existing.lastMessage || '';
+                    next.lastMessageTime = data.lastMessageTime;
+                    if (data.lastMessageSenderId) next.unread = data.lastMessageSenderId !== uid;
+                }
+                if (next.lastMessage !== existing.lastMessage ||
+                    toMillis(next.lastMessageTime) !== toMillis(existing.lastMessageTime) ||
+                    next.nickname !== existing.nickname || next.avatar !== existing.avatar ||
+                    next.globalId !== existing.globalId || next.unread !== existing.unread) {
+                    chats[index] = next;
+                    didChange = true;
+                }
+            }
+        } catch (error) {
+            // Cached/profile chats still render if the index is building or the network is down.
+            console.warn('[loadChats] Shared thread recovery failed:', error?.code || error);
+        }
     }
-    await DB.Lists.setChats(uid, chats);
+
+    chats = chats.filter(chat => chat && (chat.uid || chat.id) && !chat.isChannel);
+    chats.sort((a, b) => toMillis(b.lastMessageTime) - toMillis(a.lastMessageTime) ||
+        (a.nickname || a.globalId || '').localeCompare(b.nickname || b.globalId || '', 'ru'));
+    if (authState.userData) authState.userData.chats = chats;
+    if ((didChange || (!Array.isArray(rawChats) && chats.length)) && navigator.onLine) {
+        try {
+            await updateDoc(doc(db, 'users', uid), { chats });
+        } catch (error) {
+            console.warn('[loadChats] Could not persist the signed-in user chat list:', error?.code || error);
+        }
+    }
+    container.innerHTML = '';
+    if (!chats.length) {
+        container.innerHTML = '<div class="empty-state">Нет чатов</div>';
+    } else {
+        for (const chat of chats) container.appendChild(renderChatItem(chat));
+    }
+    await DB.Lists.setChats(uid, chats).catch(() => {});
 }
 
 function renderChatItem(chat) {
@@ -844,70 +910,117 @@ export async function loadChannels() {
     const uid = authState.user?.uid;
     const list = document.getElementById('channelsList');
     if (!list) return;
-    let channels = ensureArray(authState.userData?.channels);
-    if (uid && navigator.onLine) {
-        try {
-            const snap = await getDocs(query(collection(db, 'channels'), where('members', 'array-contains', uid), limit(100)));
-            const remoteChannels = snap.docs.map(d => {
-                const data = d.data();
-                return { ...data, id: d.id, isAdmin: Array.isArray(data.admins) && data.admins.includes(uid) };
-            });
-            // Server membership is authoritative when online; don't re-add
-            // channels from a stale local user profile after a user was removed.
-            channels = remoteChannels;
-            if (authState.userData) authState.userData.channels = channels;
-            await DB.Lists.setChannels(uid, channels).catch(() => {});
-        } catch (err) {
-            console.warn('[Channels] Не удалось обновить каналы с сервера:', err);
-        }
+
+    // Cached/profile records allow instant offline display; online records must be
+    // checked against the authoritative /channels membership fields.
+    const cached = uid ? ensureArray(await DB.Lists.getChannels(uid).catch(() => [])) : [];
+    const candidates = new Map();
+    for (const channel of [...cached, ...ensureArray(authState.userData?.channels)]) {
+        if (!channel?.id) continue;
+        const key = String(channel.id);
+        candidates.set(key, { ...(candidates.get(key) || {}), ...channel, id: key });
     }
-    channels = channels.filter(ch => ch && ch.id);
+    let channels = [...candidates.values()];
+
+    if (uid && navigator.onLine) {
+        const verified = new Map();
+        for (const field of ['members', 'memberIds']) {
+            try {
+                const snap = await getDocs(query(
+                    collection(db, 'channels'),
+                    where(field, 'array-contains', uid),
+                    limit(100)
+                ));
+                for (const item of snap.docs) {
+                    const data = item.data();
+                    verified.set(item.id, {
+                        ...data,
+                        id: item.id,
+                        isChannel: true,
+                        isAdmin: (Array.isArray(data.admins) && data.admins.includes(uid)) || data.createdBy === uid
+                    });
+                }
+            } catch (error) {
+                console.warn('[Channels] Membership query failed for ' + field + ':', error?.code || error);
+            }
+        }
+
+        // Individually verify legacy/cache entries that aren't found by either query.
+        for (const candidate of candidates.values()) {
+            if (verified.has(candidate.id)) continue;
+            try {
+                const snap = await getDoc(doc(db, 'channels', candidate.id));
+                if (!snap.exists()) continue;
+                const data = snap.data();
+                const members = Array.isArray(data.members) ? data.members : [];
+                const memberIds = Array.isArray(data.memberIds) ? data.memberIds : [];
+                const isMember = members.some(member =>
+                    member === uid || (member && typeof member === 'object' && member.uid === uid)
+                ) || memberIds.includes(uid) || data.createdBy === uid;
+                if (!isMember) continue;
+                verified.set(snap.id, {
+                    ...data,
+                    id: snap.id,
+                    isChannel: true,
+                    isAdmin: (Array.isArray(data.admins) && data.admins.includes(uid)) || data.createdBy === uid
+                });
+            } catch (error) {
+                // Do not show stale memberships when the server refuses to verify them.
+                console.debug('[Channels] Legacy entry could not be verified:', candidate.id, error?.code || '');
+            }
+        }
+        channels = [...verified.values()];
+        if (authState.userData) authState.userData.channels = channels;
+        await DB.Lists.setChannels(uid, channels).catch(() => {});
+    }
+
+    channels = channels.filter(channel => channel && channel.id);
     if (!channels.length) {
         list.innerHTML = '<div class="empty-state">Нет каналов</div>';
         return;
     }
+
     list.innerHTML = '';
-    for (const ch of channels) {
+    for (const channel of channels) {
         const div = document.createElement('div');
         div.className = 'channel-item';
-
-        const av = document.createElement('div');
-        av.className = 'avatar-small';
-        av.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
-        if (ch.avatar) {
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar-small';
+        avatar.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
+        if (channel.avatar) {
             const img = document.createElement('img');
-            img.src = ch.avatar;
+            img.src = channel.avatar;
             img.alt = 'Аватар канала';
-            av.appendChild(img);
-        } else av.textContent = '📢';
-
+            avatar.appendChild(img);
+        } else {
+            avatar.textContent = '📢';
+        }
         const info = document.createElement('div');
         info.className = 'info-small';
         const nameRow = document.createElement('div');
         nameRow.className = 'name-row';
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'item-name';
-        nameSpan.textContent = ch.name;
-        nameRow.appendChild(nameSpan);
-        if (ch.isAdmin) {
-            const b = document.createElement('span');
-            b.className = 'channel-badge';
-            b.textContent = 'АДМИН';
-            nameRow.appendChild(b);
+        const name = document.createElement('span');
+        name.className = 'item-name';
+        name.textContent = channel.name || 'Канал';
+        nameRow.appendChild(name);
+        if (channel.isAdmin) {
+            const badge = document.createElement('span');
+            badge.className = 'channel-badge';
+            badge.textContent = 'АДМИН';
+            nameRow.appendChild(badge);
         }
-        const sub = document.createElement('div');
-        sub.className = 'item-subtitle';
-        sub.textContent = ch.description || `${ch.memberCount || 0} подписчиков`;
-
+        const subtitle = document.createElement('div');
+        subtitle.className = 'item-subtitle';
+        subtitle.textContent = channel.lastMessage || channel.description ||
+            ((channel.memberCount || (Array.isArray(channel.members) ? channel.members.length : 0)) + ' подписчиков');
         info.appendChild(nameRow);
-        info.appendChild(sub);
-        div.appendChild(av);
+        info.appendChild(subtitle);
+        div.appendChild(avatar);
         div.appendChild(info);
-        div.onclick = () => selectChannel(ch);
+        div.onclick = () => selectChannel(channel);
         list.appendChild(div);
     }
 }
-
 // Automatic E2E key agreement for ordinary direct chats; no subscription or confirmation.
 const baseHandshakeListeners = new Map();
 async function ensureIcebergBaseKey(chatId, peerUid) {
@@ -1451,8 +1564,32 @@ let messageLoadVersion = 0;
  * Releases Firestore listeners and invalidates in-flight message rendering.
  * Call this when leaving a chat session or signing out.
  */
+let directChatListUnsubscribe = null;
+let directChatListUid = null;
+
+export function subscribeDirectChatUpdates() {
+    const uid = authState.user?.uid;
+    if (!uid) return;
+    if (directChatListUid === uid && typeof directChatListUnsubscribe === 'function') return;
+    if (typeof directChatListUnsubscribe === 'function') {
+        try { directChatListUnsubscribe(); } catch {}
+    }
+    directChatListUid = uid;
+    const q = query(collection(db, 'messages'), where('kind', '==', 'direct'),
+        where('participants', 'array-contains', uid), limit(100));
+    directChatListUnsubscribe = onSnapshot(q, () => {
+        if (authState.user?.uid !== uid) return;
+        loadChats(true).catch(error => console.warn('[Chat list listener]', error?.code || error));
+    }, error => console.warn('[Chat list listener] Subscription failed:', error?.code || error));
+}
+
 export function cleanupChatSubscriptions() {
     messageLoadVersion++;
+    if (typeof directChatListUnsubscribe === 'function') {
+        try { directChatListUnsubscribe(); } catch {}
+    }
+    directChatListUnsubscribe = null;
+    directChatListUid = null;
     for (const key of ['messagesUnsub', 'chatMetaUnsub', 'sedaHandshakeUnsub']) {
         const unsubscribe = uiState[key];
         if (typeof unsubscribe === 'function') {
@@ -1950,56 +2087,59 @@ async function updateChatLastMessage(previewText, context, fromQueue = false) {
         const currentChat = context?.currentChat;
         const currentGroup = context?.currentGroup;
         const currentChannel = context?.currentChannel;
-        if (!chatIdAtSend || !currentChat) return false;
+        const uid = authState.user?.uid;
+        if (!uid || !chatIdAtSend || (!currentChat && !currentGroup && !currentChannel)) return false;
 
-        if (currentChat) {
-            let chats = ensureArray(authState.userData?.chats);
-            let idx = currentChat.isSeda && currentChat.sedaChatId
-                ? chats.findIndex(c => c.sedaChatId === currentChat.sedaChatId)
-                : chats.findIndex(c => c.uid === currentChat.uid && !c.isGroup && !c.isSeda);
-            if (idx !== -1) {
-                const u = [...chats];
-                u[idx] = { ...u[idx], lastMessage: previewText, lastMessageTime: new Date() };
-                await updateDoc(doc(db, 'users', authState.user.uid), { chats: u });
-                authState.userData.chats = u;
-                loadChats();
-            }
+        const metadata = {
+            lastMessage: previewText,
+            lastMessageTime: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        };
+        if (currentChat && !currentGroup && !currentChannel) metadata.lastMessageSenderId = uid;
+        // Shared thread metadata is visible to participants; never write to another
+        // person's private /users/{uid} document from this client.
+        await updateDoc(doc(db, 'messages', chatIdAtSend), metadata);
 
-            if (!currentGroup && !currentChannel && currentChat.uid) {
-                const cRef = doc(db, 'users', currentChat.uid);
-                const cDoc = await getDoc(cRef);
-                if (cDoc.exists()) {
-                    const cd = cDoc.data();
-                    const cChats = ensureArray(cd.chats);
-                    let cIdx = currentChat.isSeda && currentChat.sedaChatId
-                        ? cChats.findIndex(c => c.sedaChatId === currentChat.sedaChatId)
-                        : cChats.findIndex(c => c.uid === authState.user.uid && !c.isGroup && !c.isSeda);
-                    if (cIdx !== -1) {
-                        const u = [...cChats];
-                        u[cIdx] = { ...u[cIdx], lastMessage: previewText, lastMessageTime: new Date(), unread: true };
-                        await updateDoc(cRef, { chats: u });
-                    } else {
-                        const newChat = {
-                            uid: authState.user.uid,
-                            globalId: authState.userData.globalId,
-                            nickname: authState.userData.nickname,
-                            avatar: authState.userData.avatar || null,
-                            mood: authState.userData.mood || null,
-                            isGroup: false,
-                            isSeda: currentChat.isSeda || false,
-                            sedaChatId: currentChat.sedaChatId || null,
-                            unread: true,
-                            lastMessage: previewText,
-                            lastMessageTime: new Date()
-                        };
-                        await updateDoc(cRef, { chats: [...cChats, newChat] });
-                    }
-                }
-            }
+        if (currentGroup?.id) {
+            await updateDoc(doc(db, 'groups', currentGroup.id), {
+                lastMessage: previewText,
+                lastMessageTime: serverTimestamp()
+            });
+        }
+        if (currentChannel?.id) {
+            await updateDoc(doc(db, 'channels', currentChannel.id), {
+                lastMessage: previewText,
+                lastMessageTime: serverTimestamp()
+            });
+        }
+
+        if (currentChat?.uid && !currentGroup && !currentChannel) {
+            const chats = ensureArray(authState.userData?.chats);
+            const isSeda = !!currentChat.isSeda;
+            const index = isSeda && currentChat.sedaChatId
+                ? chats.findIndex(chat => chat.sedaChatId === currentChat.sedaChatId)
+                : chats.findIndex(chat => chat.uid === currentChat.uid && !chat.isGroup && !chat.isSeda);
+            const nextChat = {
+                ...(index >= 0 ? chats[index] : {}),
+                ...currentChat,
+                uid: currentChat.uid,
+                isGroup: false,
+                isSeda: isSeda,
+                sedaChatId: currentChat.sedaChatId || null,
+                lastMessage: previewText,
+                lastMessageTime: new Date(),
+                unread: false
+            };
+            if (index >= 0) chats[index] = nextChat;
+            else chats.push(nextChat);
+            authState.userData.chats = chats;
+            await updateDoc(doc(db, 'users', uid), { chats });
+            await DB.Lists.setChats(uid, chats).catch(() => {});
+            loadChats();
         }
         return true;
-    } catch (e) {
-        console.error('updateChatLastMessage:', e);
+    } catch (error) {
+        console.error('[Chat metadata] Synchronization failed:', error);
         if (!fromQueue && context?.currentChat?.uid && !context.currentGroup && !context.currentChannel) {
             queueDirectChatSync(context, previewText);
         }
