@@ -403,7 +403,7 @@ service cloud.firestore {
       }
 
       // Allow a one-time existence check when a thread parent has not been created yet.
-      allow get: if resource == null || isAdmin() || currentThreadMember(resource.data);
+      allow get: if signedIn() && (resource == null || isAdmin() || currentThreadMember(resource.data));
       allow list: if isAdmin() || currentThreadMember(resource.data);
       allow create: if validThreadCreate(request.resource.data);
       allow update: if isAdmin()
