@@ -1551,41 +1551,76 @@ async function showChannelSettings() {
 }
 
 async function clearAllChats() {
-    if (!confirm('Удалить все чаты из списка?')) return;
-    const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
-    const { db } = await import('./config.js');
-    await updateDoc(doc(db, 'users', authState.user.uid), { chats: [] });
-    authState.userData.chats = [];
-    await DB.Lists.setChats(authState.user.uid, []);
-    loadChats();
-    document.getElementById('settingsModal').classList.remove('active');
-    showToast('✅ Чаты удалены', 'success');
+    if (!authState.user?.uid) return;
+    if (!confirm('Убрать все личные чаты из списка и скрыть старую историю только у вас?')) return;
+    try {
+        const { doc, updateDoc, setDoc, serverTimestamp } =
+            await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+        const { db } = await import('./config.js');
+        const uid = authState.user.uid;
+        const chats = Array.isArray(authState.userData?.chats) ? authState.userData.chats : [];
+
+        for (const chat of chats) {
+            if (!chat?.uid) continue;
+            const chatId = chat.isSeda && chat.sedaChatId
+                ? chat.sedaChatId
+                : [uid, chat.uid].sort().join('_');
+            await setDoc(doc(db, 'chat_clears', uid, 'items', chatId), {
+                clearedAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+            await DB.clearCachedMessages(chatId);
+        }
+
+        await updateDoc(doc(db, 'users', uid), { chats: [] });
+        authState.userData.chats = [];
+        await DB.Lists.setChats(uid, []);
+        await loadChats();
+        document.getElementById('settingsModal').classList.remove('active');
+        if (uiState.currentChatId) await loadMessages();
+        showToast('Личные чаты убраны из списка; их старая история скрыта только у вас', 'success', 4500);
+    } catch (err) {
+        console.error('[Clear all chats]', err);
+        showToast('Не удалось очистить список чатов. Проверьте подключение и правила Firestore.', 'error', 4500);
+    }
 }
 
 async function clearAllMessages() {
-    if (!confirm('ОЧИСТИТЬ ВСЕ СООБЩЕНИЯ? Это нельзя отменить!')) return;
+    if (!authState.user?.uid) return;
+    if (!confirm('Скрыть историю всех чатов, групп и каналов только у вас? У других участников история останется.')) return;
     try {
-        const { collection, getDocs, writeBatch } =
+        const { doc, setDoc, serverTimestamp } =
             await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
         const { db } = await import('./config.js');
-        const chats = authState.userData.chats || [];
-        for (const chat of chats) {
-            if (chat.isGroup) continue;
-            const chatId = chat.isSeda && chat.sedaChatId
+        const uid = authState.user.uid;
+        const chatIds = new Set();
+
+        for (const chat of (authState.userData?.chats || [])) {
+            if (!chat?.uid) continue;
+            chatIds.add(chat.isSeda && chat.sedaChatId
                 ? chat.sedaChatId
-                : [authState.user.uid, chat.uid].sort().join('_');
-            const mRef = collection(db, 'messages', chatId, 'msgs');
-            const snap = await getDocs(mRef);
-            const batch = writeBatch(db);
-            snap.forEach(d => batch.delete(d.ref));
-            await batch.commit();
-            await DB.deleteSedaKey(chatId);
+                : [uid, chat.uid].sort().join('_'));
+        }
+        for (const group of (authState.userData?.groups || [])) {
+            if (group?.id) chatIds.add('group_' + group.id);
+        }
+        for (const channel of (authState.userData?.channels || [])) {
+            if (channel?.id) chatIds.add('channel_' + channel.id);
+        }
+
+        for (const chatId of chatIds) {
+            await setDoc(doc(db, 'chat_clears', uid, 'items', chatId), {
+                clearedAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            }, { merge: true });
             await DB.clearCachedMessages(chatId);
         }
-        showToast('✅ Очищено', 'success');
-        if (uiState.currentChatId) loadMessages();
-    } catch (e) {
-        showToast('Ошибка', 'error');
+        if (uiState.currentChatId) await loadMessages();
+        document.getElementById('settingsModal').classList.remove('active');
+        showToast('История переписок очищена только у вас', 'success', 4000);
+    } catch (err) {
+        console.error('[Clear all messages]', err);
+        showToast('Не удалось очистить историю. Проверьте подключение и правила Firestore.', 'error', 4500);
     }
 }
 
