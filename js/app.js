@@ -121,6 +121,8 @@ function showLoading() {
 
 function hideLoading() {
     const screen = document.getElementById('loadingScreen');
+    const offline = document.getElementById('offlineScreen');
+    if (offline) offline.hidden = true;
     if (!screen || screen.classList.contains('hidden') || loadingHideTimer) return;
     // Keep the cinematic intro on screen for at least 3 seconds, even on instant restore.
     const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -169,49 +171,17 @@ async function retryConnection() {
     const label = document.getElementById('retryConnectionLabel');
     const status = document.getElementById('offlineStatusText');
     if (button) button.disabled = true;
-    if (label) label.textContent = 'Проверяем соединение…';
-    if (status) status.textContent = 'Проверяем доступность сервиса';
+    if (label) label.textContent = 'Перезагрузка…';
+    if (status) status.textContent = navigator.onLine
+        ? 'Повторно запускаем Айсберг'
+        : 'Запускаем сохранённую офлайн-версию';
     offline?.classList.add('is-checking');
-
-    try {
-        if (!navigator.onLine) throw new Error('offline');
-        // Check the app host without relying on a cached response.
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 6500);
-        let response;
-        try {
-            response = await fetch('./manifest.json?connection-check=' + Date.now(), {
-                cache: 'no-store',
-                signal: controller.signal,
-                headers: { 'Cache-Control': 'no-cache' }
-            });
-        } finally {
-            clearTimeout(timeout);
-        }
-        if (!response.ok) throw new Error('app-host-unavailable');
-
-        if (label) label.textContent = 'Соединение восстановлено';
-        if (status) status.textContent = 'Перезапускаем Айсберг';
-        offline?.classList.remove('is-checking');
-        offline?.classList.add('is-exiting');
-        // Give the shutdown transition time to finish before restarting the app.
-        await new Promise(resolve => setTimeout(resolve, 460));
-        window.location.reload();
-    } catch (error) {
-        console.warn('[Connection retry] Сервис пока недоступен:', error);
-        offline?.classList.remove('is-checking', 'is-exiting');
-        if (status) status.textContent = navigator.onLine ? 'Сервис пока недоступен' : 'Интернет по-прежнему недоступен';
-        if (label) label.textContent = 'Повторить попытку';
-        if (document.getElementById('offlineDescription')) {
-            document.getElementById('offlineDescription').textContent = navigator.onLine
-                ? 'Сайт доступен не полностью или сервер пока не отвечает. Попробуйте ещё раз чуть позже.'
-                : 'Подключение всё ещё отсутствует. Проверьте Wi-Fi или мобильную сеть и повторите попытку.';
-        }
-    } finally {
-        offlineRetryInProgress = false;
-        if (button) button.disabled = false;
-        if (label && label.textContent === 'Проверяем соединение…') label.textContent = 'Повторить попытку';
-    }
+    // Do not require a live network request: the service worker can serve the app
+    // shell from cache when the device is in airplane mode.
+    await new Promise(resolve => setTimeout(resolve, 350));
+    offline?.classList.add('is-exiting');
+    await new Promise(resolve => setTimeout(resolve, 300));
+    window.location.reload();
 }
 
 function showAuthScreen() {
@@ -1766,13 +1736,21 @@ async function waitForFirebaseAuthAndRoute() {
                     });
                 } catch (e) {
                     console.warn('[waitForFirebaseAuthAndRoute] error:', e);
-                    hideLoading();
-                    showAuthScreen();
+                    if (!navigator.onLine || isConnectionFailure(e)) {
+                        showOfflineScreen('Ошибка подключения к серверу, попробуйте позже или проверьте подключение к интернету.');
+                    } else {
+                        hideLoading();
+                        showAuthScreen();
+                    }
                     resolve();
                 }
             } else {
-                hideLoading();
-                showAuthScreen();
+                if (!navigator.onLine) {
+                    showOfflineScreen('Ошибка подключения к серверу, попробуйте позже или проверьте подключение к интернету.');
+                } else {
+                    hideLoading();
+                    showAuthScreen();
+                }
                 resolve();
             }
         });
@@ -1790,18 +1768,9 @@ async function init() {
     setupAuthSyncEvents();
     setupAuthState();
 
-    if (!navigator.onLine) {
-        // Keep the branded startup screen visible for five seconds before showing offline mode.
-        const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-        const remaining = Math.max(0, 5000 - (now - loadingStartedAt));
-        await new Promise(resolve => setTimeout(resolve, remaining));
-        showOfflineScreen('Нет подключения к интернету. Когда сеть восстановится, нажмите «Повторить попытку».');
-        initialAuthRouting = false;
-        return;
-    }
-
-    // Firebase Auth retains the session for automatic sign-in, but the UI is not
-    // opened from a local profile cache before the current lock/access state is checked.
+    // Even in airplane mode, allow Firebase to restore its locally persisted session.
+    // handleAuthLogin() can then use the previously cached profile and offline chat data.
+    // If there is no usable local session, the branded connection screen appears after 5s.
     await waitForFirebaseAuthAndRoute();
     initialAuthRouting = false;
 
