@@ -1,0 +1,33 @@
+name: Firestore rules validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - 'firebase.json'
+      - '.github/workflows/firestore-rules.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - 'firebase.json'
+      - '.github/workflows/firestore-rules.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  firestore-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools
+      - name: Compile Firestore rules in emulator
+        run: firebase emulators:exec --only firestore --project demo-iceberg "echo 'Firestore rules compiled successfully'"
