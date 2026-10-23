@@ -453,7 +453,9 @@ service cloud.firestore {
         || (currentThreadMember(resource.data)
           && currentThreadMember(request.resource.data)
           && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['lastMessage', 'lastMessageTime', 'lastMessageSenderId', 'unread', 'updatedAt']));
+            .hasOnly(['lastMessage', 'lastMessageTime', 'lastMessageSenderId', 'unread', 'updatedAt'])
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastMessageSenderId'])
+            || request.resource.data.lastMessageSenderId == request.auth.uid));
       allow delete: if isAdmin() || threadModerator(resource.data);
 
       function chatModerator() {
