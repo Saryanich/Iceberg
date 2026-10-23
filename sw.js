@@ -153,6 +153,13 @@ async function networkFirst(request) {
     } catch (err) {
         const cached = await caches.match(request);
         if (cached) return cached;
+
+        // A retry URL intentionally has a cache-busting query. If the device is
+        // offline, still serve the cached app shell instead of the browser error page.
+        if (request.mode === 'navigate') {
+            const fallback = await caches.match('./index.html') || await caches.match('./');
+            if (fallback) return fallback;
+        }
         throw err;
     }
 }
