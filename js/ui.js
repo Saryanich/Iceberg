@@ -1129,7 +1129,7 @@ export async function selectChat(chat) {
 
     try {
         await ensureMessageThread(uiState.currentChatId, {
-            kind: 'direct',
+            kind: chat.isSeda ? 'seda' : 'direct',
             participants: [chat.uid]
         });
     } catch (err) {
