@@ -535,7 +535,7 @@ export async function ensureProfile(user, profileData = {}) {
     if (d.exists()) return d.data();
     const globalId = profileData.globalId || '';
     const initial = {
-        uid: user.uid, email: user.email, globalId, nickname: profileData.nickname || user.email.split('@')[0],
+        uid: user.uid, role: 'user', email: user.email, globalId, nickname: profileData.nickname || user.email.split('@')[0],
         firstName: '', lastName: '', mood: '', avatar: null,
         chats: [], contacts: [], groups: [], channels: [], stories: [], trustedDevices: [],
         accountLocked: false, icebergAccess: true, sedaProActivated: false, autoDeleteHours: 0, createdAt: serverTimestamp()
