@@ -38,16 +38,17 @@ service cloud.firestore {
     }
 
     function isChatMember(data) {
+      // A creator/admin is not a member forever: membership must be present in
+      // the current member list so a removed user immediately loses access.
       return signedIn() && data != null && (
         (data.keys().hasAny(['participants']) && hasUid(data.participants))
         || (data.keys().hasAny(['memberIds']) && hasUid(data.memberIds))
         || (data.keys().hasAny(['members']) && hasUid(data.members))
-        || (data.keys().hasAny(['createdBy']) && data.createdBy == request.auth.uid)
       );
     }
 
     function groupAdmin(data) {
-      return signedIn() && data != null && (
+      return signedIn() && data != null && isChatMember(data) && (
         (data.keys().hasAny(['createdBy']) && data.createdBy == request.auth.uid)
         || (data.keys().hasAny(['adminIds']) && hasUid(data.adminIds))
         || (data.keys().hasAny(['members']) && data.members is list
@@ -56,7 +57,7 @@ service cloud.firestore {
     }
 
     function channelAdmin(data) {
-      return signedIn() && data != null && (
+      return signedIn() && data != null && isChatMember(data) && (
         (data.keys().hasAny(['createdBy']) && data.createdBy == request.auth.uid)
         || (data.keys().hasAny(['admins']) && hasUid(data.admins))
       );
