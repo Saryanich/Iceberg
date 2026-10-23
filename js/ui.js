@@ -1128,11 +1128,12 @@ export async function selectChat(chat) {
 
     if (chat.isSeda && chat.sedaChatId) {
         uiState.currentChatId = chat.sedaChatId;
-        uiState.currentSedaKey = authState.sedaProActivated ? await DB.getSedaKey(chat.sedaChatId) : null;
-        uiState.sedaEnabledForCurrentChat = !!(
-            authState.sedaProActivated && uiState.currentSedaKey?.startsWith('SEDAKEY:')
-        );
-        if (authState.sedaProActivated && !uiState.currentSedaKey?.startsWith('SEDAKEY:')) {
+        const localSedaKey = authState.sedaProActivated ? await DB.getSedaKey(chat.sedaChatId) : null;
+        const localSedaKeyShared = localSedaKey?.startsWith('SEDAKEY:')
+            && await DB.isSedaKeyShared(chat.sedaChatId);
+        uiState.currentSedaKey = localSedaKeyShared ? localSedaKey : null;
+        uiState.sedaEnabledForCurrentChat = !!localSedaKeyShared;
+        if (authState.sedaProActivated && !localSedaKeyShared) {
             // The initiator may have opened this chat before the peer responded,
             // then left/reloaded. Resume its pending handshake using the saved private key.
             watchSedaInitiatorHandshake(chat.sedaChatId);
@@ -2637,6 +2638,7 @@ function watchSedaInitiatorHandshake(sedaChatId) {
             if (!key?.startsWith('SEDAKEY:')) throw new Error('Не удалось расшифровать ключ SEDA');
 
             await DB.saveSedaKey(sedaChatId, key);
+            await DB.markSedaKeyShared(sedaChatId);
             if (uiState.currentChatId === sedaChatId) {
                 uiState.currentSedaKey = key;
                 uiState.sedaEnabledForCurrentChat = !!authState.sedaProActivated;
@@ -2683,7 +2685,10 @@ export async function startSedaChat() {
     const baseChatId = [authState.user.uid, peerUid].sort().join('_');
     const sedaChatId = 'seda_' + baseChatId;
 
-    if (await DB.getSedaKey(sedaChatId)) {
+    const localSedaKey = await DB.getSedaKey(sedaChatId);
+    const localSedaKeyShared = localSedaKey?.startsWith('SEDAKEY:')
+        && await DB.isSedaKeyShared(sedaChatId);
+    if (localSedaKeyShared) {
         showToast('🔮 SEDA-чат уже существует', 'info');
         await openSedaChat(peerUid, sedaChatId);
         return;
@@ -2808,6 +2813,7 @@ export function startSedaHandshakeListener() {
                         const key = await aesDecrypt(data.encryptedBaseKey, shared);
                         if (!key?.startsWith('ICEBERGBASEKEY:')) throw new Error('Неверный базовый ключ');
                         await DB.saveSedaKey(data.chatId, key);
+                        await DB.markSedaKeyShared(data.chatId);
                         await updateDoc(d.ref, { peerKeyStored: true, peerKeyStoredAt: Date.now() });
                         if (uiState.currentChatId === data.chatId) {
                             uiState.currentSedaKey = key;
@@ -2847,6 +2853,7 @@ export function startSedaHandshakeListener() {
                     const recoveredKey = await aesDecrypt(data.encryptedSedaKey, shared);
                     if (!recoveredKey?.startsWith('SEDAKEY:')) throw new Error('Некорректный восстановленный ключ SEDA');
                     await DB.saveSedaKey(d.id, recoveredKey);
+                    await DB.markSedaKeyShared(d.id);
                     await updateDoc(d.ref, { peerKeyStored: true, peerKeyStoredAt: Date.now() });
 
                     if (uiState.currentChatId === d.id) {
@@ -2912,6 +2919,7 @@ export function startSedaHandshakeListener() {
                 // Persist the exchanged key locally before telling the initiator it is stored.
                 // This keeps a fast acknowledgement/reload from deleting the only recovery copy.
                 await DB.saveSedaKey(d.id, mySedaKey);
+                await DB.markSedaKeyShared(d.id);
                 await updateDoc(d.ref, {
                     peerPublicKey: myPub,
                     encryptedSedaKey: encryptedMyKey,
@@ -2976,7 +2984,7 @@ export async function pasteSedaKeyFromClipboard() {
             return;
         }
         if (!uiState.currentChatId) return;
-        await DB.saveSedaKey(uiState.currentChatId, txt);
+        await DB.saveSedaKey(uiState.currentChatId, txt, false, true);
         uiState.currentSedaKey = txt;
         uiState.sedaEnabledForCurrentChat = true;
         showToast('✅ Ключ вставлен!', 'success');
