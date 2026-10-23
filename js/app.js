@@ -575,6 +575,7 @@ function bindUIEvents() {
         if (!d) return;
         document.getElementById('profileFirstName').value = d.firstName || '';
         document.getElementById('profileLastName').value = d.lastName || '';
+        document.getElementById('profileNickname').value = d.nickname || (d.globalId ? '@' + d.globalId : '');
         document.getElementById('profileMood').value = d.mood || '';
         const av = document.getElementById('profileAvatarBig');
         av.innerHTML = '';
@@ -623,7 +624,8 @@ function bindUIEvents() {
         const fn = document.getElementById('profileFirstName').value.trim();
         const ln = document.getElementById('profileLastName').value.trim();
         const mood = document.getElementById('profileMood').value.trim();
-        const nick = (fn || ln) ? `${fn} ${ln}`.trim() : (authState.userData.nickname || 'Пользователь');
+        const nickInput = document.getElementById('profileNickname').value.trim();
+        const nick = nickInput || (authState.userData.globalId ? '@' + authState.userData.globalId : 'Пользователь');
         try {
             const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
             const { db } = await import('./config.js');
@@ -713,14 +715,27 @@ function bindUIEvents() {
 
     document.querySelectorAll('.plus-menu-item').forEach((el, i) => {
         const actions = [
-            showCreateGroupModal,
-            showCreateChannelModal,
             showSearchModal,
             openScanner,
-            openStories
+            () => {
+                document.getElementById('searchModal').classList.add('active');
+                document.getElementById('searchGlobalIdInput').focus();
+            },
+            showCreateGroupModal,
+            showCreateChannelModal
         ];
-        el.onclick = () => actions[i]?.();
+        el.onclick = (event) => {
+            event.stopPropagation();
+            document.getElementById('plusMenu').classList.remove('show');
+            actions[i]?.();
+        };
     });
+    document.getElementById('profileCreateStoryBtn')?.addEventListener('click', async () => {
+        document.getElementById('profileModal').classList.remove('active');
+        document.getElementById('storiesModal').classList.add('active');
+        await loadOwnStories();
+    });
+    document.getElementById('searchNicknameBtn')?.addEventListener('click', searchByNickname);
 
     document.querySelectorAll('.close-modal').forEach(el => {
         el.onclick = () => {
@@ -961,6 +976,33 @@ async function openStories() {
     document.getElementById('plusMenu').classList.remove('show');
     document.getElementById('storiesModal').classList.add('active');
     await loadOwnStories();
+}
+
+async function searchByNickname() {
+    const nickname = document.getElementById('searchGlobalIdInput').value.trim().replace(/^@/, '');
+    if (!nickname) return showToast('Введите никнейм', 'error');
+    try {
+        const { collection, query, where, getDocs, limit, doc, updateDoc, arrayUnion } =
+            await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+        const { db } = await import('./config.js');
+        const snap = await getDocs(query(collection(db, 'public_profiles'), where('nickname', '==', '@' + nickname), limit(5)));
+        const profile = snap.docs.find(item => item.id !== authState.user.uid);
+        if (!profile) return showToast('Пользователь с таким никнеймом не найден', 'error');
+        const data = profile.data();
+        const contact = { uid: profile.id, globalId: data.globalId || '', nickname: data.nickname || '@' + (data.globalId || 'user'), avatar: data.avatar || null, mood: data.mood || '' };
+        const contacts = Array.isArray(authState.userData.contacts) ? authState.userData.contacts : [];
+        if (!contacts.some(existing => existing.uid === contact.uid)) {
+            await updateDoc(doc(db, 'users', authState.user.uid), { contacts: arrayUnion(contact) });
+            authState.userData.contacts = [...contacts, contact];
+            await DB.Lists.setContacts(authState.user.uid, authState.userData.contacts);
+        }
+        document.getElementById('searchModal').classList.remove('active');
+        await loadContacts();
+        await openChatWithContact(contact);
+    } catch (error) {
+        console.error('[Nickname search]', error);
+        showToast(error?.code === 'permission-denied' ? 'Поиск по никнейму запрещён правилами Firestore' : 'Не удалось выполнить поиск по никнейму', 'error');
+    }
 }
 
 async function searchByGlobalId() {
