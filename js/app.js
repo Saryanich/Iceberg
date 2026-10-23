@@ -154,33 +154,38 @@ function showOfflineScreen(message = 'Ошибка подключения к с�
     const loading = document.getElementById('loadingScreen');
     const offline = document.getElementById('offlineScreen');
     const description = document.getElementById('offlineDescription');
-    const status = document.getElementById('offlineStatusText');
     if (loading) {
         if (loadingHideTimer) clearTimeout(loadingHideTimer);
         loadingHideTimer = null;
-        loading.classList.add('hidden');
-        loading.classList.remove('loading-exit');
+        loading.classList.add('loading-exit');
+        setTimeout(() => {
+            loading.classList.add('hidden');
+            loading.classList.remove('loading-exit');
+        }, 850);
     }
     if (description) description.textContent = message;
-    if (status) status.textContent = navigator.onLine ? 'Сервис не ответил' : 'Интернет недоступен';
-    offline?.classList.remove('is-exiting', 'is-checking');
-    if (offline) offline.hidden = false;
+    offline?.classList.remove('is-leaving', 'is-checking', 'is-visible');
+    if (offline) {
+        offline.hidden = false;
+        requestAnimationFrame(() => offline.classList.add('is-visible'));
+    }
 }
 
 async function retryConnection(event) {
     event?.preventDefault();
-    if (offlineRetryInProgress) return;
+    if (window.__icebergRetryStarted || offlineRetryInProgress) return;
     offlineRetryInProgress = true;
+    window.__icebergRetryStarted = true;
     const offline = document.getElementById('offlineScreen');
     const button = document.getElementById('retryConnectionBtn');
     const label = document.getElementById('retryConnectionLabel');
     if (button) button.disabled = true;
     if (label) label.textContent = 'Перезагрузка…';
-    offline?.classList.add('is-checking');
-    // Keep the branded screen visible while reloading; fading the whole screen
-    // to opacity:0 first caused a blank flash before navigation.
-    await new Promise(resolve => setTimeout(resolve, 450));
-    window.location.reload();
+    offline?.classList.add('is-checking', 'is-leaving');
+    const target = new URL(window.location.href);
+    target.searchParams.set('retry', String(Date.now()));
+    await new Promise(resolve => setTimeout(resolve, 650));
+    window.location.replace(target.href);
 }
 
 function showAuthScreen() {
@@ -1689,7 +1694,7 @@ async function waitForFirebaseAuthAndRoute() {
             try { unsub(); } catch {}
             showOfflineScreen('Ошибка подключения к серверу, попробуйте позже или проверьте подключение к интернету.');
             resolve();
-        }, 5000);
+        }, 12000);
 
         const unsub = subscribeAuthState(async (user) => {
             if (done) return;
@@ -1767,7 +1772,7 @@ async function init() {
 
     // Even in airplane mode, allow Firebase to restore its locally persisted session.
     // handleAuthLogin() can then use the previously cached profile and offline chat data.
-    // If there is no usable local session, the branded connection screen appears after 5s.
+    // Allow Firebase Auth to restore its persisted session before treating startup as stalled.
     await waitForFirebaseAuthAndRoute();
     initialAuthRouting = false;
 
