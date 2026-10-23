@@ -167,24 +167,19 @@ function showOfflineScreen(message = 'Ошибка подключения к с�
     if (offline) offline.hidden = false;
 }
 
-async function retryConnection() {
+async function retryConnection(event) {
+    event?.preventDefault();
     if (offlineRetryInProgress) return;
     offlineRetryInProgress = true;
     const offline = document.getElementById('offlineScreen');
     const button = document.getElementById('retryConnectionBtn');
     const label = document.getElementById('retryConnectionLabel');
-    const status = document.getElementById('offlineStatusText');
     if (button) button.disabled = true;
     if (label) label.textContent = 'Перезагрузка…';
-    if (status) status.textContent = navigator.onLine
-        ? 'Повторно запускаем Айсберг'
-        : 'Запускаем сохранённую офлайн-версию';
     offline?.classList.add('is-checking');
-    // Do not require a live network request: the service worker can serve the app
-    // shell from cache when the device is in airplane mode.
-    await new Promise(resolve => setTimeout(resolve, 350));
-    offline?.classList.add('is-exiting');
-    await new Promise(resolve => setTimeout(resolve, 300));
+    // Keep the branded screen visible while reloading; fading the whole screen
+    // to opacity:0 first caused a blank flash before navigation.
+    await new Promise(resolve => setTimeout(resolve, 450));
     window.location.reload();
 }
 
@@ -516,11 +511,11 @@ function setupAuthSyncEvents() {
 }
 
 function bindUIEvents() {
-    document.getElementById('retryConnectionBtn')?.addEventListener('click', retryConnection);
+    document.getElementById('retryConnectionBtn')?.addEventListener('click', retryConnection, { passive: false });
     window.addEventListener('online', () => {
         const offline = document.getElementById('offlineScreen');
         const status = document.getElementById('offlineStatusText');
-        if (offline && !offline.hidden && status) status.textContent = 'Интернет появился — нажмите «Повторить попытку»';
+        if (offline && !offline.hidden && status) status.textContent = 'Интернет появился — нажмите «Перезагрузить»';
     });
     document.getElementById('loginPassword')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') handleLoginClick();
