@@ -473,8 +473,271 @@ function renderContactItem(contact) {
     info.appendChild(sub);
     div.appendChild(av);
     div.appendChild(info);
-    div.onclick = () => openChatWithContact(contact);
+    div.onclick = () => showContactCard(contact);
     return div;
+}
+
+
+
+// Build a safe contact profile from the public projection rather than reading another
+// user's private /users document.
+export async function showContactCard(contact) {
+    if (!contact?.uid) return;
+    let profile = { ...contact };
+    try {
+        const snap = await getDoc(doc(db, 'public_profiles', contact.uid));
+        if (snap.exists()) profile = { ...profile, ...snap.data(), uid: contact.uid };
+    } catch (err) {
+        console.warn('[Contact card] Public profile unavailable:', err);
+    }
+
+    let modal = document.getElementById('contactCardModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'contactCardModal';
+        modal.className = 'modal-overlay';
+        modal.innerHTML = '<div class="modal-content contact-card-content"></div>';
+        modal.addEventListener('click', event => {
+            if (event.target === modal) modal.classList.remove('active');
+        });
+        document.body.appendChild(modal);
+    }
+    const body = modal.querySelector('.modal-content');
+    body.replaceChildren();
+
+    const top = document.createElement('div');
+    top.className = 'modal-header';
+    const title = document.createElement('h3');
+    title.textContent = 'Карточка контакта';
+    const close = document.createElement('button');
+    close.className = 'close-modal';
+    close.type = 'button';
+    close.setAttribute('aria-label', 'Закрыть');
+    close.textContent = '×';
+    close.onclick = () => modal.classList.remove('active');
+    top.append(title, close);
+
+    const avatar = document.createElement('button');
+    avatar.type = 'button';
+    avatar.className = 'contact-card-avatar';
+    avatar.setAttribute('aria-label', 'Посмотреть историю пользователя');
+    if (profile.avatar) {
+        const img = document.createElement('img');
+        img.src = profile.avatar;
+        img.alt = 'Аватар ' + (profile.nickname || 'пользователя');
+        avatar.appendChild(img);
+    } else {
+        avatar.textContent = (profile.nickname || '👤').charAt(0).toUpperCase();
+    }
+    avatar.onclick = () => openUserStories(profile.uid, profile.nickname || profile.globalId || 'Пользователь');
+
+    const name = document.createElement('h3');
+    name.className = 'contact-card-name';
+    name.textContent = profile.nickname || profile.globalId || 'Пользователь';
+    const gid = document.createElement('p');
+    gid.className = 'contact-card-meta';
+    gid.textContent = profile.globalId ? 'Global ID: ' + profile.globalId : 'Global ID не указан';
+    const mood = document.createElement('p');
+    mood.className = 'contact-card-mood';
+    mood.textContent = profile.mood || 'Статус не указан';
+
+    const hint = document.createElement('p');
+    hint.className = 'contact-card-hint';
+    hint.textContent = 'Нажмите на аватар, чтобы открыть истории, если они есть.';
+
+    const actions = document.createElement('div');
+    actions.className = 'contact-card-actions';
+    const chatButton = document.createElement('button');
+    chatButton.type = 'button';
+    chatButton.className = 'btn btn-primary';
+    chatButton.textContent = '💬 Создать / открыть чат';
+    chatButton.onclick = async () => {
+        modal.classList.remove('active');
+        await openChatWithContact(profile);
+    };
+    const sedaButton = document.createElement('button');
+    sedaButton.type = 'button';
+    sedaButton.className = 'btn btn-secondary';
+    sedaButton.textContent = '🔮 Создать SEDA-чат';
+    sedaButton.disabled = !authState.sedaProActivated;
+    sedaButton.title = sedaButton.disabled ? 'Сначала активируйте SEDA Pro в настройках' : '';
+    sedaButton.onclick = async () => {
+        if (!authState.sedaProActivated) {
+            showToast('Сначала активируйте SEDA Pro в настройках', 'error');
+            return;
+        }
+        modal.classList.remove('active');
+        await openChatWithContact(profile);
+        await startSedaChat();
+    };
+
+    body.append(top, avatar, name, gid, mood, hint, actions);
+    actions.append(chatButton, sedaButton);
+    modal.classList.add('active');
+}
+
+async function fetchUserStories(uid) {
+    const q = query(
+        collection(db, 'user_stories', uid, 'items'),
+        where('expiresAt', '>', Timestamp.fromMillis(Date.now())),
+        orderBy('expiresAt', 'asc'),
+        limit(MAX_STORIES)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data(), ownerUid: uid }));
+}
+
+function renderStoryViewer() {
+    const items = uiState.currentStories || [];
+    const current = items[uiState.storyViewerIndex];
+    const modal = document.getElementById('storyViewerModal');
+    if (!current || !modal) {
+        modal?.classList.remove('active');
+        return;
+    }
+    const image = document.getElementById('storyImage');
+    image.src = current.image;
+    image.alt = 'История ' + (current.ownerName || 'пользователя');
+    const mine = current.ownerUid === authState.user?.uid;
+    document.getElementById('deleteStoryBtn').style.display = mine ? 'block' : 'none';
+    const progress = document.getElementById('storyProgress');
+    if (progress) {
+        progress.replaceChildren();
+        items.forEach((item, index) => {
+            const bar = document.createElement('div');
+            bar.className = 'story-progress-bar';
+            const fill = document.createElement('div');
+            fill.className = 'story-progress-fill';
+            if (index <= uiState.storyViewerIndex) fill.style.width = '100%';
+            bar.appendChild(fill);
+            progress.appendChild(bar);
+        });
+    }
+    modal.classList.add('active');
+}
+
+export async function openUserStories(uid, ownerName = 'Пользователь') {
+    if (!uid) return;
+    try {
+        const items = await fetchUserStories(uid);
+        if (!items.length) {
+            showToast('У пользователя пока нет активных историй', 'info');
+            return;
+        }
+        uiState.currentStories = items.map(item => ({ ...item, ownerName }));
+        uiState.storyViewerIndex = 0;
+        renderStoryViewer();
+    } catch (err) {
+        console.error('[Stories] Не удалось загрузить истории:', err);
+        showToast('Не удалось загрузить истории. Проверьте права Firestore.', 'error');
+    }
+}
+
+export async function loadOwnStories() {
+    const list = document.getElementById('myStoriesList');
+    if (!list || !authState.user?.uid) return;
+    list.replaceChildren();
+    let items = [];
+    try {
+        items = await fetchUserStories(authState.user.uid);
+    } catch (err) {
+        console.warn('[Stories] Не удалось загрузить свои истории:', err);
+        showToast('Не удалось загрузить истории. Обновите Firestore Rules.', 'error');
+        return;
+    }
+    if (!items.length) {
+        const empty = document.createElement('p');
+        empty.className = 'contact-card-hint';
+        empty.textContent = 'Активных историй пока нет.';
+        list.appendChild(empty);
+        return;
+    }
+    for (const item of items) {
+        const tile = document.createElement('div');
+        tile.className = 'own-story-tile';
+        const image = document.createElement('img');
+        image.src = item.image;
+        image.alt = 'Моя история';
+        image.onclick = () => {
+            uiState.currentStories = items.map(story => ({ ...story, ownerName: authState.userData?.nickname || 'Вы' }));
+            uiState.storyViewerIndex = items.findIndex(story => story.id === item.id);
+            renderStoryViewer();
+        };
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'own-story-delete';
+        remove.textContent = '×';
+        remove.setAttribute('aria-label', 'Удалить историю');
+        remove.onclick = async event => {
+            event.stopPropagation();
+            if (!confirm('Удалить эту историю?')) return;
+            try {
+                await deleteDoc(doc(db, 'user_stories', authState.user.uid, 'items', item.id));
+                await loadOwnStories();
+                showToast('История удалена', 'success');
+            } catch (err) {
+                showToast('Не удалось удалить историю', 'error');
+            }
+        };
+        tile.append(image, remove);
+        list.appendChild(tile);
+    }
+}
+
+export async function uploadOwnStories(files) {
+    if (!authState.user?.uid || !files?.length) return;
+    try {
+        const current = await fetchUserStories(authState.user.uid);
+        const remaining = MAX_STORIES - current.length;
+        if (remaining <= 0) {
+            showToast('Можно хранить не более 5 активных историй', 'error');
+            return;
+        }
+        const images = Array.from(files).filter(file => file.type.startsWith('image/')).slice(0, remaining);
+        if (!images.length) {
+            showToast('Выберите изображения', 'error');
+            return;
+        }
+        for (const file of images) {
+            const image = await compressImage(file, 400 * 1024);
+            await addDoc(collection(db, 'user_stories', authState.user.uid, 'items'), {
+                image,
+                createdAt: serverTimestamp(),
+                expiresAt: Timestamp.fromMillis(Date.now() + STORY_LIFETIME - 60000)
+            });
+        }
+        await loadOwnStories();
+        showToast('Истории опубликованы на 24 часа', 'success');
+    } catch (err) {
+        console.error('[Stories] Upload failed:', err);
+        showToast('Не удалось загрузить историю. Проверьте размер изображения и Firestore Rules.', 'error', 4500);
+    }
+}
+
+export function moveStory(direction) {
+    const total = uiState.currentStories?.length || 0;
+    if (!total) return;
+    uiState.storyViewerIndex = (uiState.storyViewerIndex + direction + total) % total;
+    renderStoryViewer();
+}
+
+export async function deleteCurrentStory() {
+    const item = uiState.currentStories?.[uiState.storyViewerIndex];
+    if (!item || item.ownerUid !== authState.user?.uid) return;
+    try {
+        await deleteDoc(doc(db, 'user_stories', item.ownerUid, 'items', item.id));
+        uiState.currentStories.splice(uiState.storyViewerIndex, 1);
+        if (!uiState.currentStories.length) {
+            document.getElementById('storyViewerModal')?.classList.remove('active');
+        } else {
+            uiState.storyViewerIndex = Math.min(uiState.storyViewerIndex, uiState.currentStories.length - 1);
+            renderStoryViewer();
+        }
+        await loadOwnStories();
+        showToast('История удалена', 'success');
+    } catch (err) {
+        showToast('Не удалось удалить историю', 'error');
+    }
 }
 
 export async function loadGroups() {
