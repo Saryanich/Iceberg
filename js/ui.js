@@ -2496,10 +2496,15 @@ export async function startSedaChat() {
             );
             const sharedKey = await deriveSharedKey(privateKey, peerPub);
             const decryptedSedaKey = await aesDecrypt(data.encryptedSedaKey, sharedKey);
-            if (decryptedSedaKey) {
+            if (decryptedSedaKey?.startsWith('SEDAKEY:')) {
                 await DB.saveSedaKey(sedaChatId, decryptedSedaKey);
-                // Сохраняем зашифрованный ECDH-handshake в Firestore как резервную копию ключа.
-                // Удалять документ сразу нельзя: ключ иначе останется только в IndexedDB инициатора.
+                if (uiState.currentChatId === sedaChatId) {
+                    uiState.currentSedaKey = decryptedSedaKey;
+                    uiState.sedaEnabledForCurrentChat = !!authState.sedaProActivated;
+                    updateSedaUI();
+                    await loadMessages();
+                }
+                // The recipient has stored its key; acknowledge without exposing the key itself.
                 await updateDoc(handshakeRef, {
                     initiatorAck: true,
                     initiatorAckAt: Date.now(),
@@ -2507,6 +2512,8 @@ export async function startSedaChat() {
                     expiresAt: null
                 }).catch(e => console.warn('[SEDA] Не удалось подтвердить handshake:', e));
                 showToast('✅ SEDA-чат установлен!', 'success');
+            } else {
+                throw new Error('Получен некорректный ключ SEDA');
             }
         }
     });
