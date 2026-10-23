@@ -120,6 +120,8 @@ function showLoading() {
 }
 
 function hideLoading() {
+    window.__icebergStartupResolved = true;
+    if (window.__icebergStartupFallback) clearTimeout(window.__icebergStartupFallback);
     const screen = document.getElementById('loadingScreen');
     const offline = document.getElementById('offlineScreen');
     if (offline) offline.hidden = true;
@@ -127,7 +129,7 @@ function hideLoading() {
     // Keep the cinematic intro on screen for at least 3 seconds, even on instant restore.
     const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     const elapsed = now - loadingStartedAt;
-    const remaining = Math.max(0, 3000 - elapsed);
+    const remaining = Math.max(0, 5000 - elapsed);
     loadingHideTimer = setTimeout(() => {
         screen.classList.add('loading-exit');
         // Let the exit animation finish before removing the overlay.
@@ -146,7 +148,9 @@ function isConnectionFailure(error) {
     return !navigator.onLine || /network|offline|timeout|timed out|unavailable|deadline-exceeded|failed to fetch|fetch failed|connection/.test(message);
 }
 
-function showOfflineScreen(message = 'Не удалось связаться с сервисами Айсберга. Проверьте интернет и попробуйте снова.') {
+function showOfflineScreen(message = 'Ошибка подключения к серверу, попробуйте позже или проверьте подключение к интернету.') {
+    window.__icebergStartupResolved = true;
+    if (window.__icebergStartupFallback) clearTimeout(window.__icebergStartupFallback);
     const loading = document.getElementById('loadingScreen');
     const offline = document.getElementById('offlineScreen');
     const description = document.getElementById('offlineDescription');
