@@ -1922,9 +1922,9 @@ export async function sendSticker(sticker) {
             const ok = await updateChatLastMessage(sticker, chatContext);
             if (ok) removePendingChatSync(pendingSyncId);
         }).catch((e) => {
-            console.error('[Sticker] Отправка ожидает сети:', e);
-            queueDirectChatSync(chatContext, sticker);
-            showToast('Стикер ожидает подключения к сети', 'info', 3500);
+            removePendingChatSync(pendingSyncId);
+            console.error('[Sticker] Не удалось сохранить сообщение:', e);
+            showToast('Не удалось отправить стикер. Проверьте подключение и права Firestore.', 'error', 4000);
         });
     } catch (e) {
         console.error('[Sticker] Ошибка:', e);
@@ -1946,6 +1946,14 @@ export async function sendMediaFile(input) {
     };
     if (chatContext.currentChannel && !chatContext.currentChannel.isAdmin) {
         showToast('❌ Только администраторы', 'error');
+        return;
+    }
+    if (chatContext.currentChat?.isSeda && !authState.sedaProActivated) {
+        showToast('SEDA-чаты доступны только с активной подпиской', 'error');
+        return;
+    }
+    if (chatContext.currentChat?.isSeda && !chatContext.sedaKey?.startsWith('SEDAKEY:')) {
+        showToast('Ключ SEDA ещё не получен. Дождитесь установки защищённого соединения.', 'info', 4000);
         return;
     }
     const isImageFile = file.type.startsWith('image/');
@@ -1997,10 +2005,7 @@ export async function sendMediaFile(input) {
             if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = keyStr;
         } else if (chatContext.currentChat?.isSeda && authState.sedaProActivated) {
             const keyStr = chatContext.sedaKey;
-            if (!keyStr?.startsWith('SEDAKEY:')) {
-                showToast('Ключ SEDA ещё не получен. Повторите отправку после установки соединения.', 'info');
-                return;
-            }
+            if (!keyStr?.startsWith('SEDAKEY:')) throw new Error('Ключ SEDA ещё не получен');
             mediaToSend = await sedaUltraEncryptWithKey(dataUrl, keyStr);
             mediaEncrypted = true;
         }
@@ -2036,9 +2041,11 @@ export async function sendMediaFile(input) {
             if (ok) removePendingChatSync(pendingSyncId);
             removeOperationIndicator(indicator);
         }).catch((e) => {
-            console.error('[Media] Сообщение ожидает синхронизации:', e);
-            queueDirectChatSync(chatContext, preview);
-            updateOperationIndicator(indicator, 'Ожидает подключения', 'Повторим автоматически');
+            removePendingChatSync(pendingSyncId);
+            console.error('[Media] Не удалось сохранить сообщение:', e);
+            updateOperationIndicator(indicator, 'Файл не отправлен', 'Проверьте соединение и права доступа');
+            showToast('Не удалось отправить файл. Проверьте подключение и права Firestore.', 'error', 4000);
+            setTimeout(() => removeOperationIndicator(indicator), 3500);
         });
     } catch (e) {
         console.error('sendMediaFile error:', e);
@@ -2110,10 +2117,7 @@ export async function toggleVoiceRecording() {
                         if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = keyStr;
                     } else if (chatContext.currentChat?.isSeda && authState.sedaProActivated) {
                         const keyStr = chatContext.sedaKey;
-                        if (!keyStr?.startsWith('SEDAKEY:')) {
-                            showToast('Ключ SEDA ещё не получен. Запись не отправлена.', 'info');
-                            return;
-                        }
+                        if (!keyStr?.startsWith('SEDAKEY:')) throw new Error('Ключ SEDA ещё не получен. Запись не отправлена.');
                         dataUrl = await sedaUltraEncryptWithKey(dataUrl, keyStr);
                         mediaEncrypted = true;
                     }
@@ -2140,9 +2144,9 @@ export async function toggleVoiceRecording() {
                         const ok = await updateChatLastMessage(preview, chatContext);
                         if (ok) removePendingChatSync(pendingSyncId);
                     }).catch((e) => {
-                        console.error('[Voice] Отправка ожидает сети:', e);
-                        queueDirectChatSync(chatContext, preview);
-                        showToast('Голосовое ожидает подключения к сети', 'info', 3500);
+                        removePendingChatSync(pendingSyncId);
+                        console.error('[Voice] Не удалось сохранить сообщение:', e);
+                        showToast('Не удалось отправить голосовое. Проверьте подключение и права Firestore.', 'error', 4000);
                     });
                 } catch (e) {
                     console.error(e);
