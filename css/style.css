@@ -2934,3 +2934,27 @@ button,
     .bottom-navigation .tab .nav-icon { font-size: 18px; }
     .sidebar .tab-content { padding-bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }
 }
+
+/* Keep the chosen profile avatar as the compact account button in the top-right. */
+.user-profile #openSettingsBtn { order: 1; }
+.user-profile #logoutBtn { order: 2; }
+.user-profile #userInfoClicker {
+    order: 3;
+    margin-left: auto;
+    flex: 0 0 auto;
+    cursor: pointer;
+}
+.user-profile #userInfoClicker .user-details { display: none; }
+.user-profile #userInfoClicker .user-avatar {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    font-size: 18px;
+}
+@media (max-width: 380px) {
+    .user-profile #userInfoClicker .user-avatar {
+        width: 36px;
+        height: 36px;
+        flex-basis: 36px;
+    }
+}
