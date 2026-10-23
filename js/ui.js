@@ -988,6 +988,9 @@ async function ensureIcebergBaseKey(chatId, peerUid) {
         }
         await DB.saveECDHKeys(handshakeId, pub, privJwk);
         await DB.saveSedaKey(chatId, baseKey);
+        // The initiator's local key is not usable for sending until the peer
+        // confirms that the same key has been decrypted and saved.
+        pendingHandshake = true;
     }
     const listenerId = handshakeId + ':' + authState.user.uid;
     if (!baseHandshakeListeners.has(listenerId)) {
