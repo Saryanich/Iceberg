@@ -415,247 +415,19 @@ service cloud.firestore {
             ])
           && (
             (
-              (resource.data.kind == 'group' || chatId.matches('^group_[A-Za-z0-9]+
-      allow delete: if isAdmin() || threadModerator(resource.data);
-
-      function chatModerator() {
-        return threadModerator(parentChat());
-      }
-      match /msgs/{messageId} {
-        allow get, list: if isAdmin() || currentThreadMember(parentChat());
-        allow create: if signedIn()
-          && currentThreadMember(parentChat())
-          && request.resource.data.senderId == request.auth.uid;
-        allow update: if isAdmin()
-          || (currentThreadMember(parentChat())
-            && (
-              (resource.data.keys().hasAny(['senderId'])
-                && resource.data.senderId == request.auth.uid
-                && request.resource.data.senderId == resource.data.senderId)
-              || (request.resource.data.diff(resource.data).affectedKeys()
-                .hasOnly(['read', 'readAt'])
-                && request.resource.data.senderId == resource.data.senderId)
-              || (request.resource.data.diff(resource.data).affectedKeys()
-                .hasOnly(['reactions'])
-                && request.resource.data.senderId == resource.data.senderId)
-              || (chatModerator()
-                && request.resource.data.diff(resource.data).affectedKeys()
-                  .hasOnly(['text', 'deleted', 'media', 'type', 'encrypted'])
-                && request.resource.data.deleted == true
-                && request.resource.data.senderId == resource.data.senderId)
-            ));
-        allow delete: if isAdmin()
-          || (currentThreadMember(parentChat())
-            && (
-              (resource.data.keys().hasAny(['senderId'])
-                && resource.data.senderId == request.auth.uid)
-              || chatModerator()
-            ));
-      }
-    }
-
-    // ECDH handshakes for Base and SEDA. A missing-document get is allowed only
-    // so a participant can check whether a new handshake must be created.
-    match /seda_handshakes/{handshakeId} {
-      function participant() {
-        return signedIn() && resource != null
-          && (resource.data.initiator == request.auth.uid
-            || resource.data.peer == request.auth.uid);
-      }
-
-      function handshakeKeysValid() {
-        return request.resource.data.keys().hasOnly([
-          'mode', 'chatId', 'initiator', 'peer', 'initiatorPublicKey',
-          'peerPublicKey', 'encryptedBaseKey', 'encryptedSedaKey',
-          'peerKeyStored', 'peerKeyStoredAt', 'initiatorAck', 'initiatorAckAt',
-          'createdAt', 'expiresAt', 'baseKeySentAt', 'peerRespondedAt',
-          'respondedAt', 'completed'
-        ])
-        && request.resource.data.initiator is string
-        && request.resource.data.peer is string
-        && request.resource.data.initiatorPublicKey is string;
-      }
-
-      allow get: if signedIn() && (resource == null || participant());
-      allow list: if participant();
-
-      allow create: if signedIn()
-        && handshakeKeysValid()
-        && request.resource.data.initiator == request.auth.uid
-        && request.resource.data.peer != request.auth.uid
-        && request.resource.data.peerPublicKey == null
-        && request.resource.data.keys().hasAll([
-          'initiator', 'peer', 'initiatorPublicKey', 'peerPublicKey', 'createdAt'
-        ]);
-
-      allow update: if participant()
-        && request.resource.data.initiator == resource.data.initiator
-        && request.resource.data.peer == resource.data.peer
-        && handshakeKeysValid()
-        && (
-          (request.auth.uid == resource.data.initiator
-            && request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly([
-                'encryptedBaseKey', 'baseKeySentAt', 'initiatorAck',
-                'initiatorAckAt', 'completed', 'expiresAt'
-              ]))
-          || (request.auth.uid == resource.data.peer
-            && request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly([
-                'peerPublicKey', 'encryptedBaseKey', 'encryptedSedaKey',
-                'peerKeyStored', 'peerKeyStoredAt', 'peerRespondedAt',
-                'respondedAt', 'completed'
-              ]))
-        );
-
-      allow delete: if participant() && (
-        (request.auth.uid == resource.data.initiator
-          && resource.data.peerPublicKey == null)
-        || (request.auth.uid == resource.data.peer
-          && resource.data.initiatorAck == true)
-        || (request.auth.uid == resource.data.initiator
-          && resource.data.expiresAt is number
-          && resource.data.expiresAt < request.time.toMillis())
-      );
-    }
-
-    // Admin data cleanup is retained, but never includes Global ID records.
-    match /{rootCollection}/{document=**} {
-      allow read: if isAdmin() && rootCollection != 'global_ids';
-      allow delete: if isAdmin() && rootCollection != 'global_ids';
-    }
-
-    match /{document=**} {
-      allow read, write: if false;
-    }
-  }
-}
-))
+              (resource.data.kind == 'group' || chatId.matches('^group_[A-Za-z0-9]+$'))
               && request.resource.data.kind == 'group'
               && request.resource.data.resourceId == sourceGroupId(resource.data)
+              && sourceGroup(resource.data) != null
               && request.resource.data.createdBy == sourceGroup(resource.data).createdBy
               && request.resource.data.memberIds == sourceGroup(resource.data).memberIds
               && request.resource.data.adminIds == sourceGroup(resource.data).adminIds
             )
             || (
-              (resource.data.kind == 'channel' || chatId.matches('^channel_[A-Za-z0-9]+
-      allow delete: if isAdmin() || threadModerator(resource.data);
-
-      function chatModerator() {
-        return threadModerator(parentChat());
-      }
-      match /msgs/{messageId} {
-        allow get, list: if isAdmin() || currentThreadMember(parentChat());
-        allow create: if signedIn()
-          && currentThreadMember(parentChat())
-          && request.resource.data.senderId == request.auth.uid;
-        allow update: if isAdmin()
-          || (currentThreadMember(parentChat())
-            && (
-              (resource.data.keys().hasAny(['senderId'])
-                && resource.data.senderId == request.auth.uid
-                && request.resource.data.senderId == resource.data.senderId)
-              || (request.resource.data.diff(resource.data).affectedKeys()
-                .hasOnly(['read', 'readAt'])
-                && request.resource.data.senderId == resource.data.senderId)
-              || (request.resource.data.diff(resource.data).affectedKeys()
-                .hasOnly(['reactions'])
-                && request.resource.data.senderId == resource.data.senderId)
-              || (chatModerator()
-                && request.resource.data.diff(resource.data).affectedKeys()
-                  .hasOnly(['text', 'deleted', 'media', 'type', 'encrypted'])
-                && request.resource.data.deleted == true
-                && request.resource.data.senderId == resource.data.senderId)
-            ));
-        allow delete: if isAdmin()
-          || (currentThreadMember(parentChat())
-            && (
-              (resource.data.keys().hasAny(['senderId'])
-                && resource.data.senderId == request.auth.uid)
-              || chatModerator()
-            ));
-      }
-    }
-
-    // ECDH handshakes for Base and SEDA. A missing-document get is allowed only
-    // so a participant can check whether a new handshake must be created.
-    match /seda_handshakes/{handshakeId} {
-      function participant() {
-        return signedIn() && resource != null
-          && (resource.data.initiator == request.auth.uid
-            || resource.data.peer == request.auth.uid);
-      }
-
-      function handshakeKeysValid() {
-        return request.resource.data.keys().hasOnly([
-          'mode', 'chatId', 'initiator', 'peer', 'initiatorPublicKey',
-          'peerPublicKey', 'encryptedBaseKey', 'encryptedSedaKey',
-          'peerKeyStored', 'peerKeyStoredAt', 'initiatorAck', 'initiatorAckAt',
-          'createdAt', 'expiresAt', 'baseKeySentAt', 'peerRespondedAt',
-          'respondedAt', 'completed'
-        ])
-        && request.resource.data.initiator is string
-        && request.resource.data.peer is string
-        && request.resource.data.initiatorPublicKey is string;
-      }
-
-      allow get: if signedIn() && (resource == null || participant());
-      allow list: if participant();
-
-      allow create: if signedIn()
-        && handshakeKeysValid()
-        && request.resource.data.initiator == request.auth.uid
-        && request.resource.data.peer != request.auth.uid
-        && request.resource.data.peerPublicKey == null
-        && request.resource.data.keys().hasAll([
-          'initiator', 'peer', 'initiatorPublicKey', 'peerPublicKey', 'createdAt'
-        ]);
-
-      allow update: if participant()
-        && request.resource.data.initiator == resource.data.initiator
-        && request.resource.data.peer == resource.data.peer
-        && handshakeKeysValid()
-        && (
-          (request.auth.uid == resource.data.initiator
-            && request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly([
-                'encryptedBaseKey', 'baseKeySentAt', 'initiatorAck',
-                'initiatorAckAt', 'completed', 'expiresAt'
-              ]))
-          || (request.auth.uid == resource.data.peer
-            && request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly([
-                'peerPublicKey', 'encryptedBaseKey', 'encryptedSedaKey',
-                'peerKeyStored', 'peerKeyStoredAt', 'peerRespondedAt',
-                'respondedAt', 'completed'
-              ]))
-        );
-
-      allow delete: if participant() && (
-        (request.auth.uid == resource.data.initiator
-          && resource.data.peerPublicKey == null)
-        || (request.auth.uid == resource.data.peer
-          && resource.data.initiatorAck == true)
-        || (request.auth.uid == resource.data.initiator
-          && resource.data.expiresAt is number
-          && resource.data.expiresAt < request.time.toMillis())
-      );
-    }
-
-    // Admin data cleanup is retained, but never includes Global ID records.
-    match /{rootCollection}/{document=**} {
-      allow read: if isAdmin() && rootCollection != 'global_ids';
-      allow delete: if isAdmin() && rootCollection != 'global_ids';
-    }
-
-    match /{document=**} {
-      allow read, write: if false;
-    }
-  }
-}
-))
+              (resource.data.kind == 'channel' || chatId.matches('^channel_[A-Za-z0-9]+$'))
               && request.resource.data.kind == 'channel'
               && request.resource.data.resourceId == sourceChannelId(resource.data)
+              && sourceChannel(resource.data) != null
               && request.resource.data.createdBy == sourceChannel(resource.data).createdBy
               && request.resource.data.members == sourceChannel(resource.data).members
               && request.resource.data.admins == sourceChannel(resource.data).admins
@@ -679,7 +451,7 @@ service cloud.firestore {
         || (currentThreadMember(resource.data)
           && currentThreadMember(request.resource.data)
           && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['lastMessage', 'lastMessageTime', 'unread', 'updatedAt']));
+            .hasOnly(['lastMessage', 'lastMessageTime', 'lastMessageSenderId', 'unread', 'updatedAt']));
       allow delete: if isAdmin() || threadModerator(resource.data);
 
       function chatModerator() {
