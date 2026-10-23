@@ -311,13 +311,13 @@ service cloud.firestore {
         allow get, list: if isAdmin() || isChatMember(parentChat());
         allow create: if signedIn()
           && isChatMember(parentChat())
-          && (!request.resource.data.keys().hasAny(['senderId'])
-            || request.resource.data.senderId == request.auth.uid);
+          && request.resource.data.senderId == request.auth.uid;
         allow update: if isAdmin()
           || (isChatMember(parentChat())
             && (
-              (!resource.data.keys().hasAny(['senderId'])
-                || resource.data.senderId == request.auth.uid)
+              (resource.data.keys().hasAny(['senderId'])
+                && resource.data.senderId == request.auth.uid
+                && request.resource.data.senderId == resource.data.senderId)
               || (request.resource.data.diff(resource.data).affectedKeys()
                 .hasOnly(['read', 'readAt'])
                 && request.resource.data.senderId == resource.data.senderId)
@@ -327,13 +327,14 @@ service cloud.firestore {
               || (chatModerator()
                 && request.resource.data.diff(resource.data).affectedKeys()
                   .hasOnly(['text', 'deleted', 'media', 'type', 'encrypted'])
-                && request.resource.data.deleted == true)
+                && request.resource.data.deleted == true
+                && request.resource.data.senderId == resource.data.senderId)
             ));
         allow delete: if isAdmin()
           || (isChatMember(parentChat())
             && (
-              !resource.data.keys().hasAny(['senderId'])
-              || resource.data.senderId == request.auth.uid
+              (resource.data.keys().hasAny(['senderId'])
+                && resource.data.senderId == request.auth.uid)
               || chatModerator()
             ));
       }
