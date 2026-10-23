@@ -1201,7 +1201,17 @@ async function showGroupInfo() {
                     const patch = { name: newName, description: descriptionInput.value.trim(), avatar: newAvatar };
                     await updateDoc(doc(db, 'groups', selected.id), patch);
                     uiState.currentGroup = { ...uiState.currentGroup, ...patch };
-                    document.getElementById('chatName').textContent = newName;
+                    if (uiState.currentGroup?.id === selected.id) {
+                        document.getElementById('chatName').textContent = newName;
+                        const chatAvatar = document.getElementById('chatAvatar');
+                        chatAvatar.replaceChildren();
+                        if (newAvatar) {
+                            const img = document.createElement('img');
+                            img.src = newAvatar;
+                            img.alt = 'Аватар группы';
+                            chatAvatar.appendChild(img);
+                        } else chatAvatar.textContent = '👥';
+                    }
                     await loadGroups();
                     showToast('Настройки группы сохранены', 'success');
                     await showGroupInfo();
@@ -1440,6 +1450,15 @@ async function showChannelSettings() {
                 const patch = { name, description: descInput.value.trim(), avatar: avatarUrl };
                 await updateDoc(doc(db, 'channels', channel.id), patch);
                 uiState.currentChannel = { ...uiState.currentChannel, ...patch };
+                document.getElementById('chatName').textContent = name;
+                const chatAvatar = document.getElementById('chatAvatar');
+                chatAvatar.replaceChildren();
+                if (avatarUrl) {
+                    const img = document.createElement('img');
+                    img.src = avatarUrl;
+                    img.alt = 'Аватар канала';
+                    chatAvatar.appendChild(img);
+                } else chatAvatar.textContent = '📢';
                 const channelList = (authState.userData.channels || []).map(item => item.id === channel.id ? { ...item, ...patch } : item);
                 authState.userData.channels = channelList;
                 await updateDoc(doc(db, 'users', uid), { channels: channelList });
