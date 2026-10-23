@@ -754,10 +754,9 @@ export async function loadGroups() {
     if (uid && navigator.onLine) {
         try {
             const snap = await getDocs(query(collection(db, 'groups'), where('memberIds', 'array-contains', uid), limit(100)));
-            const remoteGroups = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-            const byId = new Map(remoteGroups.map(g => [g.id, g]));
-            for (const legacy of groups) if (legacy?.id && !byId.has(legacy.id)) byId.set(legacy.id, legacy);
-            groups = Array.from(byId.values());
+            // When online, trust the authoritative membership query. Merging stale
+            // profile copies here would keep removed users seeing a group forever.
+            groups = snap.docs.map(d => ({ ...d.data(), id: d.id }));
             if (authState.userData) authState.userData.groups = groups;
             await DB.Lists.setGroups(uid, groups).catch(() => {});
         } catch (err) {
@@ -816,11 +815,9 @@ export async function loadChannels() {
                 const data = d.data();
                 return { ...data, id: d.id, isAdmin: Array.isArray(data.admins) && data.admins.includes(uid) };
             });
-            const byId = new Map(remoteChannels.map(ch => [ch.id, ch]));
-            for (const legacy of channels) {
-                if (legacy?.id && !byId.has(legacy.id)) byId.set(legacy.id, legacy);
-            }
-            channels = Array.from(byId.values());
+            // Server membership is authoritative when online; don't re-add
+            // channels from a stale local user profile after a user was removed.
+            channels = remoteChannels;
             if (authState.userData) authState.userData.channels = channels;
             await DB.Lists.setChannels(uid, channels).catch(() => {});
         } catch (err) {
