@@ -707,7 +707,30 @@ function bindUIEvents() {
     document.getElementById('clearChatBtn').onclick = clearCurrentChat;
     document.getElementById('deleteChatBtn').onclick = deleteCurrentChat;
     document.getElementById('groupInfoBtn').onclick = showGroupInfo;
-    document.getElementById('channelManageBtn').onclick = () => showToast('В разработке', 'info');
+    document.getElementById('channelManageBtn').onclick = () => {
+        const channel = uiState.currentChannel;
+        if (!channel || !channel.isAdmin) {
+            showToast('Управление каналом доступно только администратору', 'error');
+            return;
+        }
+        const modal = document.getElementById('channelManageModal');
+        const title = document.getElementById('channelManageTitle');
+        const body = document.getElementById('channelManageContent');
+        if (!modal || !body || !title) {
+            showToast('Не удалось открыть настройки канала', 'error');
+            return;
+        }
+        title.textContent = 'Настройки канала';
+        body.replaceChildren();
+        const name = document.createElement('p');
+        name.textContent = 'Название: ' + (channel.name || 'Без названия');
+        const description = document.createElement('p');
+        description.textContent = 'Описание: ' + (channel.description || 'Не указано');
+        const warning = document.createElement('p');
+        warning.textContent = 'Очистить историю можно кнопкой корзины в заголовке канала.';
+        body.append(name, description, warning);
+        modal.classList.add('active');
+    };
 
     document.getElementById('chatSend').onclick = sendMessage;
     document.getElementById('messageInput').addEventListener('keydown', (e) => {
