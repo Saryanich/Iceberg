@@ -143,8 +143,10 @@ service cloud.firestore {
     match /chat_clears/{uid}/items/{chatId} {
       allow get, list: if isOwner(uid);
       allow create, update: if isOwner(uid)
-        && request.resource.data.keys().hasOnly(['clearedAt', 'updatedAt'])
-        && request.resource.data.clearedAt is timestamp;
+        && request.resource.data.keys().hasOnly(['clearedAt', 'updatedAt', 'hidden', 'hiddenAt'])
+        && request.resource.data.clearedAt is timestamp
+        && (!request.resource.data.keys().hasAny(['hidden']) || request.resource.data.hidden is bool)
+        && (!request.resource.data.keys().hasAny(['hiddenAt']) || request.resource.data.hiddenAt is timestamp);
       allow delete: if isOwner(uid);
     }
 
