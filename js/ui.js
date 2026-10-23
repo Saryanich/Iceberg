@@ -2561,6 +2561,20 @@ export async function startSedaChat() {
     await DB.saveECDHKeys(sedaChatId, pubBase64, privJwk);
 
     const handshakeRef = doc(db, 'seda_handshakes', sedaChatId);
+    const previousHandshake = await getDoc(handshakeRef);
+    if (previousHandshake.exists()) {
+        const previous = previousHandshake.data();
+        const expired = Number(previous.expiresAt) > 0 && Number(previous.expiresAt) <= Date.now();
+        if (!expired || previous.initiator !== authState.user.uid) {
+            showToast(expired
+                ? 'Предыдущий запрос SEDA истёк. Попросите инициатора создать новый.'
+                : 'Рукопожатие SEDA уже выполняется. Подождите несколько секунд.',
+                'info', 4500);
+            return;
+        }
+        await deleteDoc(handshakeRef);
+        await DB.deleteECDHKeys(sedaChatId);
+    }
     await setDoc(handshakeRef, {
         initiator: authState.user.uid,
         peer: peerUid,
