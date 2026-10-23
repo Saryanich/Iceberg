@@ -47,12 +47,12 @@
     <div class="offline-card">
         <div class="offline-mark" aria-hidden="true"><span></span></div>
         <div class="offline-eyebrow">ICEBERG CONNECTION</div>
-        <h1>Нет подключения</h1>
-        <p id="offlineDescription">Не удалось связаться с сервисами Айсберга. Проверьте интернет и попробуйте снова.</p>
+        <h1>Ошибка подключения к серверу</h1>
+        <p id="offlineDescription">Ошибка подключения к серверу, попробуйте позже или проверьте подключение к интернету.</p>
         <div class="offline-status"><span class="offline-status-dot"></span><span id="offlineStatusText">Соединение не установлено</span></div>
         <button id="retryConnectionBtn" class="offline-retry" type="button">
             <span class="retry-icon" aria-hidden="true">↻</span>
-            <span id="retryConnectionLabel">Повторить попытку</span>
+            <span id="retryConnectionLabel">Перезагрузить</span>
         </button>
         <p class="offline-footnote">Ваши данные не удалены. Повторная попытка не изменяет аккаунт.</p>
     </div>
@@ -514,6 +514,31 @@
     </div>
 
     <!-- СКРИПТЫ -->
-    <script type="module" src="js/app.js"></script>
+    <script>
+    // This non-module fallback still runs if remote ES-module imports fail.
+    // It guarantees a branded error screen instead of a blank page/browser error.
+    (() => {
+        const showStartupError = () => {
+            const loading = document.getElementById('loadingScreen');
+            const offline = document.getElementById('offlineScreen');
+            if (!loading || !offline || loading.classList.contains('hidden')) return;
+            loading.classList.add('hidden');
+            offline.hidden = false;
+            const heading = offline.querySelector('h1');
+            const description = document.getElementById('offlineDescription');
+            const status = document.getElementById('offlineStatusText');
+            if (heading) heading.textContent = 'Ошибка подключения к серверу';
+            if (description) description.textContent = 'Ошибка подключения к серверу, попробуйте позже или проверьте подключение к интернету.';
+            if (status) status.textContent = navigator.onLine ? 'Сервер не ответил за 5 секунд' : 'Интернет недоступен';
+        };
+        window.__icebergStartupFallback = setTimeout(showStartupError, 5000);
+        window.addEventListener('error', (event) => {
+            if (event.target && event.target.tagName === 'SCRIPT' && event.target.type === 'module') {
+                showStartupError();
+            }
+        }, true);
+    })();
+    </script>
+    <script type="module" src="js/app.js" onerror="window.__icebergStartupFallback && clearTimeout(window.__icebergStartupFallback)"></script>
 </body>
 </html>
