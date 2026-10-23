@@ -342,6 +342,22 @@ export async function loadChats(forceRefresh = false) {
                 const peerUid = participants.find(participant => typeof participant === 'string' && participant !== uid);
                 if (!peerUid) continue;
                 let index = chats.findIndex(chat => chat.uid === peerUid && !chat.isGroup && !chat.isSeda);
+                // Hiding a chat is local to this account and survives reloads.
+                // A newer message reopens it; old messages never undo the delete.
+                try {
+                    const hiddenSnap = await getDoc(doc(db, 'chat_clears', uid, 'items', thread.id));
+                    if (hiddenSnap.exists()) {
+                        const marker = hiddenSnap.data();
+                        const hiddenAt = toMillis(marker.hiddenAt || marker.clearedAt);
+                        const latestMessageAt = toMillis(data.lastMessageTime);
+                        if (marker.hidden === true && (!latestMessageAt || latestMessageAt <= hiddenAt)) {
+                            if (index >= 0) { chats.splice(index, 1); didChange = true; }
+                            continue;
+                        }
+                    }
+                } catch (error) {
+                    console.debug('[loadChats] Could not check chat hide marker:', error?.code || '');
+                }
                 let publicProfile = {};
                 if (index === -1 || !(chats[index].nickname || chats[index].globalId)) {
                     try {
@@ -3281,7 +3297,12 @@ export async function deleteChatById(uid, sedaChatId) {
     if (!confirm('Удалить чат из списка и скрыть его старую историю только у вас?')) return false;
     try {
         const chatId = sedaChatId || [authState.user.uid, uid].sort().join('_');
-        await markHistoryCleared(chatId);
+        await setDoc(doc(db, 'chat_clears', authState.user.uid, 'items', chatId), {
+            clearedAt: serverTimestamp(),
+            hidden: true,
+            hiddenAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        }, { merge: true });
         await DB.clearCachedMessages(chatId);
         const chats = ensureArray(authState.userData.chats).filter(c => {
             if (sedaChatId && c.sedaChatId === sedaChatId) return false;
