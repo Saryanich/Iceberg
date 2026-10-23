@@ -307,38 +307,58 @@ service cloud.firestore {
         return get(/databases/$(database)/documents/messages/$(chatId)).data;
       }
 
+      // Existing threads from older Iceberg releases did not always store resourceId/kind.
+      function sourceGroupId(data) {
+        return data != null && data.keys().hasAny(['resourceId']) && data.resourceId is string
+          ? data.resourceId
+          : (chatId.matches('^group_[A-Za-z0-9]+$') ? chatId.split('_')[1] : '');
+      }
+
+      function sourceChannelId(data) {
+        return data != null && data.keys().hasAny(['resourceId']) && data.resourceId is string
+          ? data.resourceId
+          : (chatId.matches('^channel_[A-Za-z0-9]+$') ? chatId.split('_')[1] : '');
+      }
+
       function sourceGroup(data) {
-        return data != null
-          && data.keys().hasAny(['resourceId'])
-          && data.resourceId is string
-          && exists(/databases/$(database)/documents/groups/$(data.resourceId))
-          ? get(/databases/$(database)/documents/groups/$(data.resourceId)).data
+        return sourceGroupId(data).size() > 0
+          && exists(/databases/$(database)/documents/groups/$(sourceGroupId(data)))
+          ? get(/databases/$(database)/documents/groups/$(sourceGroupId(data))).data
           : null;
       }
 
       function sourceChannel(data) {
-        return data != null
-          && data.keys().hasAny(['resourceId'])
-          && data.resourceId is string
-          && exists(/databases/$(database)/documents/channels/$(data.resourceId))
-          ? get(/databases/$(database)/documents/channels/$(data.resourceId)).data
+        return sourceChannelId(data).size() > 0
+          && exists(/databases/$(database)/documents/channels/$(sourceChannelId(data)))
+          ? get(/databases/$(database)/documents/channels/$(sourceChannelId(data))).data
           : null;
       }
 
-      // Actual group/channel documents are authoritative. A stale ACL copy cannot
-      // retain access after someone is removed or a group is deleted.
+      // Root group/channel records are authoritative. Stale ACL copies cannot retain access.
       function currentThreadMember(data) {
         return signedIn() && data != null && (
           ((data.kind == 'direct' || data.kind == 'seda') && isChatMember(data))
-          || (data.kind == 'group' && isChatMember(sourceGroup(data)))
-          || (data.kind == 'channel' && isChatMember(sourceChannel(data)))
+          || ((data.kind == 'group' || (!data.keys().hasAny(['kind'])
+              && chatId.matches('^group_[A-Za-z0-9]+$')))
+            && isChatMember(sourceGroup(data)))
+          || ((data.kind == 'channel' || (!data.keys().hasAny(['kind'])
+              && chatId.matches('^channel_[A-Za-z0-9]+$')))
+            && isChatMember(sourceChannel(data)))
+          || (!data.keys().hasAny(['kind'])
+            && !chatId.matches('^group_[A-Za-z0-9]+$')
+            && !chatId.matches('^channel_[A-Za-z0-9]+$')
+            && isChatMember(data))
         );
       }
 
       function threadModerator(data) {
         return signedIn() && data != null && (
-          (data.kind == 'group' && groupAdmin(sourceGroup(data)))
-          || (data.kind == 'channel' && channelAdmin(sourceChannel(data)))
+          ((data.kind == 'group' || (!data.keys().hasAny(['kind'])
+              && chatId.matches('^group_[A-Za-z0-9]+$')))
+            && groupAdmin(sourceGroup(data)))
+          || ((data.kind == 'channel' || (!data.keys().hasAny(['kind'])
+              && chatId.matches('^channel_[A-Za-z0-9]+$')))
+            && channelAdmin(sourceChannel(data)))
         );
       }
 
@@ -382,19 +402,31 @@ service cloud.firestore {
       // Allow a one-time existence check when a thread parent has not been created yet.
       allow get: if resource == null || isAdmin() || currentThreadMember(resource.data);
       allow list: if isAdmin() || currentThreadMember(resource.data);
-      // Never accept client-supplied group/channel membership as authoritative.
       allow create: if validThreadCreate(request.resource.data);
       allow update: if isAdmin()
         || (threadModerator(resource.data)
           && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['memberIds', 'adminIds', 'members', 'admins', 'updatedAt'])
+            .hasOnly([
+              'kind', 'resourceId', 'createdBy',
+              'memberIds', 'adminIds', 'members', 'admins', 'updatedAt'
+            ])
           && (
-            (resource.data.kind == 'group'
+            (
+              (resource.data.kind == 'group' || chatId.matches('^group_[A-Za-z0-9]+$'))
+              && request.resource.data.kind == 'group'
+              && request.resource.data.resourceId == sourceGroupId(resource.data)
+              && request.resource.data.createdBy == sourceGroup(resource.data).createdBy
               && request.resource.data.memberIds == sourceGroup(resource.data).memberIds
-              && request.resource.data.adminIds == sourceGroup(resource.data).adminIds)
-            || (resource.data.kind == 'channel'
+              && request.resource.data.adminIds == sourceGroup(resource.data).adminIds
+            )
+            || (
+              (resource.data.kind == 'channel' || chatId.matches('^channel_[A-Za-z0-9]+$'))
+              && request.resource.data.kind == 'channel'
+              && request.resource.data.resourceId == sourceChannelId(resource.data)
+              && request.resource.data.createdBy == sourceChannel(resource.data).createdBy
               && request.resource.data.members == sourceChannel(resource.data).members
-              && request.resource.data.admins == sourceChannel(resource.data).admins)
+              && request.resource.data.admins == sourceChannel(resource.data).admins
+            )
           ))
         || (currentThreadMember(resource.data)
           && currentThreadMember(request.resource.data)
@@ -405,7 +437,6 @@ service cloud.firestore {
       function chatModerator() {
         return threadModerator(parentChat());
       }
-
       match /msgs/{messageId} {
         allow get, list: if isAdmin() || currentThreadMember(parentChat());
         allow create: if signedIn()
