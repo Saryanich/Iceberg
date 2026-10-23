@@ -2555,11 +2555,6 @@ export async function startSedaChat() {
 
     showToast('🔮 Создание SEDA-чата...', 'info');
 
-    const keyPair = await generateECDHKeyPair();
-    const pubBase64 = await exportPublicKey(keyPair);
-    const privJwk = await exportPrivateKey(keyPair);
-    await DB.saveECDHKeys(sedaChatId, pubBase64, privJwk);
-
     const handshakeRef = doc(db, 'seda_handshakes', sedaChatId);
     const previousHandshake = await getDoc(handshakeRef);
     if (previousHandshake.exists()) {
@@ -2575,6 +2570,13 @@ export async function startSedaChat() {
         await deleteDoc(handshakeRef);
         await DB.deleteECDHKeys(sedaChatId);
     }
+
+    // Generate/store a new private key only after we know no active handshake exists.
+    const keyPair = await generateECDHKeyPair();
+    const pubBase64 = await exportPublicKey(keyPair);
+    const privJwk = await exportPrivateKey(keyPair);
+    await DB.saveECDHKeys(sedaChatId, pubBase64, privJwk);
+
     await setDoc(handshakeRef, {
         initiator: authState.user.uid,
         peer: peerUid,
