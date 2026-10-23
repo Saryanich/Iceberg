@@ -2839,7 +2839,7 @@ export async function clearChatById(uid, sedaChatId, explicitChatId = '', kind =
 }
 
 export async function deleteChatById(uid, sedaChatId) {
-    if (!confirm('Удалить чат из списка и скрыть его старую историю только у вас?')) return;
+    if (!confirm('Удалить чат из списка и скрыть его старую историю только у вас?')) return false;
     try {
         const chatId = sedaChatId || [authState.user.uid, uid].sort().join('_');
         await markHistoryCleared(chatId);
@@ -2855,33 +2855,31 @@ export async function deleteChatById(uid, sedaChatId) {
         if (uiState.currentChatId === chatId) closeChat();
         loadChats();
         showToast('Чат удалён из списка. Старая история скрыта у вас.', 'success');
+        return true;
     } catch (e) {
         console.error('[Chat delete] Не удалось удалить чат:', e);
         showToast('Не удалось удалить чат. Проверьте права доступа и повторите попытку.', 'error');
+        return false;
     }
 }
 
 export async function clearCurrentChat() {
-    if (!uiState.currentChatId) return;
-    if (uiState.currentChannel) {
-        if (!uiState.currentChannel.isAdmin) {
-            showToast('Очищать историю канала может только администратор', 'error');
-            return;
-        }
-        await clearChatById('', '', uiState.currentChatId);
-        return;
-    }
+    if (!uiState.currentChatId || !authState.user?.uid) return;
+    // Clearing is a personal history marker. Channel admins do not get to erase
+    // history for everyone, and ordinary members can clear their own view too.
+    const kind = uiState.currentChannel ? 'channel' : uiState.currentGroup ? 'group' : 'chat';
     await clearChatById(
         uiState.currentChat?.uid || '',
         uiState.currentChat?.sedaChatId || '',
-        uiState.currentChatId
+        uiState.currentChatId,
+        kind
     );
 }
 
 export async function deleteCurrentChat() {
     if (!uiState.currentChat) return;
-    await deleteChatById(uiState.currentChat.uid, uiState.currentChat.sedaChatId || '');
-    closeChat();
+    const deleted = await deleteChatById(uiState.currentChat.uid, uiState.currentChat.sedaChatId || '');
+    if (deleted) closeChat();
 }
 
 export async function openChatWithContact(contact) {
