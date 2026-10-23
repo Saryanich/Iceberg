@@ -145,10 +145,25 @@ function getPersistentDeviceToken() {
 
 function collectDeviceInfoSync() {
     const n = navigator;
-    const raw = `${n.userAgent}|${n.language}|${screen.width}x${screen.height}|${n.platform}|${n.hardwareConcurrency || 0}`;
-    let h = 2166136261;
-    for (let i = 0; i < raw.length; i++) { h ^= raw.charCodeAt(i); h = Math.imul(h, 16777619); }
-    authState.deviceFingerprint = 'fp_' + (h >>> 0).toString(16);
+    // Physical-device hint intentionally excludes browser-specific values such as
+    // userAgent and language, so Safari/Chrome/Firefox on the same phone can match.
+    // This fingerprint is only a convenience hint, NOT cryptographic proof of identity.
+    const raw = [
+        n.platform || 'unknown-platform',
+        `${screen.width}x${screen.height}`,
+        `${screen.availWidth}x${screen.availHeight}`,
+        n.maxTouchPoints || 0,
+        n.hardwareConcurrency || 0,
+        n.deviceMemory || 0
+    ].join('|');
+    let h1 = 2166136261;
+    let h2 = 0x9e3779b9;
+    for (let i = 0; i < raw.length; i++) {
+        const code = raw.charCodeAt(i);
+        h1 = Math.imul(h1 ^ code, 16777619);
+        h2 = Math.imul(h2 ^ code, 2246822519);
+    }
+    authState.deviceFingerprint = 'fp2_' + (h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0');
     authState.deviceToken = getPersistentDeviceToken();
     return authState.deviceFingerprint;
 }
@@ -190,14 +205,30 @@ async function isDeviceKnown(uid) {
         }
         if (devices.length === 0) return false;
 
-        // Backward compatibility: recognize an already trusted device by its old fingerprint,
-        // then attach the persistent token to that existing trusted-device record.
+        // Browser tokens differ between browser profiles, but the physical-device hint
+        // is intentionally browser-independent. Migrate a matching trusted phone to this
+        // browser token without prompting for 2FA again.
+        const fingerprintIndex = devices.findIndex(x =>
+            x.fingerprint === authState.deviceFingerprint
+            && x.fingerprintVersion === 2
+        );
+        if (fingerprintIndex !== -1) {
+            const migrated = devices.map((x, i) => i === fingerprintIndex
+                ? { ...x, deviceToken: token || x.deviceToken || null, lastUsed: new Date(), fingerprintVersion: 2 }
+                : x);
+            await updateDoc(ref, { trustedDevices: migrated });
+            return true;
+        }
+
+        // Older records used browser-specific fingerprints. They cannot be safely
+        // migrated automatically across browsers; a successful trusted-device 2FA
+        // upgrades the record to the new browser-independent fingerprint.
         const legacyIndex = devices.findIndex(x => !x.deviceToken && x.fingerprint === authState.deviceFingerprint);
         if (legacyIndex !== -1) {
-            if (token) {
-                const migrated = devices.map((x, i) => i === legacyIndex ? { ...x, deviceToken: token, lastUsed: new Date() } : x);
-                await updateDoc(ref, { trustedDevices: migrated });
-            }
+            const migrated = devices.map((x, i) => i === legacyIndex
+                ? { ...x, deviceToken: token || null, fingerprint: authState.deviceFingerprint, fingerprintVersion: 2, lastUsed: new Date() }
+                : x);
+            await updateDoc(ref, { trustedDevices: migrated });
             return true;
         }
         return false;
@@ -223,8 +254,12 @@ async function addKnownDevice(uid) {
             revokedDeviceTokens: arrayRemove(authState.deviceToken),
             trustedDevices: arrayUnion({
                 deviceToken: authState.deviceToken || null,
-                fingerprint: authState.deviceFingerprint, ip: authState.currentIP || 'unknown',
-                userAgent: navigator.userAgent, addedAt: new Date(), lastUsed: new Date()
+                fingerprint: authState.deviceFingerprint,
+                fingerprintVersion: 2,
+                ip: authState.currentIP || 'unknown',
+                userAgent: navigator.userAgent,
+                addedAt: new Date(),
+                lastUsed: new Date()
             })
         });
     } catch (e) {}
