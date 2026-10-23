@@ -2865,3 +2865,72 @@ button,
         padding-right: 5px;
     }
 }
+
+
+/* Iceberg bottom navigation: compact, animated and safe-area aware. */
+.sidebar { position: relative; }
+.tabs-container.bottom-navigation {
+    position: absolute;
+    z-index: 30;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    padding: 8px max(10px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px));
+    border-top: 1px solid var(--border);
+    border-bottom: 0;
+    background: color-mix(in srgb, var(--bg-secondary) 94%, transparent);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+    overflow: visible;
+}
+.bottom-navigation .tab {
+    min-width: 0;
+    min-height: 48px;
+    padding: 5px 2px 4px;
+    border: 0;
+    border-radius: 13px;
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    font: inherit;
+    font-size: 11px;
+    line-height: 1.1;
+    transition: color .18s ease, background .18s ease, transform .18s ease;
+}
+.bottom-navigation .tab .nav-icon { font-size: 19px; line-height: 1; }
+.bottom-navigation .tab.active {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 13%, transparent);
+    border: 0;
+}
+.bottom-navigation .tab:active { transform: scale(.96); }
+.sidebar .tab-content { padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)); min-height: 0; }
+.sidebar .footer-bar { display: none; }
+.plus-menu {
+    z-index: 100;
+    transform-origin: bottom right;
+    transition: opacity .18s ease, transform .18s ease, visibility .18s ease;
+}
+.plus-menu-item {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--text-primary);
+    text-align: left;
+    font: inherit;
+    font-size: 14px;
+    padding: 13px 15px;
+    cursor: pointer;
+}
+.plus-menu-item:active { background: var(--hover); }
+@media (max-width: 600px) {
+    .bottom-navigation .tab { font-size: 10px; min-height: 46px; }
+    .bottom-navigation .tab .nav-icon { font-size: 18px; }
+    .sidebar .tab-content { padding-bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }
+}
