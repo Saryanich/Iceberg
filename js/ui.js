@@ -1141,7 +1141,10 @@ export async function selectChat(chat) {
     } else {
         uiState.currentChatId = [authState.user.uid, chat.uid].sort().join('_');
         uiState.sedaEnabledForCurrentChat = false;
-        uiState.currentSedaKey = await DB.getSedaKey(uiState.currentChatId);
+        const localBaseKey = await DB.getSedaKey(uiState.currentChatId);
+        const localBaseKeyShared = localBaseKey?.startsWith('ICEBERGBASEKEY:')
+            && await DB.isSedaKeyShared(uiState.currentChatId);
+        uiState.currentSedaKey = localBaseKeyShared ? localBaseKey : null;
         // Validate the shared-key handshake on every open, even if a key exists locally.
         // A locally cached Base key alone does not prove that the peer received it.
         const openingChatId = uiState.currentChatId;
@@ -2794,14 +2797,20 @@ export function startSedaHandshakeListener() {
         for (const d of snap.docs) {
             const data = d.data();
             if (data.mode === 'iceberg-base') {
-                if (data.initiatorAck === true) { await deleteDoc(d.ref).catch(() => {}); continue; }
+                const sharedLocalBaseKey = await DB.isSedaKeyShared(data.chatId);
+                if (data.initiatorAck === true && sharedLocalBaseKey) {
+                    await deleteDoc(d.ref).catch(() => {});
+                    continue;
+                }
                 if (Number(data.expiresAt) > 0 && Number(data.expiresAt) <= Date.now()
                     && data.peerKeyStored !== true) {
                     // Let the original initiator replace expired unfinished Base attempts.
                     continue;
                 }
                 if (!data.initiatorPublicKey) continue;
-                if (data.peerPublicKey && data.encryptedBaseKey && !data.peerKeyStored && !uiState.processedHandshakes.has(d.id)) {
+                if (data.peerPublicKey && data.encryptedBaseKey
+                    && (!data.peerKeyStored || !sharedLocalBaseKey)
+                    && !uiState.processedHandshakes.has(d.id)) {
                     uiState.processedHandshakes.add(d.id);
                     try {
                         const savedPair = await DB.getECDHKeys(d.id);
@@ -2837,8 +2846,10 @@ export function startSedaHandshakeListener() {
             }
             // Recover older/incomplete SEDA handshakes where the peer public key was
             // published but the local IndexedDB write did not finish before a reload.
+            const localSedaShared = await DB.isSedaKeyShared(d.id);
             if (data.initiatorPublicKey && data.peerPublicKey && data.encryptedSedaKey
-                && data.peerKeyStored !== true && !uiState.processedHandshakes.has(d.id)) {
+                && (data.peerKeyStored !== true || !localSedaShared)
+                && !uiState.processedHandshakes.has(d.id)) {
                 uiState.processedHandshakes.add(d.id);
                 try {
                     const saved = await DB.getECDHKeys(d.id);
