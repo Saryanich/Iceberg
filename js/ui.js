@@ -1774,10 +1774,14 @@ export async function sendMessage() {
                 showToast('Сообщение отправлено; обновление списка чатов повторится позже', 'info', 4000);
             }
         }).catch((error) => {
-            // A rejected message write must not leave a metadata queue item behind:
-            // otherwise the chat can show a preview for a message that was never saved.
+            // A rejected message write must not leave a metadata queue item behind.
             removePendingChatSync(pendingSyncId);
             console.error('[Messages] Не удалось сохранить сообщение:', error);
+            if (uiState.currentChatId === chatIdAtSend && input.value.trim() === '') {
+                input.value = originalText;
+                input.style.height = 'auto';
+                input.style.height = Math.min(input.scrollHeight, 90) + 'px';
+            }
             showToast('Не удалось отправить сообщение. Проверьте соединение и попробуйте снова', 'error', 4000);
         });
     } catch (e) {
@@ -1992,8 +1996,7 @@ export async function sendMediaFile(input) {
         let mediaEncrypted = false;
 
         if (chatContext.currentChat?.isSeda && !authState.sedaProActivated) {
-            showToast('SEDA-чаты доступны только с активной подпиской', 'error');
-            return;
+            throw new Error('SEDA-чаты доступны только с активной подпиской');
         }
         if (chatContext.currentChat && !chatContext.currentChat.isSeda) {
             let keyStr = chatContext.sedaKey;
