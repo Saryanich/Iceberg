@@ -473,6 +473,12 @@ function renderContactItem(contact) {
     info.appendChild(sub);
     div.appendChild(av);
     div.appendChild(info);
+    av.style.cursor = 'pointer';
+    av.title = 'Посмотреть истории';
+    av.onclick = event => {
+        event.stopPropagation();
+        openUserStories(contact.uid, contact.nickname || contact.globalId || 'Пользователь');
+    };
     div.onclick = () => showContactCard(contact);
     return div;
 }
@@ -770,7 +776,12 @@ export async function loadGroups() {
 
         const av = document.createElement('div');
         av.className = 'avatar-small';
-        av.textContent = '👥';
+        if (g.avatar) {
+            const img = document.createElement('img');
+            img.src = g.avatar;
+            img.alt = 'Аватар группы';
+            av.appendChild(img);
+        } else av.textContent = '👥';
 
         const info = document.createElement('div');
         info.className = 'info-small';
@@ -829,7 +840,12 @@ export async function loadChannels() {
         const av = document.createElement('div');
         av.className = 'avatar-small';
         av.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
-        av.textContent = '📢';
+        if (ch.avatar) {
+            const img = document.createElement('img');
+            img.src = ch.avatar;
+            img.alt = 'Аватар канала';
+            av.appendChild(img);
+        } else av.textContent = '📢';
 
         const info = document.createElement('div');
         info.className = 'info-small';
@@ -957,24 +973,29 @@ async function ensureIcebergBaseKey(chatId, peerUid) {
 // must be able to verify membership against messages/{chatId}.
 async function ensureMessageThread(chatId, membership) {
     if (!authState.user?.uid || !chatId || !membership) return;
+    const threadRef = doc(db, 'messages', chatId);
+    // Never overwrite ACL metadata on an existing thread just because a participant opened it.
+    const existing = await getDoc(threadRef);
+    if (existing.exists()) return;
+
     const uid = authState.user.uid;
-    const payload = { kind: membership.kind || 'direct', updatedAt: serverTimestamp() };
+    const payload = { kind: membership.kind || 'direct', createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
     if (membership.kind === 'group') {
         const ids = Array.from(new Set((membership.memberIds || [uid]).filter(Boolean)));
         if (!ids.includes(uid)) ids.push(uid);
         payload.memberIds = ids;
         payload.adminIds = Array.from(new Set((membership.adminIds || []).filter(Boolean)));
-        payload.createdBy = membership.createdBy || uid;
+        if (membership.createdBy) payload.createdBy = membership.createdBy;
     } else if (membership.kind === 'channel') {
         const ids = Array.from(new Set((membership.memberIds || [uid]).filter(Boolean)));
         if (!ids.includes(uid)) ids.push(uid);
         payload.members = ids;
         payload.admins = Array.from(new Set((membership.adminIds || []).filter(Boolean)));
-        payload.createdBy = membership.createdBy || uid;
+        if (membership.createdBy) payload.createdBy = membership.createdBy;
     } else {
         payload.participants = Array.from(new Set([uid, ...(membership.participants || [])].filter(Boolean))).sort();
     }
-    await setDoc(doc(db, 'messages', chatId), payload, { merge: true });
+    await setDoc(threadRef, payload);
 }
 
 export async function selectChat(chat) {
