@@ -234,10 +234,16 @@ service cloud.firestore {
       allow update: if isAdmin()
         || (groupAdmin(resource.data)
           && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.adminIds is list
-          && request.resource.data.memberIds is list
-          && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['name', 'description', 'avatar', 'members', 'memberIds', 'adminIds', 'memberCount']))
+          && (
+            (
+              request.resource.data.adminIds is list
+              && request.resource.data.memberIds is list
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['name', 'description', 'avatar', 'members', 'memberIds', 'adminIds', 'memberCount'])
+            )
+            || request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['name', 'description', 'avatar'])
+          ))
         || (isChatMember(resource.data)
           && !(resource.data.keys().hasAny(['adminIds']) && hasUid(resource.data.adminIds))
           && resource.data.memberIds is list
