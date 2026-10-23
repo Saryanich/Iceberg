@@ -1123,31 +1123,30 @@ export async function selectChat(chat) {
         uiState.currentChatId = [authState.user.uid, chat.uid].sort().join('_');
         uiState.sedaEnabledForCurrentChat = false;
         uiState.currentSedaKey = await DB.getSedaKey(uiState.currentChatId);
-        if (!uiState.currentSedaKey?.startsWith('ICEBERGBASEKEY:')) {
-            const openingChatId = uiState.currentChatId;
-            ensureIcebergBaseKey(openingChatId, chat.uid).then(async key => {
-                if (uiState.currentChatId !== openingChatId) return;
-                if (key?.startsWith('ICEBERGBASEKEY:')) {
-                    uiState.currentSedaKey = key;
-                    const status = document.getElementById('chatStatus');
-                    if (status) status.textContent = '🔒 Защищённое соединение готово';
-                    await loadMessages();
-                    return;
-                }
-                // A null key means the other participant has not finished the handshake yet.
+        // Validate the shared-key handshake on every open, even if a key exists locally.
+        // A locally cached Base key alone does not prove that the peer received it.
+        const openingChatId = uiState.currentChatId;
+        ensureIcebergBaseKey(openingChatId, chat.uid).then(async key => {
+            if (uiState.currentChatId !== openingChatId) return;
+            if (key?.startsWith('ICEBERGBASEKEY:')) {
+                uiState.currentSedaKey = key;
                 const status = document.getElementById('chatStatus');
-                if (status) status.textContent = '🔒 Устанавливаем защищённое соединение…';
-            }).catch(err => {
-                console.error('[Iceberg Base handshake]', {
-                    code: err?.code || 'unknown',
-                    message: err?.message || String(err),
-                    chatId: openingChatId
-                });
-                const status = document.getElementById('chatStatus');
-                if (status && uiState.currentChatId === openingChatId) status.textContent = 'Не удалось установить защищённое соединение';
-                showToast('Не удалось установить базовое шифрование. Проверьте доступ к Firestore и откройте чат снова.', 'error', 4500);
+                if (status) status.textContent = '🔒 Защищённое соединение готово';
+                await loadMessages();
+                return;
+            }
+            const status = document.getElementById('chatStatus');
+            if (status) status.textContent = '🔒 Устанавливаем защищённое соединение…';
+        }).catch(err => {
+            console.error('[Iceberg Base handshake]', {
+                code: err?.code || 'unknown',
+                message: err?.message || String(err),
+                chatId: openingChatId
             });
-        }
+            const status = document.getElementById('chatStatus');
+            if (status && uiState.currentChatId === openingChatId) status.textContent = 'Не удалось установить защищённое соединение';
+            showToast('Не удалось установить базовое шифрование. Проверьте доступ к Firestore и откройте чат снова.', 'error', 4500);
+        });
     }
 
     renderChatHeader();
