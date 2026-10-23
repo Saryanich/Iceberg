@@ -2676,3 +2676,53 @@ input::placeholder, textarea::placeholder {
     .contact-card-content { padding: 16px; }
     .story-viewer-content { width: min(100%, 430px); max-width: 100%; }
 }
+
+
+/* iOS safe areas apply to the home/sidebar as well as the open-chat screen. */
+html, body {
+    min-height: 100%;
+    min-height: 100dvh;
+}
+
+.messenger-container {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+}
+
+.user-profile {
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+}
+
+.sidebar {
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+.footer-bar {
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+
+.search-area {
+    padding-left: max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
+}
+
+.tabs-container {
+    gap: clamp(12px, 4vw, 20px);
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+}
+
+@media (max-width: 360px) {
+    .user-profile { gap: 6px; padding-left: 8px; padding-right: 8px; }
+    .user-info { gap: 7px; }
+    .user-avatar { width: 36px; height: 36px; flex: 0 0 36px; font-size: 15px; }
+    .logout-btn { min-width: 34px; min-height: 34px; padding: 5px; font-size: 15px; }
+    .search-area { gap: 6px; padding: 8px; }
+    .plus-btn { width: 36px; height: 36px; font-size: 20px; }
+    .tab { font-size: 13px; }
+    .tabs-container { gap: 12px; }
+    .footer-bar { font-size: 9px; }
+}
