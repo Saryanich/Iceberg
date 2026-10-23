@@ -3015,19 +3015,24 @@ export function applyAutoDelete() {
     if (autoDeleteInterval) clearInterval(autoDeleteInterval);
     if (uiState.autoDeleteHours > 0) {
         autoDeleteInterval = setInterval(async () => {
-            if (!uiState.currentChatId) return;
+            const chatId = uiState.currentChatId;
+            const uid = authState.user?.uid;
+            if (!chatId || !uid) return;
             try {
-                const mRef = collection(db, 'messages', uiState.currentChatId, 'msgs');
-                const cutoff = new Date(Date.now() - uiState.autoDeleteHours * 3600000);
-                const snap = await getDocs(query(mRef, orderBy('timestamp', 'asc')));
-                const batch = writeBatch(db);
-                let count = 0;
-                snap.forEach(d => {
-                    const ts = d.data().timestamp?.toDate?.();
-                    if (ts && ts < cutoff) { batch.delete(d.ref); count++; }
-                });
-                if (count > 0) await batch.commit();
-            } catch {}
+                // Auto-delete is a per-user history window. Never attempt to erase
+                // messages authored by other participants or fail an entire batch.
+                const cutoffMs = Date.now() - uiState.autoDeleteHours * 3600000;
+                const previousCutoff = await getHistoryClearedAt(chatId);
+                if (cutoffMs <= previousCutoff) return;
+                await setDoc(doc(db, 'chat_clears', uid, 'items', chatId), {
+                    clearedAt: Timestamp.fromMillis(cutoffMs),
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
+                await DB.clearCachedMessages(chatId);
+                if (uiState.currentChatId === chatId) await loadMessages();
+            } catch (err) {
+                console.warn('[Auto-delete] Не удалось обновить окно истории:', err);
+            }
         }, 60000);
     }
 }
