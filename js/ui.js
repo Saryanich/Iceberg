@@ -478,14 +478,29 @@ function renderContactItem(contact) {
 }
 
 export async function loadGroups() {
-    const groups = ensureArray(authState.userData?.groups);
-    const c = document.getElementById('groupsList');
-    if (!c) return;
+    const uid = authState.user?.uid;
+    const list = document.getElementById('groupsList');
+    if (!list) return;
+    let groups = ensureArray(authState.userData?.groups);
+    if (uid && navigator.onLine) {
+        try {
+            const snap = await getDocs(query(collection(db, 'groups'), where('memberIds', 'array-contains', uid), limit(100)));
+            const remoteGroups = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+            const byId = new Map(remoteGroups.map(g => [g.id, g]));
+            for (const legacy of groups) if (legacy?.id && !byId.has(legacy.id)) byId.set(legacy.id, legacy);
+            groups = Array.from(byId.values());
+            if (authState.userData) authState.userData.groups = groups;
+            await DB.Lists.setGroups(uid, groups).catch(() => {});
+        } catch (err) {
+            console.warn('[Groups] Не удалось обновить группы с сервера:', err);
+        }
+    }
+    groups = groups.filter(g => g && g.id);
     if (!groups.length) {
-        c.innerHTML = '<div class="empty-state">Нет групп</div>';
+        list.innerHTML = '<div class="empty-state">Нет групп</div>';
         return;
     }
-    c.innerHTML = '';
+    list.innerHTML = '';
     for (const g of groups) {
         const div = document.createElement('div');
         div.className = 'group-item';
@@ -516,14 +531,34 @@ export async function loadGroups() {
 }
 
 export async function loadChannels() {
-    const channels = ensureArray(authState.userData?.channels);
-    const c = document.getElementById('channelsList');
-    if (!c) return;
+    const uid = authState.user?.uid;
+    const list = document.getElementById('channelsList');
+    if (!list) return;
+    let channels = ensureArray(authState.userData?.channels);
+    if (uid && navigator.onLine) {
+        try {
+            const snap = await getDocs(query(collection(db, 'channels'), where('members', 'array-contains', uid), limit(100)));
+            const remoteChannels = snap.docs.map(d => {
+                const data = d.data();
+                return { ...data, id: d.id, isAdmin: Array.isArray(data.admins) && data.admins.includes(uid) };
+            });
+            const byId = new Map(remoteChannels.map(ch => [ch.id, ch]));
+            for (const legacy of channels) {
+                if (legacy?.id && !byId.has(legacy.id)) byId.set(legacy.id, legacy);
+            }
+            channels = Array.from(byId.values());
+            if (authState.userData) authState.userData.channels = channels;
+            await DB.Lists.setChannels(uid, channels).catch(() => {});
+        } catch (err) {
+            console.warn('[Channels] Не удалось обновить каналы с сервера:', err);
+        }
+    }
+    channels = channels.filter(ch => ch && ch.id);
     if (!channels.length) {
-        c.innerHTML = '<div class="empty-state">Нет каналов</div>';
+        list.innerHTML = '<div class="empty-state">Нет каналов</div>';
         return;
     }
-    c.innerHTML = '';
+    list.innerHTML = '';
     for (const ch of channels) {
         const div = document.createElement('div');
         div.className = 'channel-item';
