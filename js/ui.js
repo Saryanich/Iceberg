@@ -1079,26 +1079,34 @@ export async function selectChat(chat) {
 }
 
 export async function selectGroup(group) {
-    if (!group) return;
+    if (!group?.id) return;
     closeCurrentSubscriptions();
 
-    uiState.currentGroup = group;
+    let freshGroup = group;
+    try {
+        const groupSnap = await getDoc(doc(db, 'groups', group.id));
+        if (groupSnap.exists()) freshGroup = { ...group, ...groupSnap.data(), id: group.id };
+    } catch (err) {
+        console.warn('[Group] Не удалось обновить данные группы:', err);
+    }
+
+    uiState.currentGroup = freshGroup;
     uiState.currentChat = null;
     uiState.currentChannel = null;
-    uiState.currentChatId = `group_${group.id}`;
+    uiState.currentChatId = `group_${freshGroup.id}`;
 
     const savedKey = await DB.getSedaKey(uiState.currentChatId);
-    uiState.sedaEnabledForCurrentChat = !!(savedKey && authState.sedaProActivated);
+    uiState.sedaEnabledForCurrentChat = !!(savedKey?.startsWith('SEDAKEY:') && authState.sedaProActivated);
     uiState.currentSedaKey = savedKey;
 
     renderChatHeader();
     try {
-        const ids = group.memberIds || (Array.isArray(group.members) ? group.members.map(m => typeof m === 'string' ? m : m?.uid).filter(Boolean) : []);
+        const ids = freshGroup.memberIds || (Array.isArray(freshGroup.members) ? freshGroup.members.map(m => typeof m === 'string' ? m : m?.uid).filter(Boolean) : []);
         await ensureMessageThread(uiState.currentChatId, {
             kind: 'group',
             memberIds: ids,
-            adminIds: group.adminIds || (Array.isArray(group.members) ? group.members.filter(m => m?.role === 'admin').map(m => m.uid) : []),
-            createdBy: group.createdBy
+            adminIds: freshGroup.adminIds || (Array.isArray(freshGroup.members) ? freshGroup.members.filter(m => m?.role === 'admin').map(m => m.uid) : []),
+            createdBy: freshGroup.createdBy
         });
     } catch (err) {
         console.error('[Messages] Не удалось подготовить группу:', err);
