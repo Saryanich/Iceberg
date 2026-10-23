@@ -625,7 +625,7 @@ function bindUIEvents() {
         const ln = document.getElementById('profileLastName').value.trim();
         const mood = document.getElementById('profileMood').value.trim();
         const nickInput = document.getElementById('profileNickname').value.trim();
-        const nick = nickInput || (authState.userData.globalId ? '@' + authState.userData.globalId : 'Пользователь');
+        const nick = nickInput ? (nickInput.startsWith('@') ? nickInput : '@' + nickInput) : (authState.userData.globalId ? '@' + authState.userData.globalId : '@user');
         try {
             const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
             const { db } = await import('./config.js');
