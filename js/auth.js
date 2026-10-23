@@ -480,21 +480,12 @@ export async function login(identifier, password) {
                 return { success: false, error: 'Global ID должен содержать 22 латинские буквы или цифры' };
             }
 
-            // Lookup happens before Firebase Auth sign-in. Rules must permit exact
-            // reads of global_ids/{globalId} while request.auth is null.
-            const lookup = Promise.all([
-                getDoc(doc(db, 'global_ids', globalId)),
-                (async () => {
-                    try {
-                        const q = query(collection(db, 'users'), where('globalId', '==', globalId), limit(1));
-                        return await getDocs(q);
-                    } catch { return null; }
-                })()
-            ]);
-            let lookupResult;
+            // Read only the exact Global ID document before Firebase Auth sign-in.
+            // Listing /users is deliberately forbidden by Firestore Rules.
+            let gidDoc;
             try {
-                lookupResult = await Promise.race([
-                    lookup,
+                gidDoc = await Promise.race([
+                    getDoc(doc(db, 'global_ids', globalId)),
                     new Promise((_, reject) => {
                         timeoutId = setTimeout(() => reject(new Error('GLOBAL_ID_LOOKUP_TIMEOUT')), 8000);
                     })
@@ -505,15 +496,9 @@ export async function login(identifier, password) {
                 }
                 throw e;
             }
-
-            const [gidDoc, usersSnap] = lookupResult;
             if (gidDoc?.exists()) {
                 const data = gidDoc.data();
                 if (typeof data.email === 'string' && data.email.includes('@')) email = data.email.trim();
-            }
-            if (email === globalId && usersSnap && !usersSnap.empty) {
-                const candidate = usersSnap.docs[0].data()?.email;
-                if (typeof candidate === 'string' && candidate.includes('@')) email = candidate.trim();
             }
             if (email === globalId) {
                 recordFailedAttempt();
