@@ -836,7 +836,7 @@ export async function loadGroups() {
         div.appendChild(av);
         div.appendChild(info);
         div.onclick = () => selectGroup(g);
-        c.appendChild(div);
+        list.appendChild(div);
     }
 }
 
@@ -904,7 +904,7 @@ export async function loadChannels() {
         div.appendChild(av);
         div.appendChild(info);
         div.onclick = () => selectChannel(ch);
-        c.appendChild(div);
+        list.appendChild(div);
     }
 }
 
