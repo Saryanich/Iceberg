@@ -955,11 +955,13 @@ async function ensureMessageThread(chatId, membership) {
         const ids = Array.from(new Set((membership.memberIds || [uid]).filter(Boolean)));
         if (!ids.includes(uid)) ids.push(uid);
         payload.memberIds = ids;
+        payload.adminIds = Array.from(new Set((membership.adminIds || []).filter(Boolean)));
         payload.createdBy = membership.createdBy || uid;
     } else if (membership.kind === 'channel') {
         const ids = Array.from(new Set((membership.memberIds || [uid]).filter(Boolean)));
         if (!ids.includes(uid)) ids.push(uid);
         payload.members = ids;
+        payload.admins = Array.from(new Set((membership.adminIds || []).filter(Boolean)));
         payload.createdBy = membership.createdBy || uid;
     } else {
         payload.participants = Array.from(new Set([uid, ...(membership.participants || [])].filter(Boolean))).sort();
@@ -1046,7 +1048,12 @@ export async function selectGroup(group) {
     renderChatHeader();
     try {
         const ids = group.memberIds || (Array.isArray(group.members) ? group.members.map(m => typeof m === 'string' ? m : m?.uid).filter(Boolean) : []);
-        await ensureMessageThread(uiState.currentChatId, { kind: 'group', memberIds: ids, createdBy: group.createdBy });
+        await ensureMessageThread(uiState.currentChatId, {
+            kind: 'group',
+            memberIds: ids,
+            adminIds: group.adminIds || (Array.isArray(group.members) ? group.members.filter(m => m?.role === 'admin').map(m => m.uid) : []),
+            createdBy: group.createdBy
+        });
     } catch (err) {
         console.error('[Messages] Не удалось подготовить группу:', err);
         showToast('Не удалось подготовить историю группы. Проверьте права Firestore.', 'error', 4000);
@@ -1096,6 +1103,7 @@ export async function selectChannel(channel) {
         await ensureMessageThread(uiState.currentChatId, {
             kind: 'channel',
             memberIds: channelMembers,
+            adminIds: freshChannel.admins || [],
             createdBy: freshChannel.createdBy
         });
     } catch (err) {
