@@ -511,24 +511,39 @@
 
     <!-- СКРИПТЫ -->
     <script>
-    // This non-module fallback still runs if remote ES-module imports fail.
-    // It guarantees a branded error screen instead of a blank page/browser error.
+    // Независимый обработчик: работает даже если модуль app.js не загрузился.
     (() => {
         const showStartupError = () => {
             const loading = document.getElementById('loadingScreen');
             const offline = document.getElementById('offlineScreen');
             if (window.__icebergStartupResolved || !loading || !offline || loading.classList.contains('hidden')) return;
             window.__icebergStartupResolved = true;
-            loading.classList.add('hidden');
+            loading.classList.add('loading-exit');
             offline.hidden = false;
-            const heading = offline.querySelector('h1');
-            const description = document.getElementById('offlineDescription');
-            const status = document.getElementById('offlineStatusText');
-            if (heading) heading.textContent = 'Ошибка подключения к серверу';
-            if (description) description.textContent = 'Ошибка подключения к серверу, попробуйте позже или проверьте подключение к интернету.';
-            if (status) status.textContent = navigator.onLine ? 'Сервер не ответил за 5 секунд' : 'Интернет недоступен';
+            requestAnimationFrame(() => offline.classList.add('is-visible'));
+            setTimeout(() => {
+                loading.classList.add('hidden');
+                loading.classList.remove('loading-exit');
+            }, 850);
         };
-        window.__icebergStartupFallback = setTimeout(showStartupError, 5000);
+
+        // Перезагрузка не зависит от app.js и обходит URL-кэш старой страницы.
+        document.addEventListener('click', (event) => {
+            const button = event.target.closest('#retryConnectionBtn');
+            if (!button || window.__icebergRetryStarted) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            window.__icebergRetryStarted = true;
+            button.disabled = true;
+            const label = document.getElementById('retryConnectionLabel');
+            if (label) label.textContent = 'Перезагрузка…';
+            document.getElementById('offlineScreen')?.classList.add('is-checking', 'is-leaving');
+            const target = new URL(window.location.href);
+            target.searchParams.set('retry', String(Date.now()));
+            setTimeout(() => window.location.replace(target.href), 650);
+        }, true);
+
+        window.__icebergStartupFallback = setTimeout(showStartupError, 12000);
         window.addEventListener('error', (event) => {
             if (event.target && event.target.tagName === 'SCRIPT' && event.target.type === 'module') {
                 showStartupError();
