@@ -263,6 +263,7 @@ service cloud.firestore {
           && request.resource.data.members is list
           && request.resource.data.admins is list)
         || (isChatMember(resource.data)
+          && !(resource.data.keys().hasAny(['admins']) && hasUid(resource.data.admins))
           && resource.data.members is list
           && request.auth.uid in resource.data.members
           && !(request.auth.uid in request.resource.data.members)
@@ -275,7 +276,7 @@ service cloud.firestore {
 
     match /messages/{chatId} {
       // Allow a one-time existence check so a participant can create a missing ACL parent.
-      allow get: if resource.data == null || isAdmin() || isChatMember(resource.data);
+      allow get: if resource == null || isAdmin() || isChatMember(resource.data);
       allow list: if isAdmin() || isChatMember(resource.data);
       allow create: if signedIn() && isChatMember(request.resource.data);
       allow update: if isAdmin()
@@ -325,7 +326,7 @@ service cloud.firestore {
     // so a participant can check whether a new handshake must be created.
     match /seda_handshakes/{handshakeId} {
       function participant() {
-        return signedIn() && resource.data != null
+        return signedIn() && resource != null
           && (resource.data.initiator == request.auth.uid
             || resource.data.peer == request.auth.uid);
       }
@@ -343,7 +344,7 @@ service cloud.firestore {
         && request.resource.data.initiatorPublicKey is string;
       }
 
-      allow get: if signedIn() && (resource.data == null || participant());
+      allow get: if signedIn() && (resource == null || participant());
       allow list: if participant();
 
       allow create: if signedIn()
