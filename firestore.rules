@@ -102,9 +102,22 @@ service cloud.firestore {
       allow delete: if isOwner(uid) || isAdmin();
     }
 
+    // Public online/typing status. No email, device token, IP, or private user fields.
+    match /presence/{uid} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create, update: if isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'online', 'lastSeen', 'typing', 'typingUntil', 'updatedAt'
+        ]);
+      allow delete: if isOwner(uid) || isAdmin();
+    }
+
     // Stories are split into one document per image to stay under Firestore's document limit.
     match /user_stories/{uid}/items/{storyId} {
-      allow get, list: if signedIn() && resource.data.expiresAt > request.time;
+      allow get, list: if isOwner(uid)
+        || (signedIn() && resource.data.expiresAt > request.time);
       allow create: if isOwner(uid)
         && request.resource.data.keys().hasOnly(['image', 'createdAt', 'expiresAt'])
         && request.resource.data.image is string
