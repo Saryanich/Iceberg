@@ -2317,7 +2317,8 @@ export async function clearChatById(uid, sedaChatId, explicitChatId = '') {
             // Reconnect only after the delete has committed, so a stale snapshot cannot restore cached rows.
             await loadMessages();
         }
-        showToast('История действительно очищена', 'success');
+        const historyKind = uiState.currentChannel ? 'канала' : uiState.currentGroup ? 'группы' : 'чата';
+        showToast(`История ${historyKind} очищена`, 'success');
     } catch (e) {
         console.error('[Chat clear] Не удалось удалить историю:', e);
         showToast('Не удалось удалить историю. Проверьте права доступа и повторите попытку.', 'error');
