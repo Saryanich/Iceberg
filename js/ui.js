@@ -1044,9 +1044,19 @@ async function ensureMessageThread(chatId, membership) {
     const existing = await getDoc(threadRef);
 
     if (existing.exists()) {
-        // Synchronize/migrate ACL metadata only if this user is an administrator.
-        // Firestore Rules verify these values against the authoritative group/channel.
-        if (isGroup && (membership.createdBy === uid || adminIds.includes(uid))) {
+        const oldData = existing.data();
+        // Migrate legacy direct-thread parents whose earlier schema omitted participant IDs.
+        if (!isGroup && !isChannel
+            && (!Array.isArray(oldData.participants) || !oldData.kind)) {
+            const participants = Array.from(new Set([uid, ...(membership.participants || [])].filter(Boolean))).sort();
+            await updateDoc(threadRef, {
+                kind: membership.kind === 'seda' ? 'seda' : 'direct',
+                participants,
+                updatedAt: serverTimestamp()
+            });
+        } else if (isGroup && (membership.createdBy === uid || adminIds.includes(uid))) {
+            // Synchronize/migrate ACL metadata only if this user is an administrator.
+            // Firestore Rules verify these values against the authoritative group.
             await updateDoc(threadRef, {
                 kind: 'group',
                 resourceId: membership.resourceId,
