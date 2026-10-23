@@ -2533,6 +2533,77 @@ export function scrollToMessage(id) {
     setTimeout(() => { el.style.boxShadow = ''; }, 1200);
 }
 
+const sedaInitiatorListeners = new Map();
+
+function watchSedaInitiatorHandshake(sedaChatId) {
+    if (!sedaChatId || sedaInitiatorListeners.has(sedaChatId)) return;
+    const ref = doc(db, 'seda_handshakes', sedaChatId);
+    let unsub = () => {};
+    let processing = false;
+    let resolved = false;
+
+    unsub = onSnapshot(ref, async snap => {
+        if (!snap.exists()) {
+            try { unsub(); } catch {}
+            sedaInitiatorListeners.delete(sedaChatId);
+            return;
+        }
+        const data = snap.data();
+        if (data.initiator !== authState.user?.uid
+            || !data.peerPublicKey
+            || !data.encryptedSedaKey
+            || processing
+            || resolved) return;
+
+        processing = true;
+        try {
+            // Restore the initiator's saved private key after a page reload instead
+            // of creating a new key that can no longer decrypt the peer's response.
+            const saved = await DB.getECDHKeys(sedaChatId);
+            if (!saved?.privateKey) throw new Error('Не найден локальный ключ SEDA');
+            const privateKey = await crypto.subtle.importKey(
+                'jwk', saved.privateKey,
+                { name: 'ECDH', namedCurve: 'P-256' },
+                true, ['deriveKey', 'deriveBits']
+            );
+            const peerPublic = await importPublicKey(data.peerPublicKey);
+            const sharedKey = await deriveSharedKey(privateKey, peerPublic);
+            const key = await aesDecrypt(data.encryptedSedaKey, sharedKey);
+            if (!key?.startsWith('SEDAKEY:')) throw new Error('Не удалось расшифровать ключ SEDA');
+
+            await DB.saveSedaKey(sedaChatId, key);
+            if (uiState.currentChatId === sedaChatId) {
+                uiState.currentSedaKey = key;
+                uiState.sedaEnabledForCurrentChat = !!authState.sedaProActivated;
+                updateSedaUI();
+                await loadMessages();
+            }
+            await updateDoc(ref, {
+                initiatorAck: true,
+                initiatorAckAt: Date.now(),
+                completed: true,
+                expiresAt: null
+            }).catch(err => console.warn('[SEDA] Не удалось подтвердить рукопожатие:', err));
+
+            resolved = true;
+            showToast('✅ SEDA-чат установлен!', 'success');
+            try { unsub(); } catch {}
+            sedaInitiatorListeners.delete(sedaChatId);
+        } catch (err) {
+            console.error('[SEDA initiator] Не удалось восстановить ключ:', err);
+            showToast('Не удалось завершить SEDA-шифрование. Откройте чат ещё раз и проверьте соединение.', 'error', 4500);
+        } finally {
+            processing = false;
+        }
+    }, err => {
+        console.error('[SEDA initiator listener]', { code: err?.code || 'unknown', message: err?.message || String(err) });
+        try { unsub(); } catch {}
+        sedaInitiatorListeners.delete(sedaChatId);
+    });
+
+    sedaInitiatorListeners.set(sedaChatId, unsub);
+}
+
 export async function startSedaChat() {
     if (!authState.sedaProActivated) {
         showToast('⚠️ SEDA Pro не активирован', 'error');
@@ -2587,56 +2658,23 @@ export async function startSedaChat() {
         expiresAt: Date.now() + 5 * 60 * 1000
     });
 
-    let unsub = null;
-    let resolved = false;
-    unsub = onSnapshot(handshakeRef, async (snap) => {
-        if (resolved) return;
-        if (!snap.exists()) return;
-        const data = snap.data();
-        if (data.peerPublicKey && data.encryptedSedaKey) {
-            resolved = true;
-            if (unsub) unsub();
-
-            const peerPub = await importPublicKey(data.peerPublicKey);
-            const priv = await DB.getECDHKeys(sedaChatId);
-            if (!priv) return;
-
-            const privateKey = await crypto.subtle.importKey(
-                'jwk', priv.privateKey,
-                { name: 'ECDH', namedCurve: 'P-256' },
-                true, ['deriveKey', 'deriveBits']
-            );
-            const sharedKey = await deriveSharedKey(privateKey, peerPub);
-            const decryptedSedaKey = await aesDecrypt(data.encryptedSedaKey, sharedKey);
-            if (decryptedSedaKey?.startsWith('SEDAKEY:')) {
-                await DB.saveSedaKey(sedaChatId, decryptedSedaKey);
-                if (uiState.currentChatId === sedaChatId) {
-                    uiState.currentSedaKey = decryptedSedaKey;
-                    uiState.sedaEnabledForCurrentChat = !!authState.sedaProActivated;
-                    updateSedaUI();
-                    await loadMessages();
-                }
-                // The recipient has stored its key; acknowledge without exposing the key itself.
-                await updateDoc(handshakeRef, {
-                    initiatorAck: true,
-                    initiatorAckAt: Date.now(),
-                    completed: true,
-                    expiresAt: null
-                }).catch(e => console.warn('[SEDA] Не удалось подтвердить handshake:', e));
-                showToast('✅ SEDA-чат установлен!', 'success');
-            } else {
-                throw new Error('Получен некорректный ключ SEDA');
-            }
-        }
-    });
+    watchSedaInitiatorHandshake(sedaChatId);
 
     setTimeout(async () => {
         try {
-            const s = await getDoc(handshakeRef);
-            if (s.exists() && !s.data().peerPublicKey) {
+            const snapshot = await getDoc(handshakeRef);
+            if (!snapshot.exists()) return;
+            const data = snapshot.data();
+            if (data.initiator === authState.user?.uid
+                && Number(data.expiresAt) > 0
+                && Number(data.expiresAt) <= Date.now()) {
                 await deleteDoc(handshakeRef);
+                await DB.deleteECDHKeys(sedaChatId);
+                await DB.deleteSedaKey(sedaChatId);
             }
-        } catch {}
+        } catch (err) {
+            console.warn('[SEDA] Не удалось очистить истёкшее рукопожатие:', err);
+        }
     }, 5 * 60 * 1000);
 
     await openSedaChat(peerUid, sedaChatId);
