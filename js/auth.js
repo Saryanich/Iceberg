@@ -87,6 +87,18 @@ function loadAuthCache() {
 
 function clearAuthCache() { try { localStorage.removeItem(AUTH_CACHE_KEY); } catch {} }
 
+async function updatePublicPresence(uid, online) {
+    if (!uid) return;
+    await setDoc(doc(db, 'presence', uid), {
+        uid,
+        online: !!online,
+        lastSeen: serverTimestamp(),
+        typing: false,
+        typingUntil: 0,
+        updatedAt: serverTimestamp()
+    }, { merge: true });
+}
+
 let deviceSessionUnsubscribe = null;
 function stopDeviceSessionWatcher() {
     if (deviceSessionUnsubscribe) { try { deviceSessionUnsubscribe(); } catch {} deviceSessionUnsubscribe = null; }
@@ -327,6 +339,9 @@ export async function handleAuthLogin(user, callbacks = {}) {
                 online: true, lastSeen: serverTimestamp(),
                 currentIP: authState.currentIP || 'unknown', currentDevice: authState.deviceFingerprint
             }).catch(() => {});
+            updatePublicPresence(user.uid, true).catch(error =>
+                console.warn('[Presence] Не удалось включить статус:', error)
+            );
 
             authState.user = user; authState.userData = data;
             authState.sedaProActivated = data.sedaProActivated || false;
@@ -372,6 +387,9 @@ async function syncUserFromServer(uid) {
             online: true, lastSeen: serverTimestamp(),
             currentIP: authState.currentIP || 'unknown', currentDevice: authState.deviceFingerprint
         }).catch(() => {});
+        updatePublicPresence(uid, true).catch(error =>
+            console.warn('[Presence] Не удалось обновить статус:', error)
+        );
     } catch (e) {}
 }
 
@@ -422,6 +440,9 @@ export async function verify2FA(code, trustDevice = false) {
     authState.userData = ud.data();
     authState.sedaProActivated = authState.userData?.sedaProActivated || false;
     if (authState.userData) saveAuthCache(user.uid, authState.userData);
+    updatePublicPresence(user.uid, true).catch(error =>
+        console.warn('[Presence] Не удалось включить статус после 2FA:', error)
+    );
     resetFailedAttempts();
     return { success: true, user, data: authState.userData };
 }
@@ -558,7 +579,11 @@ export async function logout() {
     stopDeviceSessionWatcher();
     try { 
         if (authState.user) {
-            updateDoc(doc(db, 'users', authState.user.uid), { online: false, lastSeen: serverTimestamp() }).catch(() => {}); 
+            const uid = authState.user.uid;
+            updateDoc(doc(db, 'users', uid), { online: false, lastSeen: serverTimestamp() }).catch(() => {});
+            await updatePublicPresence(uid, false).catch(error =>
+                console.warn('[Presence] Не удалось выключить статус:', error)
+            );
         }
     } catch {}
     
