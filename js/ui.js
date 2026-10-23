@@ -1120,8 +1120,9 @@ export async function selectChannel(channel) {
                 ...channel,
                 ...remote,
                 id: channel.id,
-                isAdmin: Array.isArray(remote.admins) && remote.admins.includes(authState.user.uid)
-                    ? true : !!channel.isAdmin
+                isAdmin: Array.isArray(remote.admins)
+                    ? remote.admins.includes(authState.user.uid)
+                    : !!channel.isAdmin
             };
         }
     } catch (err) {
