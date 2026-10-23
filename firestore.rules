@@ -91,7 +91,8 @@ service cloud.firestore {
 
     // Public-facing profile fields only; never mirror email or security metadata here.
     match /public_profiles/{uid} {
-      allow get, list: if signedIn();
+      allow get: if signedIn();
+      allow list: if false;
       allow create, update: if isOwner(uid)
         && request.resource.data.uid == uid
         && request.resource.data.keys().hasOnly([
@@ -234,7 +235,9 @@ service cloud.firestore {
         || (groupAdmin(resource.data)
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.adminIds is list
-          && request.resource.data.memberIds is list)
+          && request.resource.data.memberIds is list
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['name', 'description', 'avatar', 'members', 'memberIds', 'adminIds', 'memberCount']))
         || (isChatMember(resource.data)
           && !(resource.data.keys().hasAny(['adminIds']) && hasUid(resource.data.adminIds))
           && resource.data.memberIds is list
@@ -287,7 +290,7 @@ service cloud.firestore {
           && isChatMember(request.resource.data)
           && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['lastMessage', 'lastMessageTime', 'unread', 'updatedAt']));
-      allow delete: if isAdmin() || isChatMember(resource.data);
+      allow delete: if isAdmin() || groupAdmin(resource.data) || channelAdmin(resource.data);
 
       function parentChat() {
         return get(/databases/$(database)/documents/messages/$(chatId)).data;
@@ -311,6 +314,13 @@ service cloud.firestore {
               || (request.resource.data.diff(resource.data).affectedKeys()
                 .hasOnly(['read', 'readAt'])
                 && request.resource.data.senderId == resource.data.senderId)
+              || (request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['reactions'])
+                && request.resource.data.senderId == resource.data.senderId)
+              || (chatModerator()
+                && request.resource.data.diff(resource.data).affectedKeys()
+                  .hasOnly(['text', 'deleted', 'media', 'type', 'encrypted'])
+                && request.resource.data.deleted == true)
             ));
         allow delete: if isAdmin()
           || (isChatMember(parentChat())
