@@ -19,7 +19,8 @@ let foregroundUnsub = null;
 let currentToken = null;
 
 // ===================================================================
-// РЕГИСТРАЦИЯ SERVICE WORKER (два разных SW)
+// РЕГИСТРАЦИЯ ОСНОВНОГО PWA SW И ОТДЕЛЬНОГО FCM SW
+// Одинаковый scope у двух скриптов приводит к замене одного service worker другим.
 // ===================================================================
 export async function registerServiceWorkers() {
     if (!('serviceWorker' in navigator)) {
@@ -39,7 +40,7 @@ export async function registerServiceWorkers() {
     }
 
     try {
-        fcmReg = await navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './' });
+        fcmReg = await navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './fcm/' });
         console.log('[SW] FCM зарегистрирован:', fcmReg.scope);
     } catch (e) {
         console.warn('[SW] FCM SW не зарегистрирован:', e);
@@ -80,10 +81,10 @@ export async function initPushNotifications() {
             return { success: false, error: 'service_worker_unavailable' };
         }
         await new Promise(resolve => setTimeout(resolve, 3000));
-        let registration = await navigator.serviceWorker.getRegistration('./');
+        let registration = await navigator.serviceWorker.getRegistration('./fcm/');
         if (!registration) {
             try {
-                registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './' });
+                registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './fcm/' });
             } catch (e) {
                 console.warn('[Push] Не удалось зарегистрировать FCM SW:', e);
             }
