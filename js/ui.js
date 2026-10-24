@@ -1103,7 +1103,6 @@ async function ensureIcebergBaseKey(chatId, peerUid) {
                 return null;
             }
         }
-    }
         // Resume the pending initiator handshake after reload.
         const saved = await DB.getECDHKeys(handshakeId);
         if (!saved) throw new Error('Нет локального ключа рукопожатия');
