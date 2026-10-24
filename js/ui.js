@@ -290,16 +290,20 @@ export function renderUserProfile() {
     const userMood = document.getElementById('userMood');
     if (userName) userName.textContent = d.nickname || 'Пользователь';
     if (userMood) userMood.textContent = d.mood || 'Нажмите, чтобы изменить профиль';
-    const av = document.getElementById('userAvatar');
-    if (!av) return;
-    av.textContent = '';
-    if (d.avatar) {
-        const img = document.createElement('img');
-        img.src = d.avatar;
-        img.alt = 'avatar';
-        av.appendChild(img);
-    } else {
-        av.textContent = (d.nickname || 'U').charAt(0).toUpperCase();
+    const avatarTargets = [
+        document.getElementById('userAvatar'),
+        document.getElementById('brandProfileAvatar')
+    ].filter(Boolean);
+    for (const av of avatarTargets) {
+        av.textContent = '';
+        if (d.avatar) {
+            const img = document.createElement('img');
+            img.src = d.avatar;
+            img.alt = 'Аватар профиля';
+            av.appendChild(img);
+        } else {
+            av.textContent = (d.nickname || d.globalId || 'U').replace(/^@/, '').charAt(0).toUpperCase();
+        }
     }
 }
 
