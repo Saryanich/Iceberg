@@ -521,6 +521,7 @@ export async function loadContacts() {
     for (const contact of sorted) {
         c.appendChild(renderContactItem(contact));
     }
+    await loadGroups();
 }
 
 function renderContactItem(contact) {
@@ -887,11 +888,13 @@ export async function loadGroups() {
         }
     }
     groups = groups.filter(g => g && g.id);
+    list.innerHTML = '';
+    const contactsList = document.getElementById('contactsList');
     if (!groups.length) {
         list.innerHTML = '<div class="empty-state">Нет групп</div>';
+        if (contactsList) contactsList.querySelector('.contacts-groups-section')?.remove();
         return;
     }
-    list.innerHTML = '';
     for (const g of groups) {
         const div = document.createElement('div');
         div.className = 'group-item';
@@ -923,6 +926,22 @@ export async function loadGroups() {
         div.appendChild(info);
         div.onclick = () => selectGroup(g);
         list.appendChild(div);
+    }
+    // Render groups directly inside the Contacts pane, beneath personal contacts.
+    if (contactsList) {
+        contactsList.querySelector('.contacts-groups-section')?.remove();
+        const section = document.createElement('section');
+        section.className = 'contacts-groups-section';
+        const heading = document.createElement('div');
+        heading.className = 'contacts-section-title';
+        heading.textContent = 'Группы';
+        section.appendChild(heading);
+        for (const item of [...list.children]) section.appendChild(item.cloneNode(true));
+        // Rebind each cloned group row to the same selection action.
+        [...section.querySelectorAll('.group-item')].forEach((row, index) => {
+            row.onclick = () => selectGroup(groups[index]);
+        });
+        contactsList.appendChild(section);
     }
 }
 
@@ -3389,7 +3408,7 @@ export function switchTab(tab) {
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
 
     const tabs = document.querySelectorAll('.tab');
-    const map = { chats: 0, channels: 1, groups: 2, contacts: 3 };
+    const map = { chats: 0, channels: 1, contacts: 3 };
     const idx = map[tab];
     if (idx !== undefined && tabs[idx]) tabs[idx].classList.add('active');
 
@@ -3398,7 +3417,6 @@ export function switchTab(tab) {
 
     if (tab === 'chats') loadChats();
     else if (tab === 'channels') loadChannels();
-    else if (tab === 'groups') loadGroups();
     else if (tab === 'contacts') loadContacts();
 }
 
