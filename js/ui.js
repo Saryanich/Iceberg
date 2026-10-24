@@ -4,7 +4,7 @@ import {
     query, where, getDocs, onSnapshot, orderBy, limit, serverTimestamp, Timestamp,
     arrayUnion, arrayRemove, writeBatch, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
- 
+
 import {
     generateSedaKey, serializeKey, sedaUltraEncryptWithKey, sedaUltraDecrypt, isSedaUltraPayload,
     icebergBaseEncrypt, icebergBaseDecrypt, isIcebergBasePayload, generateIcebergBaseKey,
