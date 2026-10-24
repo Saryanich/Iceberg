@@ -4,8 +4,8 @@
 // ⚠️ ОБЯЗАТЕЛЬНО в корне репозитория (не в js/)
 // ==================================================================
 
-const CACHE_NAME = 'iceberg-v2.0.9';
-const RUNTIME_CACHE = 'iceberg-runtime-v2.0.9';
+const CACHE_NAME = 'iceberg-v2.0.10';
+const RUNTIME_CACHE = 'iceberg-runtime-v2.0.10';
 
 // Файлы, которые кэшируем при установке (app shell)
 const PRECACHE_URLS = [
@@ -26,7 +26,7 @@ const PRECACHE_URLS = [
     'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js',
     'https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js',
     'https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging.js',
-    'https://i.ibb.co/8JY0bXs/IMG-0335.jpg'
+    'https://i.ibb.co/8JY0bXs/IMG-0335.jpg?v=20261024-2'
 ];
 
 // Домены, которые НЕ кэшируем (Firebase, Firestore, аналитика)
@@ -204,8 +204,8 @@ self.addEventListener('message', (event) => {
         event.waitUntil(
             self.registration.showNotification(title || 'Айсберг', {
                 body: body || 'Новое сообщение',
-                icon: icon || 'https://i.ibb.co/8JY0bXs/IMG-0335.jpg',
-                badge: 'https://i.ibb.co/8JY0bXs/IMG-0335.jpg',
+                icon: icon || 'https://i.ibb.co/8JY0bXs/IMG-0335.jpg?v=20261024-2',
+                badge: 'https://i.ibb.co/8JY0bXs/IMG-0335.jpg?v=20261024-2',
                 tag: tag || 'iceberg_message',
                 renotify: true,
                 vibrate: [200, 100, 200],
@@ -257,8 +257,8 @@ self.addEventListener('push', (event) => {
     event.waitUntil(
         self.registration.showNotification(title, {
             body,
-            icon: 'https://i.ibb.co/8JY0bXs/IMG-0335.jpg',
-            badge: 'https://i.ibb.co/8JY0bXs/IMG-0335.jpg',
+            icon: 'https://i.ibb.co/8JY0bXs/IMG-0335.jpg?v=20261024-2',
+            badge: 'https://i.ibb.co/8JY0bXs/IMG-0335.jpg?v=20261024-2',
             tag: payload.chatId || 'iceberg_message',
             renotify: true,
             vibrate: [200, 100, 200],
