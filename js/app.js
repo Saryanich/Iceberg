@@ -546,11 +546,7 @@ function bindUIEvents() {
     document.querySelector('#twoFactorScreen .btn-primary').onclick = handle2FAVerify;
     document.querySelector('#twoFactorScreen .btn-secondary').onclick = handle2FACancel;
 
-    document.getElementById('brandProfileBtn')?.addEventListener('click', () => {
-        document.getElementById('profileModal')?.classList.add('active');
-    });
-
-    document.getElementById('userInfoClicker')?.addEventListener('click', () => {
+    const openProfileModal = () => {
         const d = authState.userData;
         if (!d) return;
         document.getElementById('profileFirstName').value = d.firstName || '';
@@ -562,43 +558,98 @@ function bindUIEvents() {
         if (d.avatar) {
             const img = document.createElement('img');
             img.src = d.avatar;
+            img.alt = 'Аватар профиля';
             av.appendChild(img);
         } else {
-            av.textContent = (d.nickname || 'U').charAt(0).toUpperCase();
+            av.textContent = (d.nickname || d.globalId || 'U').replace(/^@/, '').charAt(0).toUpperCase();
         }
+        document.getElementById('avatarCropControls').hidden = true;
         document.getElementById('profileModal')?.classList.add('active');
-    });
+    };
+    document.getElementById('brandProfileBtn')?.addEventListener('click', openProfileModal);
+
+    document.getElementById('userInfoClicker')?.addEventListener('click', openProfileModal);
 
     document.getElementById('avatarClicker')?.addEventListener('click', () => {
         document.getElementById('avatarUploadInput')?.click();
     });
 
+    let pendingAvatarImage = null;
     document.getElementById('avatarUploadInput').onchange = async function () {
         const file = this.files?.[0];
         this.value = '';
         if (!file) return;
         try {
-            const { compressImage } = await import('./ui.js');
-            const dataUrl = await compressImage(file, 300 * 1024);
-            authState.userData.avatar = dataUrl;
+            const image = new Image();
+            const objectUrl = URL.createObjectURL(file);
+            image.onload = () => {
+                URL.revokeObjectURL(objectUrl);
+                pendingAvatarImage = image;
+                document.getElementById('avatarCropControls').hidden = false;
+                document.getElementById('avatarZoom').value = '1';
+                document.getElementById('avatarCropX').value = '50';
+                document.getElementById('avatarCropY').value = '50';
+                updateAvatarCropPreview();
+            };
+            image.onerror = () => { URL.revokeObjectURL(objectUrl); showToast('Не удалось открыть изображение', 'error'); };
+            image.src = objectUrl;
+        } catch (e) {
+            console.error(e);
+            showToast('Ошибка загрузки изображения', 'error');
+        }
+    };
 
-            const av = document.getElementById('profileAvatarBig');
-            av.innerHTML = '';
-            const img = document.createElement('img');
-            img.src = dataUrl;
-            av.appendChild(img);
-
+    const updateAvatarCropPreview = () => {
+        if (!pendingAvatarImage) return;
+        const avatar = document.getElementById('profileAvatarBig');
+        const zoom = Number(document.getElementById('avatarZoom').value);
+        const x = Number(document.getElementById('avatarCropX').value);
+        const y = Number(document.getElementById('avatarCropY').value);
+        avatar.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = pendingAvatarImage.src;
+        img.style.width = (zoom * 100) + '%';
+        img.style.height = (zoom * 100) + '%';
+        img.style.maxWidth = 'none';
+        img.style.objectFit = 'cover';
+        img.style.position = 'absolute';
+        img.style.left = x + '%';
+        img.style.top = y + '%';
+        img.style.transform = 'translate(-' + x + '%, -' + y + '%)';
+        avatar.style.overflow = 'hidden';
+        avatar.style.position = 'relative';
+        avatar.appendChild(img);
+    };
+    ['avatarZoom','avatarCropX','avatarCropY'].forEach(id => document.getElementById(id)?.addEventListener('input', updateAvatarCropPreview));
+    document.getElementById('applyAvatarCropBtn')?.addEventListener('click', async () => {
+        if (!pendingAvatarImage) return;
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            const iw = pendingAvatarImage.naturalWidth, ih = pendingAvatarImage.naturalHeight;
+            const side = Math.min(iw, ih) / Number(document.getElementById('avatarZoom').value);
+            const maxX = Math.max(0, iw - side), maxY = Math.max(0, ih - side);
+            const sx = maxX * Number(document.getElementById('avatarCropX').value) / 100;
+            const sy = maxY * Number(document.getElementById('avatarCropY').value) / 100;
+            ctx.drawImage(pendingAvatarImage, sx, sy, side, side, 0, 0, 512, 512);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
             const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
             const { db } = await import('./config.js');
             await updateDoc(doc(db, 'users', authState.user.uid), { avatar: dataUrl });
+            authState.userData.avatar = dataUrl;
             await syncPublicProfile();
             await DB.setCachedProfile(authState.user.uid, authState.userData);
             renderUserProfile();
-            showToast('✅ Аватар обновлён', 'success');
+            pendingAvatarImage = null;
+            document.getElementById('avatarCropControls').hidden = true;
+            openProfileModal();
+            showToast('Аватар обновлён', 'success');
         } catch (e) {
-            showToast('Ошибка загрузки', 'error');
+            console.error('[Avatar crop]', e);
+            showToast('Не удалось сохранить аватар', 'error');
         }
-    };
+    });
 
     document.querySelector('#profileModal .btn-primary').onclick = async () => {
         const fn = document.getElementById('profileFirstName').value.trim();
