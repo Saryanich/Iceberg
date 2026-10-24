@@ -4,8 +4,8 @@
 // ⚠️ ОБЯЗАТЕЛЬНО в корне репозитория (не в js/)
 // ==================================================================
 
-const CACHE_NAME = 'iceberg-v2.0.8';
-const RUNTIME_CACHE = 'iceberg-runtime-v2.0.8';
+const CACHE_NAME = 'iceberg-v2.0.9';
+const RUNTIME_CACHE = 'iceberg-runtime-v2.0.9';
 
 // Файлы, которые кэшируем при установке (app shell)
 const PRECACHE_URLS = [
@@ -95,6 +95,8 @@ self.addEventListener('fetch', (event) => {
     const { request } = event;
     const url = new URL(request.url);
 
+    // Avoid caching opaque cross-origin responses and never intercept non-HTTP schemes.
+
     // Не трогаем не-GET
     if (request.method !== 'GET') return;
 
@@ -126,7 +128,10 @@ async function cacheFirst(request) {
     if (cached) return cached;
 
     try {
-        const response = await fetch(request);
+        const isAppShell = new URL(request.url).origin === self.location.origin
+            && (/\\.(?:html|css|js|json)$/i.test(new URL(request.url).pathname) || request.mode === 'navigate');
+        const networkRequest = isAppShell ? new Request(request, { cache: 'no-cache' }) : request;
+        const response = await fetch(networkRequest);
         if (response && response.ok && response.type !== 'opaque') {
             const cache = await caches.open(RUNTIME_CACHE);
             cache.put(request, response.clone());
@@ -160,7 +165,13 @@ async function networkFirst(request) {
             const fallback = await caches.match('./index.html') || await caches.match('./');
             if (fallback) return fallback;
         }
-        throw err;
+        // Missing optional resources should not turn offline mode into a page-wide failure.
+        if (request.mode === 'navigate') {
+            return new Response('Айсберг доступен в ограниченном офлайн-режиме. Подключитесь к интернету для обновления.', {
+                status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+            });
+        }
+        return new Response('', { status: 504, statusText: 'Offline cache miss' });
     }
 }
 
@@ -175,9 +186,11 @@ self.addEventListener('message', (event) => {
         return;
     }
 
-    if (data.type === 'CLEAR_CACHE') {
+    if (data.type === 'CLEAR_RUNTIME_CACHE') {
         event.waitUntil(
-            caches.keys().then(names => Promise.all(names.map(n => caches.delete(n))))
+            caches.keys().then(names => Promise.all(
+                names.filter(name => name.startsWith('iceberg-runtime-')).map(name => caches.delete(name))
+            ))
         );
         return;
     }
