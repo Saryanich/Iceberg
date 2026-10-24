@@ -194,13 +194,11 @@
     <div id="storyViewerModal" class="modal-overlay">
         <div class="story-viewer-content">
             <div class="story-progress" id="storyProgress"></div>
+            <div class="story-viewer-top"><strong id="storyOwnerName">История</strong><button id="closeStoryViewerBtn" type="button" aria-label="Закрыть историю">×</button></div>
             <img class="story-image" id="storyImage" src="" alt="История">
-            <div style="display:flex;justify-content:space-between;margin-top:12px;">
-                <button class="btn btn-secondary" id="prevStoryBtn" style="width:auto;padding:8px 16px;">← Назад</button>
-                <button class="btn btn-secondary" id="nextStoryBtn" style="width:auto;padding:8px 16px;">Вперёд →</button>
-            </div>
-            <button class="btn btn-danger" id="deleteStoryBtn" style="margin-top:8px;">🗑 Удалить историю</button>
-            <button class="btn btn-secondary" id="closeStoryViewerBtn" style="margin-top:8px;">Закрыть</button>
+            <div class="story-viewer-social"><button class="btn btn-secondary" id="storyLikeBtn" type="button">♡ Нравится</button><button class="story-social-info" id="storySocialInfo" type="button">Просмотры: 0</button></div>
+            <div class="story-viewer-controls"><button class="btn btn-secondary" id="prevStoryBtn" type="button">← Назад</button><button class="btn btn-secondary" id="nextStoryBtn" type="button">Вперёд →</button></div>
+            <button class="btn btn-danger" id="deleteStoryBtn" type="button">🗑 Удалить историю</button>
         </div>
     </div>
 
