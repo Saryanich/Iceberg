@@ -512,6 +512,7 @@ export async function loadContacts() {
     if (!c) return;
     if (!contacts.length) {
         c.innerHTML = '<div class="empty-state">Нет контактов</div>';
+        await loadGroups();
         return;
     }
     const sorted = [...contacts].sort((a, b) =>
