@@ -2,7 +2,7 @@ import { auth, db, SEDA_ACTIVATION_CODE } from './config.js';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, serverTimestamp, arrayUnion, arrayRemove, limit, runTransaction, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { hash2FACode, sha256Hex } from './crypto.js';
-
+ 
 const AUTH_CACHE_KEY = 'iceberg_auth_cache_v1';
 const BRUTE_FORCE_KEY = 'iceberg_bruteforce_v1';
 const RATE_LIMIT_KEY = 'iceberg_ratelimit_v1';
