@@ -586,9 +586,7 @@ function bindUIEvents() {
                 URL.revokeObjectURL(objectUrl);
                 pendingAvatarImage = image;
                 document.getElementById('avatarCropControls').hidden = false;
-                document.getElementById('avatarZoom').value = '1';
-                document.getElementById('avatarCropX').value = '50';
-                document.getElementById('avatarCropY').value = '50';
+                avatarCropState = { zoom: 1, x: 0.5, y: 0.5 };
                 updateAvatarCropPreview();
             };
             image.onerror = () => { URL.revokeObjectURL(objectUrl); showToast('Не удалось открыть изображение', 'error'); };
@@ -599,28 +597,71 @@ function bindUIEvents() {
         }
     };
 
+    let avatarCropState = { zoom: 1, x: 0.5, y: 0.5 };
+    let cropPointers = new Map();
+    let cropGestureStart = null;
     const updateAvatarCropPreview = () => {
         if (!pendingAvatarImage) return;
         const avatar = document.getElementById('profileAvatarBig');
-        const zoom = Number(document.getElementById('avatarZoom').value);
-        const x = Number(document.getElementById('avatarCropX').value);
-        const y = Number(document.getElementById('avatarCropY').value);
+        const iw = pendingAvatarImage.naturalWidth, ih = pendingAvatarImage.naturalHeight;
+        const base = Math.max(avatar.clientWidth / iw, avatar.clientHeight / ih);
+        const scale = base * avatarCropState.zoom;
+        const width = iw * scale, height = ih * scale;
+        const maxLeft = Math.max(0, width - avatar.clientWidth);
+        const maxTop = Math.max(0, height - avatar.clientHeight);
+        const left = -maxLeft * avatarCropState.x;
+        const top = -maxTop * avatarCropState.y;
         avatar.innerHTML = '';
         const img = document.createElement('img');
         img.src = pendingAvatarImage.src;
-        img.style.width = (zoom * 100) + '%';
-        img.style.height = (zoom * 100) + '%';
-        img.style.maxWidth = 'none';
-        img.style.objectFit = 'cover';
-        img.style.position = 'absolute';
-        img.style.left = x + '%';
-        img.style.top = y + '%';
-        img.style.transform = 'translate(-' + x + '%, -' + y + '%)';
+        img.alt = 'Предпросмотр кадрирования';
+        img.style.cssText = `position:absolute;width:${width}px;height:${height}px;max-width:none;object-fit:fill;left:${left}px;top:${top}px;pointer-events:none;`;
         avatar.style.overflow = 'hidden';
         avatar.style.position = 'relative';
+        avatar.style.touchAction = 'none';
         avatar.appendChild(img);
     };
-    ['avatarZoom','avatarCropX','avatarCropY'].forEach(id => document.getElementById(id)?.addEventListener('input', updateAvatarCropPreview));
+    const cropSurface = document.getElementById('profileAvatarBig');
+    cropSurface?.addEventListener('pointerdown', event => {
+        if (!pendingAvatarImage) return;
+        event.preventDefault();
+        cropSurface.setPointerCapture?.(event.pointerId);
+        cropPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (cropPointers.size === 1) {
+            cropGestureStart = { type: 'pan', x: event.clientX, y: event.clientY, cropX: avatarCropState.x, cropY: avatarCropState.y };
+        } else if (cropPointers.size === 2) {
+            const pts = [...cropPointers.values()];
+            cropGestureStart = { type: 'pinch', distance: Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y), zoom: avatarCropState.zoom };
+        }
+    });
+    cropSurface?.addEventListener('pointermove', event => {
+        if (!pendingAvatarImage || !cropPointers.has(event.pointerId)) return;
+        event.preventDefault();
+        cropPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        const avatar = document.getElementById('profileAvatarBig');
+        const iw = pendingAvatarImage.naturalWidth, ih = pendingAvatarImage.naturalHeight;
+        const base = Math.max(avatar.clientWidth / iw, avatar.clientHeight / ih);
+        const width = iw * base * avatarCropState.zoom, height = ih * base * avatarCropState.zoom;
+        if (cropPointers.size >= 2 && cropGestureStart?.type === 'pinch') {
+            const pts = [...cropPointers.values()];
+            const distance = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+            avatarCropState.zoom = Math.max(1, Math.min(4, cropGestureStart.zoom * distance / Math.max(1,cropGestureStart.distance)));
+        } else if (cropGestureStart?.type === 'pan') {
+            avatarCropState.x = Math.max(0, Math.min(1, cropGestureStart.cropX - (event.clientX-cropGestureStart.x) / Math.max(1,width-avatar.clientWidth)));
+            avatarCropState.y = Math.max(0, Math.min(1, cropGestureStart.cropY - (event.clientY-cropGestureStart.y) / Math.max(1,height-avatar.clientHeight)));
+        }
+        updateAvatarCropPreview();
+    });
+    const endCropPointer = event => {
+        cropPointers.delete(event.pointerId);
+        cropGestureStart = null;
+        if (cropPointers.size === 1) {
+            const [p] = [...cropPointers.values()];
+            cropGestureStart = { type: 'pan', x: p.x, y: p.y, cropX: avatarCropState.x, cropY: avatarCropState.y };
+        }
+    };
+    cropSurface?.addEventListener('pointerup', endCropPointer);
+    cropSurface?.addEventListener('pointercancel', endCropPointer);
     document.getElementById('applyAvatarCropBtn')?.addEventListener('click', async () => {
         if (!pendingAvatarImage) return;
         try {
@@ -628,10 +669,10 @@ function bindUIEvents() {
             canvas.width = canvas.height = 512;
             const ctx = canvas.getContext('2d');
             const iw = pendingAvatarImage.naturalWidth, ih = pendingAvatarImage.naturalHeight;
-            const side = Math.min(iw, ih) / Number(document.getElementById('avatarZoom').value);
+            const side = Math.min(iw, ih) / avatarCropState.zoom;
             const maxX = Math.max(0, iw - side), maxY = Math.max(0, ih - side);
-            const sx = maxX * Number(document.getElementById('avatarCropX').value) / 100;
-            const sy = maxY * Number(document.getElementById('avatarCropY').value) / 100;
+            const sx = maxX * avatarCropState.x;
+            const sy = maxY * avatarCropState.y;
             ctx.drawImage(pendingAvatarImage, sx, sy, side, side, 0, 0, 512, 512);
             const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
             const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
