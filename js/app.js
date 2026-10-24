@@ -788,6 +788,25 @@ function bindUIEvents() {
         document.getElementById('settingsModal').classList.remove('active');
     };
     document.getElementById('bottomSettingsBtn')?.addEventListener('click', openSettings);
+    document.getElementById('clearOfflineCacheBtn')?.addEventListener('click', async () => {
+        const button = document.getElementById('clearOfflineCacheBtn');
+        if (!confirm('Удалить загруженные на это устройство чаты, сообщения, группы, каналы и контакты? Данные на сервере останутся без изменений.')) return;
+        if (button) { button.disabled = true; button.textContent = 'Очистка…'; }
+        try {
+            await DB.clearOfflineContent();
+            if ('serviceWorker' in navigator) {
+                const registration = await navigator.serviceWorker.getRegistration('./').catch(() => null);
+                const worker = registration?.active || navigator.serviceWorker.controller;
+                worker?.postMessage({ type: 'CLEAR_RUNTIME_CACHE' });
+            }
+            showToast('Локальный кэш чатов очищен. Данные на сервере не изменены.', 'success');
+        } catch (error) {
+            console.warn('[Offline cache] Очистка не завершена:', error?.name || 'unknown');
+            showToast('Не удалось полностью очистить локальный кэш. Повторите попытку.', 'error');
+        } finally {
+            if (button) { button.disabled = false; button.textContent = 'Очистить кэш устройства'; }
+        }
+    });
     document.getElementById('settingsLogoutBtn')?.addEventListener('click', async () => {
         if (confirm('Выйти из аккаунта?')) {
             localStorage.removeItem('iceberg_authenticated');
