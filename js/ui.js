@@ -284,8 +284,12 @@ export function loadTheme() {
 export function renderUserProfile() {
     const d = authState.userData;
     if (!d) return;
-    document.getElementById('userName').textContent = d.nickname || 'Пользователь';
-    document.getElementById('userMood').textContent = d.mood || 'Нажмите, чтобы изменить профиль';
+    // The compact branded sidebar no longer contains the legacy profile header.
+    // Keep this renderer safe for layouts where one or more legacy nodes are absent.
+    const userName = document.getElementById('userName');
+    const userMood = document.getElementById('userMood');
+    if (userName) userName.textContent = d.nickname || 'Пользователь';
+    if (userMood) userMood.textContent = d.mood || 'Нажмите, чтобы изменить профиль';
     const av = document.getElementById('userAvatar');
     if (!av) return;
     av.textContent = '';
