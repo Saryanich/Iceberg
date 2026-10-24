@@ -661,9 +661,10 @@ function bindUIEvents() {
 
     
 
-    document.querySelectorAll('.bottom-navigation .tab').forEach((tab, i) => {
-        const names = ['chats', 'channels', null, 'groups', 'contacts', null];
-        if (names[i]) tab.addEventListener('click', () => switchTab(names[i]));
+    document.querySelectorAll('.bottom-navigation .tab').forEach((tab) => {
+        const label = tab.getAttribute('aria-label');
+        const names = { 'Чаты': 'chats', 'Каналы': 'channels', 'Контакты': 'contacts' };
+        if (names[label]) tab.addEventListener('click', () => switchTab(names[label]));
     });
 
     document.getElementById('searchInput')?.addEventListener('input', (e) => {
@@ -683,7 +684,6 @@ function bindUIEvents() {
         }
     });
 
-    document.getElementById('bottomFindContactBtn')?.addEventListener('click', showSearchModal);
     document.getElementById('headerAddStoryBtn')?.addEventListener('click', async () => {
         document.getElementById('storiesModal').classList.add('active');
         await loadOwnStories();
@@ -698,14 +698,24 @@ function bindUIEvents() {
         plusMenu.style.width = width + 'px';
         plusMenu.style.maxWidth = 'calc(100vw - 24px)';
         plusMenu.style.right = 'auto';
-        const left = Math.max(12, Math.min(rect.right - width, window.innerWidth - width - 12));
+        const left = Math.max(12, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - 12));
         plusMenu.style.left = left + 'px';
         const menuHeight = plusMenu.scrollHeight || 270;
-        let top = rect.bottom + 8;
-        if (top + menuHeight > window.innerHeight - 12) top = Math.max(12, rect.top - menuHeight - 8);
-        plusMenu.style.top = top + 'px';
+        let top = rect.top - menuHeight - 10;
+        if (top < 12) top = Math.min(window.innerHeight - menuHeight - 12, rect.bottom + 8);
+        plusMenu.style.top = Math.max(12, top) + 'px';
     };
-    plusButton.onclick = (event) => { event.stopPropagation(); showSearchModal(); };
+    plusButton.onclick = (event) => {
+        event.stopPropagation();
+        if (plusMenu.classList.contains('show')) {
+            plusMenu.classList.remove('show');
+            plusButton.setAttribute('aria-expanded', 'false');
+        } else {
+            positionPlusMenu();
+            plusMenu.classList.add('show');
+            plusButton.setAttribute('aria-expanded', 'true');
+        }
+    };
     document.addEventListener('click', () => {
         plusMenu.classList.remove('show');
         plusButton.setAttribute('aria-expanded', 'false');
@@ -724,10 +734,6 @@ function bindUIEvents() {
         const actions = [
             showSearchModal,
             openScanner,
-            () => {
-                document.getElementById('searchModal').classList.add('active');
-                document.getElementById('searchGlobalIdInput').focus();
-            },
             showCreateGroupModal,
             showCreateChannelModal
         ];
