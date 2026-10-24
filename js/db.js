@@ -1,7 +1,7 @@
 
 const DB_NAME = 'iceberg_cache';
 const DB_VERSION = 1;
-
+ 
 const STORES = {
     profile:    'profile',      // { uid, data, updatedAt }
     contacts:   'contacts',     // { uid, list, updatedAt }
