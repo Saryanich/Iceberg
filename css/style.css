@@ -3212,3 +3212,85 @@ img {
     transition-duration: .01ms !important;
   }
 }
+
+
+/* Responsive app shell: mobile viewport, safe areas and navigation */
+html, body {
+    width: 100%;
+    min-width: 0;
+    min-height: 100%;
+    margin: 0;
+}
+body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: clip;
+}
+.app-container,
+.messenger-container {
+    min-height: 0;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+}
+.bottom-navigation {
+    box-sizing: border-box;
+    width: 100%;
+    padding-left: max(6px, env(safe-area-inset-left));
+    padding-right: max(6px, env(safe-area-inset-right));
+    padding-bottom: env(safe-area-inset-bottom);
+}
+.bottom-navigation .tab {
+    min-width: 0;
+    flex: 1 1 0;
+    padding-left: 2px;
+    padding-right: 2px;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+}
+.bottom-navigation .tab > span:last-child {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.nav-icon-contacts {
+    font-family: system-ui, sans-serif;
+    font-size: 1.15em;
+}
+@media (max-width: 600px) {
+    .app-container,
+    .messenger-container {
+        width: 100%;
+        max-width: 100vw;
+        overflow: hidden;
+    }
+    .sidebar {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        padding-top: env(safe-area-inset-top);
+        box-sizing: border-box;
+    }
+    .bottom-navigation {
+        gap: 0;
+        min-height: 60px;
+        padding-bottom: max(5px, env(safe-area-inset-bottom));
+    }
+    .bottom-navigation .tab {
+        font-size: clamp(10px, 2.8vw, 12px);
+        gap: 3px;
+    }
+    .bottom-navigation .nav-icon,
+    .bottom-navigation .nav-plus {
+        line-height: 1.15;
+    }
+    .chat-screen {
+        min-width: 0;
+        max-width: 100vw;
+        padding-bottom: env(safe-area-inset-bottom);
+        box-sizing: border-box;
+    }
+    input, textarea, select {
+        font-size: 16px;
+    }
+}
