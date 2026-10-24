@@ -1,12 +1,4 @@
-// ===================================================================
-// js/push.js — Push-уведомления через Firebase Cloud Messaging
-//
-//  • Запрос разрешения
-//  • Получение FCM-токена
-//  • Сохранение токена в Firestore
-//  • Foreground-сообщения (показ уведомления только когда вкладка свёрнута)
-//  • Ротация токена
-// ===================================================================
+
 
 import { db, auth, getMessagingInstance, VAPID_KEY } from './config.js';
 import { doc, updateDoc, arrayUnion, arrayRemove, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
