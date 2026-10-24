@@ -143,7 +143,7 @@
                 <input type="text" id="profileLastName" placeholder="Фамилия" maxlength="30">
             </div>
             <div class="form-group">
-                <label class="form-label">Никнейм</label>
+                <label class="form-label">Юзернейм</label>
                 <input type="text" id="profileNickname" placeholder="@GlobalID" maxlength="32" autocomplete="nickname">
             </div>
             <div class="form-group">
@@ -245,6 +245,7 @@
                     <span class="settings-row-label" style="color:var(--danger);">🧹 Очистить все сообщения</span>
                 </div>
             </div>
+            <button class="btn btn-danger fullwidth-btn" id="settingsLogoutBtn" type="button">Выйти из аккаунта</button>
             <button class="btn btn-secondary close-settings-btn">Закрыть</button>
         </div>
     </div>
@@ -258,9 +259,8 @@
                 <h3>Найти пользователя</h3>
                 <button class="close-modal" aria-label="Закрыть">&times;</button>
             </div>
-            <input type="text" id="searchGlobalIdInput" placeholder="Global ID или точный никнейм">
-            <button class="btn btn-primary" id="searchGlobalIdBtn" style="margin-top:10px;">Найти по Global ID</button>
-            <button class="btn btn-secondary" id="searchNicknameBtn" type="button" style="margin-top:8px;">Найти по никнейму</button>
+            <input type="text" id="searchGlobalIdInput" placeholder="@username или Global ID">
+            <button class="btn btn-primary" id="searchGlobalIdBtn" style="margin-top:10px;">Найти</button>
         </div>
     </div>
 
@@ -418,30 +418,26 @@
 
             <!-- САЙДБАР -->
             <div id="sidebar" class="sidebar">
-                <div class="user-profile">
-                    <div class="user-info" id="userInfoClicker">
-                        <div class="user-avatar" id="userAvatar">U</div>
-                        <div class="user-details">
-                            <h4 id="userName"></h4>
-                            <p id="userMood">Нажмите, чтобы изменить профиль</p>
-                        </div>
-                    </div>
-                    <button class="logout-btn" title="Настройки" id="openSettingsBtn">⚙️</button>
-                    <button class="logout-btn" title="Выйти" id="logoutBtn">🚪</button>
+                <div class="iceberg-brand" aria-label="Айсберг">Айсберг</div>
+                <div class="stories-bar" id="storiesBar">
+                    <button class="story-add-item" id="headerAddStoryBtn" type="button" aria-label="Добавить историю">
+                        <span class="story-add-circle"><span aria-hidden="true">+</span></span>
+                        <span>Моя история</span>
+                    </button>
                 </div>
 
-                <div class="stories-bar" id="storiesBar"></div>
-
                 <div class="search-area">
-                    <input type="text" class="search-input" placeholder="Поиск..." id="searchInput">
-                    <button class="plus-btn" id="plusBtn" type="button" aria-label="Найти или создать" aria-haspopup="menu" aria-expanded="false">+</button>
+                    <input type="text" class="search-input" placeholder="Поиск чатов..." id="searchInput" aria-label="Поиск по списку">
+                    <button class="plus-btn" id="plusBtn" type="button" aria-label="Найти контакт" title="Найти контакт">+</button>
                 </div>
 
                 <nav class="tabs-container bottom-navigation" aria-label="Основная навигация">
-                    <button class="tab active" type="button" aria-label="Чаты"><span class="nav-icon">▣</span><span>Чаты</span></button>
-                    <button class="tab" type="button" aria-label="Каналы"><span class="nav-icon">📢</span><span>Каналы</span></button>
-                    <button class="tab" type="button" aria-label="Группы"><span class="nav-icon">👥</span><span>Группы</span></button>
-                    <button class="tab" type="button" aria-label="Контакты"><span class="nav-icon">♙</span><span>Контакты</span></button>
+                    <button class="tab active" type="button" aria-label="Чаты"><span class="nav-icon" aria-hidden="true">▣</span><span>Чаты</span></button>
+                    <button class="tab" type="button" aria-label="Каналы"><span class="nav-icon" aria-hidden="true">▰</span><span>Каналы</span></button>
+                    <button class="tab nav-find-contact" id="bottomFindContactBtn" type="button" aria-label="Найти контакт"><span class="nav-plus" aria-hidden="true">+</span><span>Найти</span></button>
+                    <button class="tab" type="button" aria-label="Группы"><span class="nav-icon" aria-hidden="true">▦</span><span>Группы</span></button>
+                    <button class="tab" type="button" aria-label="Контакты"><span class="nav-icon" aria-hidden="true">♙</span><span>Контакты</span></button>
+                    <button class="tab" id="bottomSettingsBtn" type="button" aria-label="Настройки"><span class="nav-icon" aria-hidden="true">⚙</span><span>Настройки</span></button>
                 </nav>
 
                 <div class="tab-content">
