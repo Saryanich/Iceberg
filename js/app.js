@@ -613,7 +613,7 @@ function bindUIEvents() {
         };
         image.onerror = () => {
             URL.revokeObjectURL(objectUrl);
-            showToast('Не удалось открыть изображение', 'error');
+            showToast('Не удалось открыть выбранное изображение.', 'error');
         };
         image.src = objectUrl;
     };
@@ -685,10 +685,10 @@ function bindUIEvents() {
             cropModal.hidden = true;
             renderUserProfile();
             openProfileModal();
-            showToast('Аватар обновлён', 'success');
+            showToast('Изображение профиля обновлено.', 'success');
         } catch (e) {
             console.error('[Avatar crop]', e);
-            showToast('Не удалось сохранить аватар', 'error');
+            showToast('Не удалось сохранить изображение профиля.', 'error');
         }
     });
 
