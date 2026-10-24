@@ -428,13 +428,12 @@
 
                 <div class="search-area">
                     <input type="text" class="search-input" placeholder="Поиск чатов..." id="searchInput" aria-label="Поиск по списку">
-                    <button class="plus-btn" id="plusBtn" type="button" aria-label="Найти контакт" title="Найти контакт">+</button>
                 </div>
 
                 <nav class="tabs-container bottom-navigation" aria-label="Основная навигация">
                     <button class="tab active" type="button" aria-label="Чаты"><span class="nav-icon" aria-hidden="true">▣</span><span>Чаты</span></button>
                     <button class="tab" type="button" aria-label="Каналы"><span class="nav-icon" aria-hidden="true">▰</span><span>Каналы</span></button>
-                    <button class="tab nav-find-contact" id="bottomFindContactBtn" type="button" aria-label="Найти контакт"><span class="nav-plus" aria-hidden="true">+</span><span>Найти</span></button>
+                    <button class="tab nav-find-contact" id="plusBtn" type="button" aria-label="Создать или найти" aria-haspopup="menu" aria-expanded="false"><span class="nav-plus" aria-hidden="true">+</span><span>Создать</span></button>
                     <button class="tab" type="button" aria-label="Контакты"><span class="nav-icon" aria-hidden="true">♙</span><span>Контакты</span></button>
                     <button class="tab" id="bottomSettingsBtn" type="button" aria-label="Настройки"><span class="nav-icon" aria-hidden="true">⚙</span><span>Настройки</span></button>
                 </nav>
@@ -496,9 +495,8 @@
 
     <!-- ПЛЮС-МЕНЮ -->
     <div id="plusMenu" class="plus-menu" role="menu" aria-label="Создать или найти">
-        <button class="plus-menu-item" type="button" role="menuitem">🔎 Найти по Global ID</button>
+        <button class="plus-menu-item" type="button" role="menuitem">🔎 Найти контакт</button>
         <button class="plus-menu-item" type="button" role="menuitem">📷 Найти по QR-коду</button>
-        <button class="plus-menu-item" type="button" role="menuitem">🔤 Найти по никнейму</button>
         <button class="plus-menu-item" type="button" role="menuitem">👥 Создать группу</button>
         <button class="plus-menu-item" type="button" role="menuitem">📢 Создать канал</button>
     </div>
