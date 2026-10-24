@@ -661,9 +661,9 @@ function bindUIEvents() {
 
     
 
-    document.querySelectorAll('.tab').forEach((tab, i) => {
-        const names = ['chats', 'channels', 'groups', 'contacts'];
-        tab.onclick = () => switchTab(names[i]);
+    document.querySelectorAll('.bottom-navigation .tab').forEach((tab, i) => {
+        const names = ['chats', 'channels', null, 'groups', 'contacts', null];
+        if (names[i]) tab.addEventListener('click', () => switchTab(names[i]));
     });
 
     document.getElementById('searchInput')?.addEventListener('input', (e) => {
@@ -683,7 +683,6 @@ function bindUIEvents() {
         }
     });
 
-    document.getElementById('plusBtn')?.addEventListener('click', showSearchModal);
     document.getElementById('bottomFindContactBtn')?.addEventListener('click', showSearchModal);
     document.getElementById('headerAddStoryBtn')?.addEventListener('click', async () => {
         document.getElementById('storiesModal').classList.add('active');
@@ -706,17 +705,7 @@ function bindUIEvents() {
         if (top + menuHeight > window.innerHeight - 12) top = Math.max(12, rect.top - menuHeight - 8);
         plusMenu.style.top = top + 'px';
     };
-    plusButton.onclick = (event) => {
-        event.stopPropagation();
-        if (plusMenu.classList.contains('show')) {
-            plusMenu.classList.remove('show');
-            plusButton.setAttribute('aria-expanded', 'false');
-        } else {
-            positionPlusMenu();
-            plusMenu.classList.add('show');
-            plusButton.setAttribute('aria-expanded', 'true');
-        }
-    };
+    plusButton.onclick = (event) => { event.stopPropagation(); showSearchModal(); };
     document.addEventListener('click', () => {
         plusMenu.classList.remove('show');
         plusButton.setAttribute('aria-expanded', 'false');
