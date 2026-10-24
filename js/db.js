@@ -240,6 +240,15 @@ export async function setCachedSettings(uid, settings) {
     return await cachePut(STORES.settings, { uid, ...settings, updatedAt: Date.now() });
 }
 
+
+// Удаляет только загруженные офлайн-данные чатов. Профиль, настройки и
+// локальные ключи шифрования сохраняются, чтобы не нарушить вход и E2E.
+export async function clearOfflineContent() {
+    for (const name of [STORES.contacts, STORES.chats, STORES.groups, STORES.channels, STORES.messages]) {
+        await cacheClear(name);
+    }
+}
+
 // ===================================================================
 // ПОЛНАЯ ОЧИСТКА (logout)
 // ===================================================================
