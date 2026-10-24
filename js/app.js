@@ -546,6 +546,10 @@ function bindUIEvents() {
     document.querySelector('#twoFactorScreen .btn-primary').onclick = handle2FAVerify;
     document.querySelector('#twoFactorScreen .btn-secondary').onclick = handle2FACancel;
 
+    document.getElementById('brandProfileBtn')?.addEventListener('click', () => {
+        document.getElementById('profileModal')?.classList.add('active');
+    });
+
     document.getElementById('userInfoClicker')?.addEventListener('click', () => {
         const d = authState.userData;
         if (!d) return;
