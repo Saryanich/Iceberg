@@ -135,19 +135,19 @@
             </div>
             <input type="file" id="avatarUploadInput" class="file-input-hidden" accept="image/*">
             <div id="avatarCropControls" class="avatar-crop-controls" hidden>
-                <p class="avatar-crop-hint">Перемещай фотографию, чтобы нужная часть оказалась внутри круга.</p>
+                <p class="avatar-crop-hint">Переместите фотографию, чтобы выбрать область для аватара.</p>
             </div>
-            <div id="avatarCropModal" class="avatar-crop-modal" hidden role="dialog" aria-modal="true" aria-label="Кадрирование аватарки">
+            <div id="avatarCropModal" class="avatar-crop-modal" hidden role="dialog" aria-modal="true" aria-label="Настройка изображения профиля">
                 <div class="avatar-crop-dialog">
-                    <div class="avatar-crop-title">Настрой аватарку</div>
-                    <p class="avatar-crop-hint">Перемещай фотографию. На телефоне увеличивай и уменьшай двумя пальцами — в круг попадёт именно то, что увидишь внутри него.</p>
+                    <div class="avatar-crop-title">Настройка изображения профиля</div>
+                    <p class="avatar-crop-hint">Перетащите изображение, чтобы расположить его в рамке. На сенсорном экране используйте жест масштабирования двумя пальцами. В аватар будет включена область внутри круга.</p>
                     <div id="avatarCropStage" class="avatar-crop-stage">
-                        <img id="avatarCropImage" alt="Фото для кадрирования">
+                        <img id="avatarCropImage" alt="Изображение для кадрирования">
                         <div class="avatar-crop-mask" aria-hidden="true"><div class="avatar-crop-hole"></div></div>
                     </div>
                     <div class="avatar-crop-actions">
-                        <button type="button" class="btn btn-secondary" id="cancelAvatarCropBtn">Отмена</button>
-                        <button type="button" class="btn btn-primary" id="applyAvatarCropBtn">Использовать фото</button>
+                        <button type="button" class="btn btn-secondary" id="cancelAvatarCropBtn">Отменить</button>
+                        <button type="button" class="btn btn-primary" id="applyAvatarCropBtn">Сохранить изображение</button>
                     </div>
                 </div>
             </div>
