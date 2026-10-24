@@ -3064,3 +3064,31 @@ button,
 .avatar-crop-controls input[type="range"] { width:100%; accent-color:#42a5f5; }
 #profileAvatarBig { overflow:hidden; position:relative; }
 #profileAvatarBig img { width:100%; height:100%; object-fit:cover; }
+
+
+/* Full-screen avatar cropper with a translucent circular guide. */
+.avatar-crop-modal[hidden] { display:none !important; }
+.avatar-crop-modal {
+    position:fixed; inset:0; z-index:12000; display:flex; align-items:center; justify-content:center;
+    padding:20px; background:rgba(3,8,18,.94); backdrop-filter:blur(12px);
+}
+.avatar-crop-dialog {
+    width:min(100%,440px); display:flex; flex-direction:column; align-items:center; gap:14px;
+    color:#fff; text-align:center;
+}
+.avatar-crop-title { font-size:21px; font-weight:750; }
+.avatar-crop-hint { color:#c5d5e6; font-size:13px; line-height:1.45; max-width:340px; }
+.avatar-crop-stage {
+    position:relative; width:min(78vw,360px); height:min(78vw,360px); max-width:calc(100vw - 40px);
+    max-height:calc(100vw - 40px); overflow:hidden; background:#111827; touch-action:none; cursor:grab;
+    border-radius:12px; flex:0 0 auto;
+}
+.avatar-crop-stage:active { cursor:grabbing; }
+#avatarCropImage { position:absolute; display:block; max-width:none; object-fit:fill; pointer-events:none; user-select:none; -webkit-user-drag:none; }
+.avatar-crop-mask { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; }
+.avatar-crop-hole {
+    width:78%; height:78%; border-radius:50%; border:2px solid rgba(255,255,255,.95);
+    box-shadow:0 0 0 9999px rgba(0,0,0,.52), 0 0 0 1px rgba(0,0,0,.35) inset;
+}
+.avatar-crop-actions { width:100%; display:flex; gap:10px; }
+.avatar-crop-actions button { flex:1; min-width:0; }
