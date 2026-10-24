@@ -511,9 +511,26 @@ function renderChatItem(chat) {
     return div;
 }
 
+export async function renderStoriesBar() {
+    const bar=document.getElementById('storiesBar'); if(!bar||!authState.user?.uid)return;
+    bar.replaceChildren();
+    const own=document.createElement('button'); own.type='button'; own.className='story-add-item'; own.id='headerAddStoryBtn';
+    own.innerHTML='<span class="story-add-circle"><span aria-hidden="true">+</span></span><span>Моя история</span>';
+    own.onclick=async()=>{document.getElementById('storiesModal')?.classList.add('active');await loadOwnStories();}; bar.appendChild(own);
+    const contacts=ensureArray(authState.userData?.contacts).filter(c=>c?.uid&&c.uid!==authState.user.uid);
+    const rows=await Promise.all(contacts.slice(0,80).map(async contact=>{try{const stories=await fetchUserStories(contact.uid);return stories.length?{contact,stories}:null;}catch(err){console.warn('[Stories] Cannot load contact stories',err);return null;}}));
+    rows.filter(Boolean).forEach(({contact,stories})=>{
+        const button=document.createElement('button');button.type='button';button.className='story-add-item story-contact-item';
+        const circle=document.createElement('span');circle.className='story-contact-circle has-story';
+        if(contact.avatar){const img=document.createElement('img');img.src=contact.avatar;img.alt='';circle.appendChild(img);}else circle.textContent=(contact.nickname||'👤').charAt(0).toUpperCase();
+        const label=document.createElement('span');label.className='story-name';label.textContent=contact.nickname||contact.globalId||'Контакт';
+        button.append(circle,label);button.onclick=()=>{uiState.currentStories=stories.map(item=>({...item,ownerUid:contact.uid,ownerName:contact.nickname||contact.globalId||'Контакт'}));uiState.storyViewerIndex=0;renderStoryViewer();};bar.appendChild(button);
+    });
+}
 export async function loadContacts() {
     const contacts = ensureArray(authState.userData?.contacts);
     const c = document.getElementById('contactsList');
+    await renderStoriesBar();
     if (!c) return;
     if (!contacts.length) {
         c.innerHTML = '<div class="empty-state">Нет контактов</div>';
@@ -699,35 +716,39 @@ async function fetchUserStories(uid) {
     return snap.docs.map(d => ({ id: d.id, ...d.data(), ownerUid: uid }));
 }
 
-function renderStoryViewer() {
-    const items = uiState.currentStories || [];
-    const current = items[uiState.storyViewerIndex];
-    const modal = document.getElementById('storyViewerModal');
-    if (!current || !modal) {
-        modal?.classList.remove('active');
-        return;
-    }
-    const image = document.getElementById('storyImage');
-    image.src = current.image;
-    image.alt = 'История ' + (current.ownerName || 'пользователя');
-    const mine = current.ownerUid === authState.user?.uid;
-    document.getElementById('deleteStoryBtn').style.display = mine ? 'block' : 'none';
-    const progress = document.getElementById('storyProgress');
-    if (progress) {
-        progress.replaceChildren();
-        items.forEach((item, index) => {
-            const bar = document.createElement('div');
-            bar.className = 'story-progress-bar';
-            const fill = document.createElement('div');
-            fill.className = 'story-progress-fill';
-            if (index <= uiState.storyViewerIndex) fill.style.width = '100%';
-            bar.appendChild(fill);
-            progress.appendChild(bar);
-        });
-    }
-    modal.classList.add('active');
+async function refreshStorySocial(story) {
+    const likeBtn = document.getElementById('storyLikeBtn'), social = document.getElementById('storySocialInfo');
+    if (!likeBtn || !social || !authState.user?.uid) return;
+    const ownerUid = story.ownerUid, uid = authState.user.uid;
+    const likeRef = doc(db,'user_stories',ownerUid,'items',story.id,'likes',uid);
+    const viewRef = doc(db,'user_stories',ownerUid,'items',story.id,'views',uid);
+    try {
+        if (ownerUid !== uid) await setDoc(viewRef,{uid,nickname:authState.userData?.nickname||authState.userData?.globalId||'Контакт',viewedAt:serverTimestamp()});
+        const [mine,likes] = await Promise.all([getDoc(likeRef),getDocs(collection(db,'user_stories',ownerUid,'items',story.id,'likes'))]);
+        likeBtn.textContent = mine.exists() ? '♥ Вам нравится' : '♡ Нравится';
+        likeBtn.classList.toggle('is-liked',mine.exists());
+        likeBtn.onclick = async () => {
+            try { const current=await getDoc(likeRef); if(current.exists()) await deleteDoc(likeRef); else await setDoc(likeRef,{uid,nickname:authState.userData?.nickname||authState.userData?.globalId||'Контакт',createdAt:serverTimestamp()}); await refreshStorySocial(story); }
+            catch(err) { console.error('[Stories] Like failed:',err); showToast('Не удалось поставить лайк. Проверьте правила Firebase.','error'); }
+        };
+        if(ownerUid===uid) {
+            const views=await getDocs(collection(db,'user_stories',ownerUid,'items',story.id,'views'));
+            social.textContent='♥ '+likes.size+' · Просмотры: '+views.size;
+            social.onclick=()=>showToast(views.size?'Посмотрели: '+views.docs.map(d=>d.data().nickname||'Контакт').join(', '):'Пока никто не посмотрел','info',5000);
+            social.title='Нажмите, чтобы посмотреть список зрителей';
+        } else { social.textContent='♥ '+likes.size; social.onclick=null; social.title=''; }
+    } catch(err) { console.warn('[Stories] Social data unavailable:',err); likeBtn.textContent='♡ Нравится'; social.textContent='Реакции недоступны: проверьте Firebase Rules'; }
 }
-
+function renderStoryViewer() {
+    const items=uiState.currentStories||[], current=items[uiState.storyViewerIndex], modal=document.getElementById('storyViewerModal');
+    if(!current||!modal){modal?.classList.remove('active');return;}
+    const image=document.getElementById('storyImage'); image.src=current.image; image.alt='История '+(current.ownerName||'пользователя');
+    const del=document.getElementById('deleteStoryBtn'); if(del) del.style.display=current.ownerUid===authState.user?.uid?'block':'none';
+    const owner=document.getElementById('storyOwnerName'); if(owner) owner.textContent=current.ownerName||'Пользователь';
+    const progress=document.getElementById('storyProgress');
+    if(progress){progress.replaceChildren();items.forEach((item,index)=>{const bar=document.createElement('div');bar.className='story-progress-bar';const fill=document.createElement('div');fill.className='story-progress-fill';if(index<=uiState.storyViewerIndex)fill.style.width='100%';bar.appendChild(fill);progress.appendChild(bar);});}
+    modal.classList.add('active'); refreshStorySocial(current);
+}
 export async function openUserStories(uid, ownerName = 'Пользователь') {
     if (!uid) return;
     try {
@@ -736,7 +757,7 @@ export async function openUserStories(uid, ownerName = 'Пользователь
             showToast('У пользователя пока нет активных историй', 'info');
             return;
         }
-        uiState.currentStories = items.map(item => ({ ...item, ownerName }));
+        uiState.currentStories = items.map(item => ({ ...item, ownerName, ownerUid: uid }));
         uiState.storyViewerIndex = 0;
         renderStoryViewer();
     } catch (err) {
@@ -772,7 +793,7 @@ export async function loadOwnStories() {
         image.src = item.image;
         image.alt = 'Моя история';
         image.onclick = () => {
-            uiState.currentStories = items.map(story => ({ ...story, ownerName: authState.userData?.nickname || 'Вы' }));
+            uiState.currentStories = items.map(story => ({ ...story, ownerName: authState.userData?.nickname || 'Вы', ownerUid: authState.user.uid }));
             uiState.storyViewerIndex = items.findIndex(story => story.id === item.id);
             renderStoryViewer();
         };
@@ -797,34 +818,63 @@ export async function loadOwnStories() {
     }
 }
 
+async function decorateStoryImage(file) {
+    const caption = (prompt('Текст на фото (необязательно):') || '').trim().slice(0, 180);
+    const sticker = (prompt('Стикер — введите эмодзи (❤️ ✨ 😂 🔥 🌸) или оставьте пустым:') || '').trim().slice(0, 12);
+    const effect = (prompt('Эффект: 1 — обычный, 2 — чёрно-белый, 3 — тёплый, 4 — контрастный') || '1').trim();
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const ctx = canvas.getContext('2d');
+    ctx.filter = effect === '2' ? 'grayscale(1)' : effect === '3' ? 'sepia(.25) saturate(1.2)' : effect === '4' ? 'contrast(1.18) saturate(1.12)' : 'none';
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    ctx.filter = 'none';
+    if (sticker) {
+        ctx.font = Math.max(32, Math.round(canvas.width * .12)) + 'px system-ui,sans-serif';
+        ctx.textAlign = 'center'; ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 8;
+        ctx.fillText(sticker, canvas.width / 2, canvas.height * .28);
+    }
+    if (caption) {
+        const size = Math.max(20, Math.round(canvas.width * .045));
+        ctx.font = '700 ' + size + 'px system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.lineWidth = Math.max(3, size * .16); ctx.strokeStyle = 'rgba(0,0,0,.85)'; ctx.fillStyle = '#fff';
+        const words = caption.split(/\\s+/), lines = []; let line = '';
+        for (const word of words) { const test = line ? line + ' ' + word : word; if (ctx.measureText(test).width > canvas.width * .86 && line) { lines.push(line); line = word; } else line = test; }
+        if (line) lines.push(line);
+        lines.slice(-4).forEach((t,i,arr) => { const y=canvas.height-28-(arr.length-1-i)*size*1.25; ctx.strokeText(t,canvas.width/2,y); ctx.fillText(t,canvas.width/2,y); });
+    }
+    bitmap.close?.();
+    const blob = await new Promise(resolve => canvas.toBlob(resolve,'image/jpeg',.84));
+    if (!blob) throw new Error('Не удалось обработать фото');
+    return new File([blob], 'iceberg-story.jpg', {type:'image/jpeg'});
+}
+
 export async function uploadOwnStories(files) {
-    if (!authState.user?.uid || !files?.length) return;
+    if (!authState.user?.uid || !files?.length) { showToast('Сначала войдите в Iceberg', 'error'); return; }
     try {
         await pruneExpiredStories(authState.user.uid);
         const current = await fetchUserStories(authState.user.uid);
         const remaining = MAX_STORIES - current.length;
-        if (remaining <= 0) {
-            showToast('Можно хранить не более 5 активных историй', 'error');
-            return;
-        }
+        if (remaining <= 0) { showToast('Можно хранить не более 5 активных историй', 'error'); return; }
         const images = Array.from(files).filter(file => file.type.startsWith('image/')).slice(0, remaining);
-        if (!images.length) {
-            showToast('Выберите изображения', 'error');
-            return;
-        }
+        if (!images.length) { showToast('Выберите изображения', 'error'); return; }
         for (const file of images) {
-            const image = await compressImage(file, 400 * 1024);
+            const decorated = await decorateStoryImage(file);
+            const image = await compressImage(decorated, 400 * 1024);
+            if (typeof image !== 'string' || image.length >= 700000) throw new Error('Фото слишком большое после сжатия');
             await addDoc(collection(db, 'user_stories', authState.user.uid, 'items'), {
-                image,
-                createdAt: serverTimestamp(),
+                image, createdAt: serverTimestamp(),
                 expiresAt: Timestamp.fromMillis(Date.now() + STORY_LIFETIME - 60000)
             });
         }
         await loadOwnStories();
+        await renderStoriesBar();
         showToast('Истории опубликованы на 24 часа', 'success');
     } catch (err) {
         console.error('[Stories] Upload failed:', err);
-        showToast('Не удалось загрузить историю. Проверьте размер изображения и Firestore Rules.', 'error', 4500);
+        showToast('Не удалось опубликовать историю. ' + (err?.code === 'permission-denied' ? 'Firebase отклонил запись: проверьте правила user_stories.' : (err?.message || 'Проверьте подключение и размер фото.')), 'error', 5000);
     }
 }
 
