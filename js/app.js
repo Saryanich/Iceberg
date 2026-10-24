@@ -546,7 +546,7 @@ function bindUIEvents() {
     document.querySelector('#twoFactorScreen .btn-primary').onclick = handle2FAVerify;
     document.querySelector('#twoFactorScreen .btn-secondary').onclick = handle2FACancel;
 
-    document.getElementById('userInfoClicker').onclick = () => {
+    document.getElementById('userInfoClicker')?.addEventListener('click', () => {
         const d = authState.userData;
         if (!d) return;
         document.getElementById('profileFirstName').value = d.firstName || '';
@@ -562,12 +562,12 @@ function bindUIEvents() {
         } else {
             av.textContent = (d.nickname || 'U').charAt(0).toUpperCase();
         }
-        document.getElementById('profileModal').classList.add('active');
-    };
+        document.getElementById('profileModal')?.classList.add('active');
+    });
 
-    document.getElementById('avatarClicker').onclick = () => {
-        document.getElementById('avatarUploadInput').click();
-    };
+    document.getElementById('avatarClicker')?.addEventListener('click', () => {
+        document.getElementById('avatarUploadInput')?.click();
+    });
 
     document.getElementById('avatarUploadInput').onchange = async function () {
         const file = this.files?.[0];
