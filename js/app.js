@@ -1035,9 +1035,8 @@ function bindUIEvents() {
     document.getElementById('prevStoryBtn').onclick = () => moveStory(-1);
     document.getElementById('nextStoryBtn').onclick = () => moveStory(1);
     document.getElementById('deleteStoryBtn').onclick = deleteCurrentStory;
-    document.getElementById('closeStoryViewerBtn').onclick = () => {
-        document.getElementById('storyViewerModal').classList.remove('active');
-    };
+    document.getElementById('closeStoryViewerBtn').onclick = () => { document.getElementById('storyViewerModal').classList.remove('active'); };
+    document.getElementById('storyViewerModal')?.addEventListener('click', event => { if (event.target.id === 'storyViewerModal') event.currentTarget.classList.remove('active'); });
     document.getElementById('clearGroupBtn').onclick = async () => {
         document.getElementById('groupInfoModal').classList.remove('active');
         await clearCurrentChat();
