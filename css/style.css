@@ -3031,7 +3031,7 @@ button,
 
 
 /* Groups are shown inside Contacts; keep the bottom bar at five actions. */
-.tabs-container.bottom-navigation { grid-template-columns:repeat(5,minmax(0,1fr)); }
+ .tabs-container.bottom-navigation { grid-template-columns:repeat(5,minmax(0,1fr)); }
 .contacts-section-title {
     padding: 16px 14px 8px;
     color: var(--text-secondary);
@@ -3042,3 +3042,6 @@ button,
     border-top: 1px solid var(--border);
     margin-top: 8px;
 }
+
+/* The create/find menu is anchored to the central bottom action. */
+#plusMenu { z-index: 1000; }
