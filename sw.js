@@ -149,7 +149,11 @@ async function cacheFirst(request) {
 
 async function networkFirst(request) {
     try {
-        const response = await fetch(request);
+        const url = new URL(request.url);
+        const isAppShell = url.origin === self.location.origin
+            && (/\.(?:html|css|js|json)$/i.test(url.pathname) || request.mode === 'navigate');
+        const networkRequest = isAppShell ? new Request(request, { cache: 'no-cache' }) : request;
+        const response = await fetch(networkRequest);
         if (response && response.ok && response.type !== 'opaque') {
             const cache = await caches.open(RUNTIME_CACHE);
             cache.put(request, response.clone());
