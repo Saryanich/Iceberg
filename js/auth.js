@@ -277,6 +277,16 @@ async function addKnownDevice(uid) {
     } catch (e) {}
 }
 
+// Лёгкое обратимое кодирование для отображения кода в Global ID.
+// ВАЖНО: это обфускация, а не криптографическая защита; секреты в публичном JS скрыть нельзя.
+function encode2FACodeForDisplay(code, uid) {
+    const key = `${uid}|iceberg_2fa_display_v1`;
+    const encoded = Array.from(String(code), (char, i) =>
+        String.fromCharCode(char.charCodeAt(0) ^ key.charCodeAt(i % key.length))
+    ).join('');
+    return btoa(encoded);
+}
+
 async function generate2FACode(uid) {
     const range = 9000;
     const ceiling = Math.floor(0x100000000 / range) * range;
@@ -290,7 +300,8 @@ async function generate2FACode(uid) {
     const hash = await hash2FACode(code, uid);
     // Do not swallow persistence errors: showing a code that was not saved creates a broken flow.
     await updateDoc(doc(db, 'users', uid), {
-        twoFactorCodeHash: hash, twoFactorCodePlain: code,
+        twoFactorCodeHash: hash,
+        twoFactorCodeEncrypted: encode2FACodeForDisplay(code, uid),
         twoFactorCodeExpires: new Date(Date.now() + 5 * 60 * 1000),
         pendingDeviceInfo: { ip: authState.currentIP || 'unknown', userAgent: navigator.userAgent, requestedAt: new Date() }
     });
@@ -416,7 +427,7 @@ export async function verify2FA(code, trustDevice = false) {
                 return { success: false, error: 'Неверный или истёкший код' };
             }
             transaction.update(userRef, {
-                twoFactorCodeHash: null, twoFactorCodePlain: null,
+                twoFactorCodeHash: null, twoFactorCodeEncrypted: null, twoFactorCodePlain: null,
                 twoFactorCodeExpires: null, pendingDeviceInfo: null,
                 online: true, lastSeen: serverTimestamp(),
                 currentIP: authState.currentIP || 'unknown',
