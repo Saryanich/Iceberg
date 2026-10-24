@@ -3028,3 +3028,17 @@ button,
  .bottom-navigation .tab { font-size:9px; }
  .bottom-navigation .nav-icon { font-size:16px; }
 }
+
+
+/* Groups are shown inside Contacts; keep the bottom bar at five actions. */
+.tabs-container.bottom-navigation { grid-template-columns:repeat(5,minmax(0,1fr)); }
+.contacts-section-title {
+    padding: 16px 14px 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    border-top: 1px solid var(--border);
+    margin-top: 8px;
+}
