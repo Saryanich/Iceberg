@@ -601,7 +601,7 @@ function bindUIEvents() {
         const ln = document.getElementById('profileLastName').value.trim();
         const mood = document.getElementById('profileMood').value.trim();
         const nickInput = document.getElementById('profileNickname').value.trim();
-        const nick = nickInput ? (nickInput.startsWith('@') ? nickInput : '@' + nickInput) : (authState.userData.globalId ? '@' + authState.userData.globalId : '@user');
+        const nick = nickInput ? '@' + nickInput.replace(/^@+/, '').trim() : (authState.userData.globalId ? '@' + authState.userData.globalId : '@user');
         try {
             const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
             const { db } = await import('./config.js');
@@ -625,7 +625,7 @@ function bindUIEvents() {
         }
     };
 
-    document.getElementById('openSettingsBtn').onclick = () => {
+    const openSettings = () => {
         document.getElementById('settingsModal').classList.add('active');
         updateSedaUI();
         const ad = document.getElementById('autoDeleteValue');
@@ -647,17 +647,19 @@ function bindUIEvents() {
     document.querySelector('#settingsModal .close-settings-btn').onclick = () => {
         document.getElementById('settingsModal').classList.remove('active');
     };
+    document.getElementById('bottomSettingsBtn')?.addEventListener('click', openSettings);
+    document.getElementById('settingsLogoutBtn')?.addEventListener('click', async () => {
+        if (confirm('Выйти из аккаунта?')) {
+            localStorage.removeItem('iceberg_authenticated');
+            await logout();
+        }
+    });
 
     document.querySelectorAll('.theme-cell').forEach(el => {
         el.onclick = () => setTheme(el.dataset.theme);
     });
 
-    document.getElementById('logoutBtn').onclick = async () => {
-        if (confirm('Выйти из аккаунта?')) {
-            localStorage.removeItem('iceberg_authenticated');
-            await logout();
-        }
-    };
+    
 
     document.querySelectorAll('.tab').forEach((tab, i) => {
         const names = ['chats', 'channels', 'groups', 'contacts'];
@@ -681,6 +683,12 @@ function bindUIEvents() {
         }
     });
 
+    document.getElementById('plusBtn')?.addEventListener('click', showSearchModal);
+    document.getElementById('bottomFindContactBtn')?.addEventListener('click', showSearchModal);
+    document.getElementById('headerAddStoryBtn')?.addEventListener('click', async () => {
+        document.getElementById('storiesModal').classList.add('active');
+        await loadOwnStories();
+    });
     const plusButton = document.getElementById('plusBtn');
     const plusMenu = document.getElementById('plusMenu');
     const positionPlusMenu = () => {
@@ -746,7 +754,7 @@ function bindUIEvents() {
         document.getElementById('storiesModal').classList.add('active');
         await loadOwnStories();
     });
-    document.getElementById('searchNicknameBtn')?.addEventListener('click', searchByNickname);
+
 
     document.querySelectorAll('.close-modal').forEach(el => {
         el.onclick = () => {
@@ -856,7 +864,8 @@ function bindUIEvents() {
         }
     });
 
-    document.getElementById('searchGlobalIdBtn').onclick = searchByGlobalId;
+    document.getElementById('searchGlobalIdBtn').onclick = searchContact;
+    document.getElementById('searchGlobalIdInput')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') searchContact(); });
     document.getElementById('closeScannerBtn').onclick = () => {
         document.getElementById('scannerModal').classList.remove('active');
     };
@@ -990,7 +999,7 @@ async function openStories() {
 }
 
 async function searchByNickname() {
-    const nickname = document.getElementById('searchGlobalIdInput').value.trim().replace(/^@/, '');
+    const nickname = (rawValue ?? document.getElementById('searchGlobalIdInput').value).trim().replace(/^@/, '');
     if (!nickname) return showToast('Введите никнейм', 'error');
     try {
         const { collection, query, where, getDocs, limit, doc, updateDoc, arrayUnion } =
@@ -1016,7 +1025,14 @@ async function searchByNickname() {
     }
 }
 
-async function searchByGlobalId() {
+async function searchContact() {
+    const value = document.getElementById('searchGlobalIdInput')?.value.trim() || '';
+    const gid = value.replace(/^@/, '');
+    if (/^[0-9a-zA-Z]{22}$/.test(gid)) return searchByGlobalId(gid);
+    return searchByNickname(value);
+}
+
+async function searchByNickname(rawValue) {
     const gid = document.getElementById('searchGlobalIdInput').value.trim();
     if (!/^[0-9a-zA-Z]{22}$/.test(gid)) {
         return showToast('Введите корректный Global ID из 22 символов', 'error');
