@@ -435,6 +435,7 @@ export async function loadChats(forceRefresh = false) {
         for (const chat of chats) container.appendChild(renderChatItem(chat));
     }
     await DB.Lists.setChats(uid, chats).catch(() => {});
+    await loadGroups();
 }
 
 function renderChatItem(chat) {
@@ -893,7 +894,7 @@ export async function loadGroups() {
     const contactsList = document.getElementById('contactsList');
     if (!groups.length) {
         list.innerHTML = '<div class="empty-state">Нет групп</div>';
-        if (contactsList) contactsList.querySelector('.contacts-groups-section')?.remove();
+        document.getElementById('chatsList')?.querySelector('.chats-groups-section')?.remove();
         return;
     }
     for (const g of groups) {
@@ -928,21 +929,21 @@ export async function loadGroups() {
         div.onclick = () => selectGroup(g);
         list.appendChild(div);
     }
-    // Render groups directly inside the Contacts pane, beneath personal contacts.
-    if (contactsList) {
-        contactsList.querySelector('.contacts-groups-section')?.remove();
+    // Render groups below conversations in the Chats pane.
+    const chatsList = document.getElementById('chatsList');
+    if (chatsList) {
+        chatsList.querySelector('.chats-groups-section')?.remove();
         const section = document.createElement('section');
-        section.className = 'contacts-groups-section';
+        section.className = 'chats-groups-section';
         const heading = document.createElement('div');
         heading.className = 'contacts-section-title';
         heading.textContent = 'Группы';
         section.appendChild(heading);
         for (const item of [...list.children]) section.appendChild(item.cloneNode(true));
-        // Rebind each cloned group row to the same selection action.
         [...section.querySelectorAll('.group-item')].forEach((row, index) => {
             row.onclick = () => selectGroup(groups[index]);
         });
-        contactsList.appendChild(section);
+        chatsList.appendChild(section);
     }
 }
 
