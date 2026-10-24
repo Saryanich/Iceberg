@@ -3093,3 +3093,22 @@ button,
 }
 .avatar-crop-actions { width:100%; display:flex; gap:10px; }
 .avatar-crop-actions button { flex:1; min-width:0; }
+
+
+/* Iceberg Stories refresh */
+.stories-bar{display:flex;gap:12px;align-items:flex-start;overflow-x:auto;padding:12px 10px;scrollbar-width:thin}
+.story-add-item{flex:0 0 68px;min-width:68px;align-items:center;gap:6px;cursor:pointer}
+.story-contact-circle{width:54px;height:54px;display:grid;place-items:center;border-radius:50%;overflow:hidden;position:relative;box-sizing:border-box;padding:3px;background:linear-gradient(135deg,#8b5cf6,#ec4899,#f59e0b);color:#fff;font-size:22px}
+.story-contact-circle:before{content:'';position:absolute;inset:3px;border:2px solid #101116;border-radius:50%;z-index:1;pointer-events:none}
+.story-contact-circle img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.story-contact-item .story-name{max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.story-viewer-content{position:relative;width:min(94vw,460px);max-width:460px;max-height:94dvh;overflow:hidden;padding:12px;border-radius:22px;background:#101116;color:#fff;box-shadow:0 24px 80px rgba(0,0,0,.5)}
+.story-viewer-top{display:flex;align-items:center;justify-content:space-between;padding:8px 2px 12px}
+.story-viewer-top button{border:0;background:rgba(255,255,255,.14);color:white;border-radius:50%;width:34px;height:34px;font-size:24px;cursor:pointer}
+.story-image{width:100%;height:min(66dvh,680px);object-fit:contain;border-radius:14px;background:#08090c}
+.story-viewer-social,.story-viewer-controls{display:flex;gap:10px;justify-content:space-between;align-items:center;margin-top:12px}
+.story-viewer-social .btn,.story-viewer-controls .btn{flex:1;width:auto}
+#storyLikeBtn.is-liked{color:#ff5c87;border-color:#ff5c87}
+.story-social-info{flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#fff;border-radius:12px;padding:10px;cursor:pointer}
+#deleteStoryBtn{width:100%;margin-top:10px}
+@media(max-width:520px){.story-viewer-content{width:100%;max-width:none;max-height:100dvh;border-radius:0;padding:10px}.story-image{height:66dvh}.stories-bar{gap:8px}}
