@@ -134,6 +134,12 @@
                 <div class="profile-avatar-edit">📷</div>
             </div>
             <input type="file" id="avatarUploadInput" class="file-input-hidden" accept="image/*">
+            <div id="avatarCropControls" class="avatar-crop-controls" hidden>
+                <label>Масштаб <input id="avatarZoom" type="range" min="1" max="3" step="0.05" value="1"></label>
+                <label>По горизонтали <input id="avatarCropX" type="range" min="0" max="100" step="1" value="50"></label>
+                <label>По вертикали <input id="avatarCropY" type="range" min="0" max="100" step="1" value="50"></label>
+                <button type="button" class="btn btn-primary" id="applyAvatarCropBtn">Применить кадрирование</button>
+            </div>
             <div class="form-group">
                 <label class="form-label">Имя</label>
                 <input type="text" id="profileFirstName" placeholder="Имя" maxlength="30">
