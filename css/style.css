@@ -3004,3 +3004,27 @@ button,
         transition: none !important;
     }
 }
+
+
+/* Refined Iceberg sidebar: branded header, stories row and six-item navigation. */
+.iceberg-brand {
+    height: 68px; display:flex; align-items:center; justify-content:center;
+    font-size:21px; font-weight:800; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--text-primary); border-bottom:1px solid var(--border);
+    background:var(--bg-secondary);
+}
+.stories-bar { min-height:92px; align-items:flex-start; padding:12px 14px; }
+.story-add-item { border:0; background:transparent; color:var(--text-secondary); display:flex;
+    flex-direction:column; align-items:center; gap:5px; flex:0 0 auto; font:inherit; font-size:11px; cursor:pointer; }
+.story-add-circle { width:52px; height:52px; display:grid; place-items:center; border-radius:50%;
+    border:1px solid var(--border); background:var(--bg-primary); color:var(--accent,#4aa8f5); font-size:28px; }
+.tabs-container.bottom-navigation { grid-template-columns:repeat(6,minmax(0,1fr)); gap:2px; padding-left:5px; padding-right:5px; }
+.bottom-navigation .tab { font-size:10px; }
+.bottom-navigation .nav-icon { font-size:18px; line-height:1.2; }
+.bottom-navigation .nav-find-contact .nav-plus { display:grid; place-items:center; width:30px; height:30px;
+    border-radius:50%; background:linear-gradient(135deg,#58b8ff,#2587e5); color:#fff; font-size:25px; line-height:1; }
+.bottom-navigation .nav-find-contact { gap:3px; }
+@media (max-width:380px) {
+ .bottom-navigation .tab { font-size:9px; }
+ .bottom-navigation .nav-icon { font-size:16px; }
+}
