@@ -987,18 +987,30 @@ async function openStories() {
     await loadOwnStories();
 }
 
-async function searchByNickname() {
-    const nickname = (rawValue ?? document.getElementById('searchGlobalIdInput').value).trim().replace(/^@/, '');
-    if (!nickname) return showToast('Введите никнейм', 'error');
+async function searchByNickname(rawValue) {
+    const nickname = String(rawValue ?? document.getElementById('searchGlobalIdInput')?.value ?? '')
+        .trim().replace(/^@/, '');
+    if (!nickname) return showToast('Введите юзернейм или Global ID', 'error');
     try {
         const { collection, query, where, getDocs, limit, doc, updateDoc, arrayUnion } =
             await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
         const { db } = await import('./config.js');
-        const snap = await getDocs(query(collection(db, 'public_profiles'), where('nickname', '==', '@' + nickname), limit(5)));
+        const exactUsername = '@' + nickname;
+        const snap = await getDocs(query(
+            collection(db, 'public_profiles'),
+            where('nickname', '==', exactUsername),
+            limit(5)
+        ));
         const profile = snap.docs.find(item => item.id !== authState.user.uid);
-        if (!profile) return showToast('Пользователь с таким никнеймом не найден', 'error');
+        if (!profile) return showToast('Пользователь с таким юзернеймом не найден', 'error');
         const data = profile.data();
-        const contact = { uid: profile.id, globalId: data.globalId || '', nickname: data.nickname || '@' + (data.globalId || 'user'), avatar: data.avatar || null, mood: data.mood || '' };
+        const contact = {
+            uid: profile.id,
+            globalId: data.globalId || '',
+            nickname: data.nickname || '@' + (data.globalId || 'user'),
+            avatar: data.avatar || null,
+            mood: data.mood || ''
+        };
         const contacts = Array.isArray(authState.userData.contacts) ? authState.userData.contacts : [];
         if (!contacts.some(existing => existing.uid === contact.uid)) {
             await updateDoc(doc(db, 'users', authState.user.uid), { contacts: arrayUnion(contact) });
@@ -1007,10 +1019,13 @@ async function searchByNickname() {
         }
         document.getElementById('searchModal').classList.remove('active');
         await loadContacts();
+        await loadChats();
         await openChatWithContact(contact);
     } catch (error) {
-        console.error('[Nickname search]', error);
-        showToast(error?.code === 'permission-denied' ? 'Поиск по никнейму запрещён правилами Firestore' : 'Не удалось выполнить поиск по никнейму', 'error');
+        console.error('[Username search]', error);
+        showToast(error?.code === 'permission-denied'
+            ? 'Поиск по юзернейму запрещён правилами Firestore'
+            : 'Не удалось найти пользователя по юзернейму', 'error');
     }
 }
 
@@ -1021,18 +1036,15 @@ async function searchContact() {
     return searchByNickname(value);
 }
 
-async function searchByNickname(rawValue) {
-    const gid = document.getElementById('searchGlobalIdInput').value.trim();
+async function searchByGlobalId(rawGid) {
+    const gid = String(rawGid ?? document.getElementById('searchGlobalIdInput')?.value ?? '').trim().replace(/^@/, '');
     if (!/^[0-9a-zA-Z]{22}$/.test(gid)) {
-        return showToast('Введите корректный Global ID из 22 символов', 'error');
+        return showToast('Введите юзернейм или корректный Global ID из 22 символов', 'error');
     }
     try {
-        const { doc, getDoc, updateDoc, arrayUnion, setDoc, serverTimestamp } =
+        const { doc, getDoc, updateDoc, arrayUnion } =
             await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
         const { db } = await import('./config.js');
-
-        // Never list the private users collection. Resolve one Global ID, then read
-        // only the deliberately-public profile projection.
         const globalIdSnap = await getDoc(doc(db, 'global_ids', gid));
         if (!globalIdSnap.exists()) return showToast('Пользователь не найден', 'error');
         const uid = globalIdSnap.data()?.uid;
@@ -1044,11 +1056,10 @@ async function searchByNickname(rawValue) {
         const contact = {
             uid,
             globalId: publicData.globalId || gid,
-            nickname: publicData.nickname || gid,
+            nickname: publicData.nickname || '@' + gid,
             avatar: publicData.avatar || null,
             mood: publicData.mood || ''
         };
-
         const contacts = Array.isArray(authState.userData.contacts) ? authState.userData.contacts : [];
         if (!contacts.some(existing => existing.uid === uid)) {
             await updateDoc(doc(db, 'users', authState.user.uid), { contacts: arrayUnion(contact) });
@@ -1056,14 +1067,14 @@ async function searchByNickname(rawValue) {
             await DB.Lists.setContacts(authState.user.uid, authState.userData.contacts);
         }
         document.getElementById('searchModal').classList.remove('active');
-        loadContacts();
-        loadChats();
-        showToast(`✅ ${contact.nickname || contact.globalId} добавлен`, 'success');
+        await loadContacts();
+        await loadChats();
+        showToast(`Контакт найден: ${contact.nickname || contact.globalId}`, 'success');
         await openChatWithContact(contact);
-    } catch (e) {
-        console.error('[Global ID search]', { code: e?.code || 'unknown', message: e?.message || String(e) });
-        showToast(e?.code === 'permission-denied'
-            ? 'Нет доступа к публичному профилю. Обновите Firestore Rules.'
+    } catch (error) {
+        console.error('[Global ID search]', { code: error?.code || 'unknown', message: error?.message || String(error) });
+        showToast(error?.code === 'permission-denied'
+            ? 'Нет доступа к публичному профилю. Проверьте Firestore Rules.'
             : 'Не удалось найти пользователя. Проверьте Global ID и подключение.', 'error', 4500);
     }
 }
