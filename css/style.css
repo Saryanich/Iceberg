@@ -3082,6 +3082,7 @@ button,
     position:relative; width:min(78vw,360px); height:min(78vw,360px); max-width:calc(100vw - 40px);
     max-height:calc(100vw - 40px); overflow:hidden; background:#111827; touch-action:none; cursor:grab;
     border-radius:12px; flex:0 0 auto;
+    user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
 }
 .avatar-crop-stage:active { cursor:grabbing; }
 #avatarCropImage { position:absolute; display:block; max-width:none; object-fit:fill; pointer-events:none; user-select:none; -webkit-user-drag:none; }
