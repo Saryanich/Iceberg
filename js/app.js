@@ -575,6 +575,7 @@ function bindUIEvents() {
     });
 
     let pendingAvatarImage = null;
+    let pendingAvatarObjectUrl = null;
     const cropModal = document.getElementById('avatarCropModal');
     const cropStage = document.getElementById('avatarCropStage');
     const cropImage = document.getElementById('avatarCropImage');
@@ -583,71 +584,113 @@ function bindUIEvents() {
     let cropPointers = new Map();
     let cropGestureStart = null;
 
+    const getCropDimensions = () => {
+        if (!pendingAvatarImage || !cropStage) return null;
+        const sw = cropStage.clientWidth, sh = cropStage.clientHeight;
+        if (!sw || !sh) return null;
+        const base = Math.max(sw / pendingAvatarImage.naturalWidth, sh / pendingAvatarImage.naturalHeight);
+        return {
+            sw, sh,
+            width: pendingAvatarImage.naturalWidth * base * avatarCropState.zoom,
+            height: pendingAvatarImage.naturalHeight * base * avatarCropState.zoom
+        };
+    };
+
     const updateAvatarCropPreview = () => {
         if (!pendingAvatarImage || !cropStage || !cropImage) return;
-        const iw = pendingAvatarImage.naturalWidth, ih = pendingAvatarImage.naturalHeight;
-        const sw = cropStage.clientWidth, sh = cropStage.clientHeight;
-        if (!sw || !sh) return;
-        const base = Math.max(sw / iw, sh / ih);
-        const width = iw * base * avatarCropState.zoom;
-        const height = ih * base * avatarCropState.zoom;
-        cropImage.style.width = width + 'px';
-        cropImage.style.height = height + 'px';
-        cropImage.style.left = (-Math.max(0, width - sw) * avatarCropState.x) + 'px';
-        cropImage.style.top = (-Math.max(0, height - sh) * avatarCropState.y) + 'px';
+        const d = getCropDimensions();
+        if (!d) return;
+        const maxX = Math.max(0, d.width - d.sw);
+        const maxY = Math.max(0, d.height - d.sh);
+        avatarCropState.x = maxX ? Math.max(0, Math.min(1, avatarCropState.x)) : 0.5;
+        avatarCropState.y = maxY ? Math.max(0, Math.min(1, avatarCropState.y)) : 0.5;
+        cropImage.style.width = d.width + 'px';
+        cropImage.style.height = d.height + 'px';
+        cropImage.style.left = (-maxX * avatarCropState.x) + 'px';
+        cropImage.style.top = (-maxY * avatarCropState.y) + 'px';
+    };
+
+    const setAvatarCropZoom = (nextZoom, anchorX, anchorY) => {
+        const before = getCropDimensions();
+        if (!before) return;
+        const localX = Math.max(0, Math.min(before.sw, anchorX - cropStage.getBoundingClientRect().left));
+        const localY = Math.max(0, Math.min(before.sh, anchorY - cropStage.getBoundingClientRect().top));
+        const imageX = localX + Math.max(0, before.width - before.sw) * avatarCropState.x;
+        const imageY = localY + Math.max(0, before.height - before.sh) * avatarCropState.y;
+        avatarCropState.zoom = Math.max(1, Math.min(4, nextZoom));
+        const after = getCropDimensions();
+        if (!after) return;
+        const maxX = Math.max(0, after.width - after.sw);
+        const maxY = Math.max(0, after.height - after.sh);
+        avatarCropState.x = maxX ? Math.max(0, Math.min(1, (imageX * (after.width / before.width) - localX) / maxX)) : 0.5;
+        avatarCropState.y = maxY ? Math.max(0, Math.min(1, (imageY * (after.height / before.height) - localY) / maxY)) : 0.5;
+        updateAvatarCropPreview();
     };
 
     document.getElementById('avatarUploadInput').onchange = function () {
         const file = this.files?.[0];
         this.value = '';
         if (!file) return;
-        const objectUrl = URL.createObjectURL(file);
+        if (pendingAvatarObjectUrl) URL.revokeObjectURL(pendingAvatarObjectUrl);
+        pendingAvatarObjectUrl = URL.createObjectURL(file);
         const image = new Image();
         image.onload = () => {
             pendingAvatarImage = image;
             avatarCropState = { zoom: 1, x: 0.5, y: 0.5 };
-            cropImage.src = objectUrl;
+            cropImage.src = pendingAvatarObjectUrl;
             cropModal.hidden = false;
             cropControls.hidden = true;
             requestAnimationFrame(updateAvatarCropPreview);
         };
         image.onerror = () => {
-            URL.revokeObjectURL(objectUrl);
+            if (pendingAvatarObjectUrl) URL.revokeObjectURL(pendingAvatarObjectUrl);
+            pendingAvatarObjectUrl = null;
             showToast('Не удалось открыть выбранное изображение.', 'error');
         };
-        image.src = objectUrl;
+        image.src = pendingAvatarObjectUrl;
     };
 
     cropStage?.addEventListener('pointerdown', event => {
         if (!pendingAvatarImage) return;
         event.preventDefault();
-        cropStage.setPointerCapture?.(event.pointerId);
+        try { cropStage.setPointerCapture(event.pointerId); } catch (_) {}
         cropPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
         if (cropPointers.size === 1) {
             cropGestureStart = { type: 'pan', x: event.clientX, y: event.clientY, cropX: avatarCropState.x, cropY: avatarCropState.y };
         } else if (cropPointers.size === 2) {
             const pts = [...cropPointers.values()];
-            cropGestureStart = { type: 'pinch', distance: Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y), zoom: avatarCropState.zoom };
+            cropGestureStart = { type: 'pinch', distance: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y), zoom: avatarCropState.zoom };
         }
     });
+
     cropStage?.addEventListener('pointermove', event => {
         if (!pendingAvatarImage || !cropPointers.has(event.pointerId)) return;
         event.preventDefault();
         cropPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-        const sw = cropStage.clientWidth, sh = cropStage.clientHeight;
-        const base = Math.max(sw / pendingAvatarImage.naturalWidth, sh / pendingAvatarImage.naturalHeight);
-        const width = pendingAvatarImage.naturalWidth * base * avatarCropState.zoom;
-        const height = pendingAvatarImage.naturalHeight * base * avatarCropState.zoom;
         if (cropPointers.size >= 2 && cropGestureStart?.type === 'pinch') {
             const pts = [...cropPointers.values()];
-            const distance = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
-            avatarCropState.zoom = Math.max(1, Math.min(4, cropGestureStart.zoom * distance / Math.max(1, cropGestureStart.distance)));
-        } else if (cropGestureStart?.type === 'pan') {
-            avatarCropState.x = Math.max(0, Math.min(1, cropGestureStart.cropX - (event.clientX-cropGestureStart.x) / Math.max(1, width-sw)));
-            avatarCropState.y = Math.max(0, Math.min(1, cropGestureStart.cropY - (event.clientY-cropGestureStart.y) / Math.max(1, height-sh)));
+            const distance = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+            setAvatarCropZoom(cropGestureStart.zoom * distance / Math.max(1, cropGestureStart.distance), (pts[0].x + pts[1].x) / 2, (pts[0].y + pts[1].y) / 2);
+            return;
         }
-        updateAvatarCropPreview();
+        if (cropGestureStart?.type === 'pan') {
+            const d = getCropDimensions();
+            if (!d) return;
+            const maxX = Math.max(0, d.width - d.sw);
+            const maxY = Math.max(0, d.height - d.sh);
+            if (maxX) avatarCropState.x = Math.max(0, Math.min(1, cropGestureStart.cropX - (event.clientX - cropGestureStart.x) / maxX));
+            if (maxY) avatarCropState.y = Math.max(0, Math.min(1, cropGestureStart.cropY - (event.clientY - cropGestureStart.y) / maxY));
+            updateAvatarCropPreview();
+        }
     });
+
+    cropStage?.addEventListener('wheel', event => {
+        if (!pendingAvatarImage) return;
+        event.preventDefault();
+        const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+        setAvatarCropZoom(avatarCropState.zoom * factor, event.clientX, event.clientY);
+    }, { passive: false });
+
     const endCropPointer = event => {
         cropPointers.delete(event.pointerId);
         cropGestureStart = null;
@@ -658,6 +701,7 @@ function bindUIEvents() {
     };
     cropStage?.addEventListener('pointerup', endCropPointer);
     cropStage?.addEventListener('pointercancel', endCropPointer);
+    cropStage?.addEventListener('lostpointercapture', endCropPointer);
 
     document.getElementById('cancelAvatarCropBtn')?.addEventListener('click', () => {
         pendingAvatarImage = null;
