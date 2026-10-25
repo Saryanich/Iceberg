@@ -3419,3 +3419,10 @@ body {
     .bottom-navigation .tab > span:last-child { font-size: 9px; }
     .bottom-navigation .nav-icon-sticker { width: 29px; height: 29px; font-size: 19px; }
 }
+
+/* Keep the wordmark below the iPhone status/notch area, not inside it. */
+@media (max-width: 600px) {
+    .iceberg-brand .iceberg-brand-title {
+        top: calc(50% + env(safe-area-inset-top, 0px) / 2);
+    }
+}
