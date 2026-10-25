@@ -3683,3 +3683,83 @@ body {
         min-height: 42px;
     }
 }
+
+
+/* Final iPhone full-bleed viewport:
+   the prior 100dvh + nested safe-area padding left the app sitting above
+   the physical bottom edge. Pin the app shell to the viewport and keep
+   the bottom safe area inside the navigation/background instead of outside it. */
+@supports (-webkit-touch-callout: none) {
+    @media (max-width: 768px) and (orientation: portrait) {
+        html {
+            position: fixed !important;
+            inset: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            min-height: 0 !important;
+            overflow: hidden !important;
+            background: var(--bg-secondary) !important;
+        }
+        body {
+            position: fixed !important;
+            inset: 0 !important;
+            width: auto !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            background: var(--bg-secondary) !important;
+        }
+        .app-container {
+            position: absolute !important;
+            inset: 0 !important;
+            width: auto !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+        }
+        #messengerApp.messenger-container {
+            position: absolute !important;
+            inset: 0 !important;
+            width: auto !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+        }
+        #sidebar.sidebar {
+            position: absolute !important;
+            inset: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            overflow: hidden !important;
+        }
+        .tabs-container.bottom-navigation {
+            bottom: 0 !important;
+            padding-bottom: max(4px, env(safe-area-inset-bottom, 0px)) !important;
+            background: var(--bg-secondary) !important;
+        }
+        #chatScreen.chat-screen {
+            position: absolute !important;
+            inset: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            padding-top: env(safe-area-inset-top, 0px) !important;
+            padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+            overflow: hidden !important;
+        }
+    }
+}
