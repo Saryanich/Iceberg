@@ -766,9 +766,31 @@ export async function openUserStories(uid, ownerName = 'Пользователь
     }
 }
 
+async function ensureStoriesSession() {
+    const user = authState.user || auth.currentUser;
+    if (!user?.uid) return null;
+    authState.user = user;
+
+    // Firebase Auth may be restored a moment before the messenger's profile state.
+    // Hydrate the profile so opening/uploading stories does not falsely ask to log in.
+    if (!authState.userData) {
+        try {
+            const profileSnap = await getDoc(doc(db, 'users', user.uid));
+            if (profileSnap.exists()) authState.userData = profileSnap.data();
+        } catch (error) {
+            console.warn('[Stories] Could not hydrate signed-in profile:', error);
+        }
+    }
+    return user;
+}
+
 export async function loadOwnStories() {
+    const user = await ensureStoriesSession();
     const list = document.getElementById('myStoriesList');
-    if (!list || !authState.user?.uid) return;
+    if (!list || !user?.uid) {
+        if (list) showToast('Сначала войдите в Айсберг', 'error');
+        return;
+    }
     list.replaceChildren();
     let items = [];
     try {
@@ -852,9 +874,14 @@ async function decorateStoryImage(file) {
 }
 
 export async function uploadOwnStories(files) {
-    if (!authState.user?.uid || !files?.length) { showToast('Сначала войдите в Iceberg', 'error'); return; }
+    if (!files?.length) return;
+    const user = await ensureStoriesSession();
+    if (!user?.uid) {
+        showToast('Сначала войдите в Айсберг', 'error');
+        return;
+    }
     try {
-        await pruneExpiredStories(authState.user.uid);
+        await pruneExpiredStories(user.uid);
         const current = await fetchUserStories(authState.user.uid);
         const remaining = MAX_STORIES - current.length;
         if (remaining <= 0) { showToast('Можно хранить не более 5 активных историй', 'error'); return; }
@@ -864,7 +891,7 @@ export async function uploadOwnStories(files) {
             const decorated = await decorateStoryImage(file);
             const image = await compressImage(decorated, 400 * 1024);
             if (typeof image !== 'string' || image.length >= 700000) throw new Error('Фото слишком большое после сжатия');
-            await addDoc(collection(db, 'user_stories', authState.user.uid, 'items'), {
+            await addDoc(collection(db, 'user_stories', user.uid, 'items'), {
                 image, createdAt: serverTimestamp(),
                 expiresAt: Timestamp.fromMillis(Date.now() + STORY_LIFETIME - 60000)
             });
