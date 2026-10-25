@@ -3294,3 +3294,128 @@ body {
         font-size: 16px;
     }
 }
+
+
+/* Iceberg responsive polish: centered brand, real emoji navigation, compact safe-area layout */
+.iceberg-brand {
+    position: relative;
+    min-height: 72px;
+    height: auto;
+    padding: 12px 16px;
+    padding-top: max(12px, env(safe-area-inset-top, 0px));
+    justify-content: flex-end;
+    letter-spacing: 0;
+}
+.iceberg-brand .iceberg-brand-title {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: calc(100% - 116px);
+    text-align: center;
+    font-size: clamp(17px, 4.4vw, 23px);
+    line-height: 1.2;
+    letter-spacing: .2em;
+    font-weight: 850;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-primary);
+    pointer-events: none;
+}
+.brand-profile-btn { position: relative; z-index: 1; width: 42px; height: 42px; flex-basis: 42px; }
+.bottom-navigation .nav-icon {
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+    font-size: clamp(19px, 5vw, 23px);
+    line-height: 1.15;
+    font-weight: 400;
+}
+.bottom-navigation .nav-icon-sticker {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 13px;
+    background: color-mix(in srgb, var(--bg-surface) 88%, transparent);
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 7px rgba(0,0,0,.08);
+    font-size: 22px;
+}
+.bottom-navigation .nav-find-contact .nav-plus {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #59baff, #2687e5);
+    color: #fff;
+    font-size: 21px;
+    box-shadow: 0 4px 12px rgba(38,135,229,.24);
+}
+.bottom-navigation .tab {
+    min-height: 58px;
+    justify-content: center;
+    gap: 5px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    border-radius: 17px;
+}
+.bottom-navigation .tab > span:last-child {
+    font-size: clamp(10px, 2.7vw, 12px);
+    line-height: 1.15;
+    letter-spacing: 0;
+}
+.stories-bar { padding: 14px 12px; min-height: 102px; }
+.story-add-circle { width: 54px; height: 54px; font-size: 0; }
+.story-add-circle > span { font-size: 0; }
+.story-add-circle > span::before { content: "➕"; font-size: 23px; }
+.search-area { padding: 12px 14px; }
+.search-input { min-height: 46px; border-radius: 24px; }
+.tab-content { min-height: 0; overscroll-behavior: contain; }
+@media (max-width: 600px) {
+    html, body { height: 100%; min-height: 0; }
+    .messenger-container { height: 100vh; height: 100dvh; min-height: 0; }
+    .sidebar {
+        height: 100%;
+        max-height: 100%;
+        padding-top: 0;
+        padding-bottom: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .iceberg-brand {
+        flex: 0 0 auto;
+        min-height: calc(58px + env(safe-area-inset-top, 0px));
+        padding-top: max(10px, env(safe-area-inset-top, 0px));
+    }
+    .stories-bar { flex: 0 0 auto; min-height: 94px; max-height: 112px; }
+    .search-area { flex: 0 0 auto; }
+    .tab-content {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+    .tab-pane, .chats-list, .channels-list, .groups-list, .contacts-list {
+        min-height: 0;
+        max-height: 100%;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .bottom-navigation {
+        flex: 0 0 auto;
+        min-height: 66px;
+        padding-top: 5px;
+        padding-bottom: max(7px, env(safe-area-inset-bottom, 0px));
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border);
+    }
+    .bottom-navigation .tab { min-height: 54px; }
+    .bottom-navigation .nav-icon-sticker { width: 32px; height: 32px; border-radius: 11px; }
+}
+@media (max-width: 360px) {
+    .iceberg-brand .iceberg-brand-title { font-size: 16px; letter-spacing: .14em; width: calc(100% - 100px); }
+    .brand-profile-btn { width: 36px; height: 36px; flex-basis: 36px; }
+    .bottom-navigation .tab > span:last-child { font-size: 9px; }
+    .bottom-navigation .nav-icon-sticker { width: 29px; height: 29px; font-size: 19px; }
+}
