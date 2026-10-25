@@ -726,15 +726,20 @@ function bindUIEvents() {
             let dataUrl = '';
             for (let quality = 0.82; quality >= 0.42; quality -= 0.08) {
                 dataUrl = canvas.toDataURL('image/jpeg', quality);
-                if (dataUrl.length <= 420000) break;
+                if (dataUrl.length <= 200000) break;
             }
-            if (!dataUrl || dataUrl.length > 480000) {
-                // Final fallback for unusually noisy photos.
+            if (!dataUrl || dataUrl.length > 220000) {
+                // Final fallback for unusually noisy photos; keep the data small enough
+                // to coexist with chat/contact metadata in a Firestore user document.
                 canvas.width = canvas.height = 256;
                 ctx.drawImage(pendingAvatarImage, sx, sy, side, side, 0, 0, 256, 256);
-                dataUrl = canvas.toDataURL('image/jpeg', 0.55);
+                dataUrl = '';
+                for (let quality = 0.58; quality >= 0.30; quality -= 0.07) {
+                    dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    if (dataUrl.length <= 200000) break;
+                }
             }
-            if (dataUrl.length > 500000) throw new Error('Фото не удалось сжать до безопасного размера');
+            if (!dataUrl || dataUrl.length > 220000) throw new Error('Фото не удалось сжать до безопасного размера');
 
             const { doc, updateDoc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
             const { db, auth } = await import('./config.js');
