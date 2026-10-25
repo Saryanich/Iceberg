@@ -3785,3 +3785,46 @@ body {
         padding-bottom: 60px !important;
     }
 }
+
+/* iOS final correction: size the app by fixed viewport edges, not 100lvh.
+   On iPhone, 100lvh can stop above the bottom safe-area region, which clips
+   the navigation and exposes the page's black background. */
+@supports (-webkit-touch-callout: none) {
+    @media (max-width: 768px) and (orientation: portrait) {
+        html,
+        body {
+            position: fixed !important;
+            inset: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: var(--bg-secondary) !important;
+            overflow: hidden !important;
+        }
+        .app-container,
+        #messengerApp.messenger-container,
+        #sidebar.sidebar {
+            position: fixed !important;
+            inset: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: var(--bg-secondary) !important;
+        }
+        #sidebar.sidebar {
+            bottom: 0 !important;
+            overflow: hidden !important;
+        }
+        .tabs-container.bottom-navigation {
+            position: absolute !important;
+            bottom: 0 !important;
+            padding-bottom: 0 !important;
+            transform: none !important;
+        }
+    }
+}
