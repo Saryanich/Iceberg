@@ -736,10 +736,16 @@ function bindUIEvents() {
             }
             if (dataUrl.length > 500000) throw new Error('Фото не удалось сжать до безопасного размера');
 
-            const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
-            const { db } = await import('./config.js');
-            const uid = authState.user?.uid;
+            const { doc, updateDoc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+            const { db, auth } = await import('./config.js');
+            const activeUser = authState.user || auth.currentUser;
+            const uid = activeUser?.uid;
             if (!uid) throw new Error('Сессия завершена. Войдите в Айсберг повторно.');
+            authState.user = activeUser;
+            if (!authState.userData) {
+                const existingProfile = await getDoc(doc(db, 'users', uid));
+                if (existingProfile.exists()) authState.userData = existingProfile.data();
+            }
 
             await updateDoc(doc(db, 'users', uid), { avatar: dataUrl });
             authState.userData.avatar = dataUrl;
