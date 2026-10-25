@@ -3763,3 +3763,25 @@ body {
         }
     }
 }
+
+/* Full-bleed mobile layout: extend the existing interface to the physical
+   bottom edge. Keep the current top/header spacing unchanged. */
+@media (max-width: 768px) {
+    html,
+    body,
+    .app-container,
+    #messengerApp.messenger-container {
+        min-height: 100lvh !important;
+    }
+    .app-container,
+    #messengerApp.messenger-container {
+        height: 100lvh !important;
+        max-height: none !important;
+    }
+    .tabs-container.bottom-navigation {
+        padding-bottom: 0 !important;
+    }
+    .sidebar .tab-content {
+        padding-bottom: 60px !important;
+    }
+}
