@@ -754,13 +754,17 @@ function bindUIEvents() {
 
             await updateDoc(doc(db, 'users', uid), { avatar: dataUrl });
             authState.userData.avatar = dataUrl;
-            await DB.setCachedProfile(uid, authState.userData);
 
-            // Update the visible avatar immediately after the owner document is saved.
+            // The remote save is authoritative. Refresh the UI before optional local cache work.
             pendingAvatarImage = null;
             cropModal.hidden = true;
             renderUserProfile();
             openProfileModal();
+            try {
+                await DB.setCachedProfile(uid, authState.userData);
+            } catch (cacheError) {
+                console.warn('[Avatar] Photo saved remotely; local cache unavailable:', cacheError);
+            }
 
             // Public sync is handled separately: a legacy public document must not make
             // a successful private profile save look as if the photo upload failed.
@@ -794,8 +798,12 @@ function bindUIEvents() {
             authState.userData.lastName = ln;
             authState.userData.mood = mood;
             authState.userData.nickname = nick;
-            await DB.setCachedProfile(authState.user.uid, authState.userData);
             renderUserProfile();
+            try {
+                await DB.setCachedProfile(authState.user.uid, authState.userData);
+            } catch (cacheError) {
+                console.warn('[Profile] Profile saved remotely; local cache unavailable:', cacheError);
+            }
             try {
                 await syncPublicProfile();
             } catch (publicError) {
