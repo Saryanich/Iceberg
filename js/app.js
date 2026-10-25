@@ -336,7 +336,9 @@ async function syncPublicProfile(user = authState.user, profile = authState.user
         mood: profile.mood || '',
         updatedAt: serverTimestamp()
     };
-    await setDoc(doc(db, 'public_profiles', user.uid), publicProfile, { merge: true });
+    // Keep this document strictly within the public_profiles Firestore rule schema.
+    // merge:true could preserve legacy fields that make the rules reject the write.
+    await setDoc(doc(db, 'public_profiles', user.uid), publicProfile);
 }
 
 async function bootMessenger(user, userData) {
@@ -710,26 +712,54 @@ function bindUIEvents() {
     document.getElementById('applyAvatarCropBtn')?.addEventListener('click', async () => {
         if (!pendingAvatarImage) return;
         try {
+            // Store a compact JPEG. Large data URLs can exceed Firestore's document limit,
+            // especially when both user and public profile documents contain the avatar.
             const canvas = document.createElement('canvas');
-            canvas.width = canvas.height = 512;
+            canvas.width = canvas.height = 384;
             const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('Canvas недоступен');
             const iw = pendingAvatarImage.naturalWidth, ih = pendingAvatarImage.naturalHeight;
             const side = Math.min(iw, ih) / avatarCropState.zoom;
             const sx = (iw - side) * avatarCropState.x;
             const sy = (ih - side) * avatarCropState.y;
-            ctx.drawImage(pendingAvatarImage, sx, sy, side, side, 0, 0, 512, 512);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+            ctx.drawImage(pendingAvatarImage, sx, sy, side, side, 0, 0, 384, 384);
+            let dataUrl = '';
+            for (let quality = 0.82; quality >= 0.42; quality -= 0.08) {
+                dataUrl = canvas.toDataURL('image/jpeg', quality);
+                if (dataUrl.length <= 420000) break;
+            }
+            if (!dataUrl || dataUrl.length > 480000) {
+                // Final fallback for unusually noisy photos.
+                canvas.width = canvas.height = 256;
+                ctx.drawImage(pendingAvatarImage, sx, sy, side, side, 0, 0, 256, 256);
+                dataUrl = canvas.toDataURL('image/jpeg', 0.55);
+            }
+            if (dataUrl.length > 500000) throw new Error('Фото не удалось сжать до безопасного размера');
+
             const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
             const { db } = await import('./config.js');
-            await updateDoc(doc(db, 'users', authState.user.uid), { avatar: dataUrl });
+            const uid = authState.user?.uid;
+            if (!uid) throw new Error('Сессия завершена. Войдите в Айсберг повторно.');
+
+            await updateDoc(doc(db, 'users', uid), { avatar: dataUrl });
             authState.userData.avatar = dataUrl;
-            await syncPublicProfile();
-            await DB.setCachedProfile(authState.user.uid, authState.userData);
+            await DB.setCachedProfile(uid, authState.userData);
+
+            // Update the visible avatar immediately after the owner document is saved.
             pendingAvatarImage = null;
             cropModal.hidden = true;
             renderUserProfile();
             openProfileModal();
-            showToast('Изображение профиля обновлено.', 'success');
+
+            // Public sync is handled separately: a legacy public document must not make
+            // a successful private profile save look as if the photo upload failed.
+            try {
+                await syncPublicProfile();
+                showToast('Изображение профиля обновлено.', 'success');
+            } catch (publicError) {
+                console.warn('[Avatar] Private profile saved, public profile sync failed:', publicError);
+                showToast('Фото сохранено. Не удалось обновить его для контактов — попробуйте сохранить профиль ещё раз.', 'warning', 4500);
+            }
         } catch (e) {
             console.error('[Avatar crop]', e);
             showToast('Не удалось сохранить изображение профиля.', 'error');
@@ -753,9 +783,14 @@ function bindUIEvents() {
             authState.userData.lastName = ln;
             authState.userData.mood = mood;
             authState.userData.nickname = nick;
-            await syncPublicProfile();
             await DB.setCachedProfile(authState.user.uid, authState.userData);
             renderUserProfile();
+            try {
+                await syncPublicProfile();
+            } catch (publicError) {
+                console.warn('[Profile] Public profile sync failed:', publicError);
+                showToast('Профиль сохранён, но обновление для контактов не удалось.', 'warning', 4500);
+            }
             showToast('✅ Профиль сохранён', 'success');
             setTimeout(() => {
                 document.getElementById('profileModal').classList.remove('active');
