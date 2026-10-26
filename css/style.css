@@ -3888,3 +3888,58 @@ body {
     #icebergDiagnosticsButton { width:27px; height:27px; font-size:12px; }
     #icebergDiagnosticsPanel { bottom:68px; }
 }
+
+
+/* 2026-10 mobile full-height correction: remove the reserved fake footer gap.
+   The bottom navigation owns its safe area; content must not reserve a second one. */
+@media (max-width: 768px) {
+    html, body {
+        height: 100% !important;
+        min-height: 0 !important;
+        max-height: none !important;
+    }
+    .app-container,
+    #messengerApp.messenger-container,
+    #sidebar.sidebar {
+        height: 100% !important;
+        min-height: 0 !important;
+        max-height: none !important;
+    }
+    #sidebar.sidebar {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    .sidebar .tab-content {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        padding-bottom: 0 !important;
+        margin-bottom: 0 !important;
+    }
+    .tabs-container.bottom-navigation {
+        flex: 0 0 auto !important;
+        margin-bottom: 0 !important;
+        bottom: 0 !important;
+        padding-bottom: max(4px, env(safe-area-inset-bottom, 0px)) !important;
+    }
+    #chatScreen.chat-screen {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        padding-bottom: 0 !important;
+        margin: 0 !important;
+        display: flex;
+        flex-direction: column;
+    }
+    #chatScreen .messages-area {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+    }
+    #chatScreen .chat-input-area {
+        flex: 0 0 auto !important;
+        margin-bottom: 0 !important;
+        padding-bottom: max(6px, env(safe-area-inset-bottom, 0px)) !important;
+    }
+}
