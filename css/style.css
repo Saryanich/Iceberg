@@ -3943,3 +3943,48 @@ body {
         padding-bottom: max(6px, env(safe-area-inset-bottom, 0px)) !important;
     }
 }
+
+
+/* FIX: fill the complete iPhone viewport without changing the top header.
+   The previous body + sidebar safe-area padding stacked up and left a large
+   empty strip below the bottom navigation. */
+@supports (height: 100dvh) {
+    body {
+        padding-bottom: 0 !important;
+    }
+
+    .app-container {
+        height: calc(100dvh - env(safe-area-inset-top, 0px)) !important;
+        min-height: 0 !important;
+        max-height: calc(100dvh - env(safe-area-inset-top, 0px)) !important;
+    }
+
+    #messengerApp.messenger-container {
+        height: 100% !important;
+        min-height: 0 !important;
+        max-height: 100% !important;
+    }
+
+    #messengerApp .sidebar {
+        height: 100% !important;
+        min-height: 0 !important;
+        padding-bottom: 0 !important;
+        box-sizing: border-box !important;
+    }
+
+    #messengerApp .tabs-container.bottom-navigation {
+        bottom: 0 !important;
+        box-sizing: border-box !important;
+        padding-bottom: max(8px, env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    #messengerApp .tab-content {
+        min-height: 0 !important;
+        padding-bottom: calc(66px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    #messengerApp .chat-screen {
+        height: 100% !important;
+        max-height: 100% !important;
+    }
+}
