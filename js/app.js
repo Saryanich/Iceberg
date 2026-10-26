@@ -755,6 +755,16 @@ function bindUIEvents() {
             await updateDoc(doc(db, 'users', uid), { avatar: dataUrl });
             authState.userData.avatar = dataUrl;
 
+            // Update every avatar presentation immediately, including the large preview
+            // inside the profile dialog (it is not part of renderUserProfile's header targets).
+            const profileAvatarBig = document.getElementById('profileAvatarBig');
+            if (profileAvatarBig) {
+                profileAvatarBig.replaceChildren();
+                const preview = document.createElement('img');
+                preview.src = dataUrl;
+                preview.alt = 'Аватар профиля';
+                profileAvatarBig.appendChild(preview);
+            }
             // The remote save is authoritative. Refresh the UI before optional local cache work.
             pendingAvatarImage = null;
             cropModal.hidden = true;
@@ -1082,8 +1092,11 @@ function bindUIEvents() {
 
     document.getElementById('addStoryBtn').onclick = () => document.getElementById('storyUploadInput').click();
     document.getElementById('storyUploadInput').onchange = async function () {
-        const files = this.files;
+        // Snapshot File objects before clearing the input. On iOS Safari, clearing
+        // the input first can empty the live FileList and silently publish nothing.
+        const files = Array.from(this.files || []);
         this.value = '';
+        if (!files.length) return;
         await uploadOwnStories(files);
     };
     document.getElementById('prevStoryBtn').onclick = () => moveStory(-1);
