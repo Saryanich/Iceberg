@@ -3963,3 +3963,40 @@ body {
         }
     }
 }
+
+/* Final viewport correction: anchor the navigation to the device viewport,
+   not to a shortened parent. Keep the existing header/top safe area untouched. */
+@supports (-webkit-touch-callout: none) {
+    @media (max-width: 768px) and (orientation: portrait) {
+        html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+        }
+        .app-container,
+        #messengerApp.messenger-container,
+        #sidebar.sidebar {
+            inset: 0 !important;
+            min-height: 0 !important;
+            max-height: none !important;
+        }
+        .tabs-container.bottom-navigation {
+            position: fixed !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            transform: none !important;
+            padding-bottom: max(5px, env(safe-area-inset-bottom, 0px)) !important;
+            background: var(--bg-secondary, #101d2b) !important;
+            border-bottom: 0 !important;
+            z-index: 1000 !important;
+        }
+        #sidebar .tab-content {
+            padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+            min-height: 0 !important;
+            margin-bottom: 0 !important;
+        }
+    }
+}
