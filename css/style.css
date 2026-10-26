@@ -3828,3 +3828,63 @@ body {
         }
     }
 }
+
+/* Маленькая плавающая кнопка диагностики — поверх интерфейса, не меняет его разметку. */
+#icebergDiagnosticsButton {
+    position: fixed;
+    z-index: 10050;
+    right: 9px;
+    top: 46%;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(142, 177, 207, .42);
+    border-radius: 50%;
+    background: rgba(17, 31, 48, .78);
+    color: #d7e9f8;
+    font: 14px/1 system-ui, sans-serif;
+    box-shadow: 0 2px 10px rgba(0,0,0,.2);
+    opacity: .62;
+    touch-action: none;
+    cursor: grab;
+    -webkit-tap-highlight-color: transparent;
+}
+#icebergDiagnosticsButton:active { cursor: grabbing; opacity: 1; }
+#icebergDiagnosticsButton.has-errors { border-color: #ff8a80; box-shadow: 0 0 0 2px rgba(255,82,82,.16); }
+#icebergDiagnosticsPanel {
+    position: fixed;
+    z-index: 10051;
+    right: 10px;
+    bottom: 74px;
+    width: min(370px, calc(100vw - 20px));
+    max-height: min(58vh, 520px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 12px;
+    border: 1px solid #334b63;
+    border-radius: 15px;
+    color: #edf6ff;
+    background: #101d2b;
+    box-shadow: 0 12px 36px rgba(0,0,0,.42);
+    font: 13px/1.45 system-ui, sans-serif;
+}
+#icebergDiagnosticsPanel[hidden] { display: none !important; }
+.iceberg-diagnostics-header, .iceberg-diagnostics-actions { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.iceberg-diagnostics-header button, .iceberg-diagnostics-actions button {
+    border: 1px solid #38536c; border-radius: 9px; padding: 6px 9px;
+    color: #e8f3ff; background: #1b3045; font: inherit;
+}
+.iceberg-diagnostics-note { margin:0; color:#9fb5ca; font-size:11px; }
+#icebergDiagnosticsList { overflow:auto; min-height:35px; }
+.iceberg-diagnostic-entry { padding:8px 0; border-top:1px solid #26394b; overflow-wrap:anywhere; }
+.iceberg-diagnostic-entry strong { display:block; color:#ffb4a9; margin-bottom:3px; }
+.iceberg-diagnostic-entry pre { white-space:pre-wrap; overflow-wrap:anywhere; font:11px/1.4 ui-monospace,monospace; color:#b8cce0; }
+#icebergDiagnosticsPanel textarea { width:100%; min-height:80px; background:#09131f; color:#fff; }
+@media (max-width: 480px) {
+    #icebergDiagnosticsButton { width:27px; height:27px; font-size:12px; }
+    #icebergDiagnosticsPanel { bottom:68px; }
+}
