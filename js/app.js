@@ -797,8 +797,11 @@ function bindUIEvents() {
             }
             await renderStoriesBar().catch(error => console.warn('[Stories] Не удалось обновить аватары:', error));
         } catch (e) {
-            console.error('[Avatar crop]', e);
-            showToast('Не удалось сохранить изображение профиля.', 'error');
+            console.error('[Avatar crop] Save failed:', e?.code || e, e);
+            const detail = e?.code === 'permission-denied'
+                ? 'Firebase отклонил запись в users/{uid}. Правила не изменены; проверьте, что вы вошли в свой аккаунт.'
+                : (e?.message || 'Проверьте соединение и повторите попытку.');
+            showToast('Не удалось сохранить фото: ' + detail, 'error', 6500);
         }
     });
 
@@ -831,12 +834,20 @@ function bindUIEvents() {
                 console.warn('[Profile] Public profile sync failed:', publicError);
                 showToast('Профиль сохранён, но обновление для контактов не удалось.', 'warning', 4500);
             }
+            await renderStoriesBar().catch(error => console.warn('[Stories] Не удалось обновить полосу после сохранения профиля:', error));
             showToast('✅ Профиль сохранён', 'success');
             setTimeout(() => {
                 document.getElementById('profileModal').classList.remove('active');
             }, 600);
         } catch (e) {
-            showToast('Ошибка сохранения', 'error');
+            console.error('[Profile] Save failed:', e?.code || e, e);
+            showToast(
+                e?.code === 'permission-denied'
+                    ? 'Firebase отклонил сохранение профиля. Правила не менялись.'
+                    : 'Не удалось сохранить профиль: ' + (e?.message || 'проверьте соединение'),
+                'error',
+                6000
+            );
         }
     };
 
