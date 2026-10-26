@@ -559,6 +559,122 @@
         }, true);
     })();
     </script>
+    <!-- Плавающий диагностический ярлык: не занимает место в интерфейсе и его можно перетаскивать. -->
+    <button id="icebergDiagnosticsButton" type="button" aria-label="Журнал ошибок" title="Журнал ошибок">⚠️</button>
+    <section id="icebergDiagnosticsPanel" role="dialog" aria-modal="false" aria-labelledby="icebergDiagnosticsTitle" hidden>
+        <header class="iceberg-diagnostics-header">
+            <strong id="icebergDiagnosticsTitle">Ошибки Iceberg</strong>
+            <button id="icebergDiagnosticsClose" type="button" aria-label="Закрыть">✕</button>
+        </header>
+        <p class="iceberg-diagnostics-note">Журнал хранится только в текущей вкладке и не отправляется на сервер.</p>
+        <div id="icebergDiagnosticsList" aria-live="polite">Ошибок пока нет.</div>
+        <footer class="iceberg-diagnostics-actions">
+            <button id="icebergDiagnosticsCopy" type="button">Копировать</button>
+            <button id="icebergDiagnosticsClear" type="button">Очистить</button>
+        </footer>
+    </section>
+    <script>
+    (() => {
+        const button = document.getElementById('icebergDiagnosticsButton');
+        const panel = document.getElementById('icebergDiagnosticsPanel');
+        const list = document.getElementById('icebergDiagnosticsList');
+        if (!button || !panel || !list) return;
+        const records = [];
+        const format = value => {
+            try { return typeof value === 'string' ? value : JSON.stringify(value); }
+            catch { return String(value); }
+        };
+        const add = (kind, message, details = '') => {
+            records.push({ time: new Date().toLocaleTimeString('ru-RU'), kind, message: String(message || 'Неизвестная ошибка'), details: String(details || '') });
+            if (records.length > 100) records.shift();
+            button.classList.add('has-errors');
+            render();
+        };
+        const render = () => {
+            if (!records.length) { list.textContent = 'Ошибок пока нет.'; return; }
+            list.replaceChildren();
+            records.slice().reverse().forEach(item => {
+                const entry = document.createElement('article');
+                entry.className = 'iceberg-diagnostic-entry';
+                const title = document.createElement('strong');
+                title.textContent = '[' + item.time + '] ' + item.kind;
+                const message = document.createElement('div');
+                message.textContent = item.message;
+                entry.append(title, message);
+                if (item.details) {
+                    const details = document.createElement('pre');
+                    details.textContent = item.details;
+                    entry.append(details);
+                }
+                list.append(entry);
+            });
+        };
+        window.addEventListener('error', event => {
+            if (event.target && event.target !== window) {
+                add('Ресурс', event.target.src || event.target.href || event.target.tagName || 'Ошибка загрузки');
+            } else {
+                add('JavaScript', event.message, (event.filename || '') + (event.lineno ? ':' + event.lineno : '') + (event.error?.stack ? '\n' + event.error.stack : ''));
+            }
+        }, true);
+        window.addEventListener('unhandledrejection', event => {
+            add('Promise', event.reason?.message || format(event.reason), event.reason?.stack || '');
+        });
+        const originalError = console.error.bind(console);
+        console.error = (...args) => {
+            add('console.error', args.map(format).join(' '));
+            originalError(...args);
+        };
+        button.addEventListener('click', () => { panel.hidden = !panel.hidden; render(); });
+        document.getElementById('icebergDiagnosticsClose')?.addEventListener('click', () => { panel.hidden = true; });
+        document.getElementById('icebergDiagnosticsClear')?.addEventListener('click', () => {
+            records.length = 0;
+            button.classList.remove('has-errors');
+            render();
+        });
+        document.getElementById('icebergDiagnosticsCopy')?.addEventListener('click', async () => {
+            const text = records.map(x => '[' + x.time + '] ' + x.kind + ': ' + x.message + (x.details ? '\n' + x.details : '')).join('\n\n') || 'Ошибок пока нет.';
+            try {
+                await navigator.clipboard.writeText(text);
+                const copy = document.getElementById('icebergDiagnosticsCopy');
+                copy.textContent = 'Скопировано ✓';
+                setTimeout(() => { copy.textContent = 'Копировать'; }, 1400);
+            } catch {
+                const area = document.createElement('textarea');
+                area.value = text;
+                panel.append(area);
+                area.select();
+                document.execCommand('copy');
+                area.remove();
+            }
+        });
+        let drag = null;
+        button.addEventListener('pointerdown', event => {
+            if (event.button !== 0) return;
+            const rect = button.getBoundingClientRect();
+            drag = { id: event.pointerId, dx: event.clientX - rect.left, dy: event.clientY - rect.top, moved: false };
+            button.setPointerCapture(event.pointerId);
+        });
+        button.addEventListener('pointermove', event => {
+            if (!drag || drag.id !== event.pointerId) return;
+            if (Math.abs(event.clientX - (drag.dx + button.getBoundingClientRect().left)) > 3 || Math.abs(event.clientY - (drag.dy + button.getBoundingClientRect().top)) > 3) drag.moved = true;
+            if (!drag.moved) return;
+            button.style.left = Math.max(4, Math.min(innerWidth - button.offsetWidth - 4, event.clientX - drag.dx)) + 'px';
+            button.style.top = Math.max(4, Math.min(innerHeight - button.offsetHeight - 4, event.clientY - drag.dy)) + 'px';
+            button.style.right = 'auto';
+            button.style.bottom = 'auto';
+        });
+        button.addEventListener('pointerup', () => {
+            if (drag?.moved) {
+                button.dataset.dragged = 'true';
+                setTimeout(() => delete button.dataset.dragged, 0);
+            }
+            drag = null;
+        });
+        button.addEventListener('click', event => {
+            if (button.dataset.dragged === 'true') { event.stopImmediatePropagation(); event.preventDefault(); }
+        }, true);
+    })();
+    </script>
     <script type="module" src="js/app.js"></script>
 </body>
 </html>
