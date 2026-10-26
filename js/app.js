@@ -65,6 +65,7 @@ import {
     compressImage,
     showContactCard,
     loadOwnStories,
+    renderStoriesBar,
     uploadOwnStories,
     openUserStories,
     moveStory,
@@ -741,7 +742,7 @@ function bindUIEvents() {
             }
             if (!dataUrl || dataUrl.length > 220000) throw new Error('Фото не удалось сжать до безопасного размера');
 
-            const { doc, updateDoc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+            const { doc, updateDoc, getDocFromServer } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
             const { db, auth } = await import('./config.js');
             const activeUser = authState.user || auth.currentUser;
             const uid = activeUser?.uid;
@@ -753,10 +754,21 @@ function bindUIEvents() {
             }
 
             await updateDoc(doc(db, 'users', uid), { avatar: dataUrl });
-            authState.userData.avatar = dataUrl;
 
-            // Update every avatar presentation immediately, including the large preview
-            // inside the profile dialog (it is not part of renderUserProfile's header targets).
+            // Read the saved value back from the server so the visible avatar and
+            // offline profile cache cannot continue displaying an older local value.
+            const confirmedProfile = await getDocFromServer(doc(db, 'users', uid));
+            if (!confirmedProfile.exists() || confirmedProfile.data().avatar !== dataUrl) {
+                throw new Error('Firebase не подтвердил сохранение новой фотографии.');
+            }
+            authState.userData = {
+                ...(authState.userData || {}),
+                ...confirmedProfile.data(),
+                avatar: dataUrl
+            };
+
+            // Update the crop preview, header avatar and the cached profile from the
+            // server-confirmed value.
             const profileAvatarBig = document.getElementById('profileAvatarBig');
             if (profileAvatarBig) {
                 profileAvatarBig.replaceChildren();
@@ -765,7 +777,6 @@ function bindUIEvents() {
                 preview.alt = 'Аватар профиля';
                 profileAvatarBig.appendChild(preview);
             }
-            // The remote save is authoritative. Refresh the UI before optional local cache work.
             pendingAvatarImage = null;
             cropModal.hidden = true;
             renderUserProfile();
@@ -776,15 +787,15 @@ function bindUIEvents() {
                 console.warn('[Avatar] Photo saved remotely; local cache unavailable:', cacheError);
             }
 
-            // Public sync is handled separately: a legacy public document must not make
-            // a successful private profile save look as if the photo upload failed.
+            // The public profile keeps story/contact avatars in sync with the new photo.
             try {
                 await syncPublicProfile();
                 showToast('Изображение профиля обновлено.', 'success');
             } catch (publicError) {
-                console.warn('[Avatar] Private profile saved, public profile sync failed:', publicError);
+                console.warn('[Avatar] Private profile saved; public profile sync failed:', publicError);
                 showToast('Фото сохранено. Не удалось обновить его для контактов — попробуйте сохранить профиль ещё раз.', 'warning', 4500);
             }
+            await renderStoriesBar().catch(error => console.warn('[Stories] Не удалось обновить аватары:', error));
         } catch (e) {
             console.error('[Avatar crop]', e);
             showToast('Не удалось сохранить изображение профиля.', 'error');
