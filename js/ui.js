@@ -1,7 +1,7 @@
 import { db, auth, STICKERS, REACTION_EMOJIS, MAX_MEDIA_SIZE, MAX_PHOTO_DIMENSION, MAX_STORIES, STORY_LIFETIME, RATE_LIMIT, AUTO_DELETE_OPTIONS, THEMES } from './config.js';
 import {
-    collection, doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc,
-    query, where, getDocs, onSnapshot, orderBy, limit, serverTimestamp, Timestamp,
+    collection, doc, getDoc, getDocFromServer, setDoc, updateDoc, addDoc, deleteDoc,
+    query, where, getDocs, getDocsFromServer, onSnapshot, orderBy, limit, serverTimestamp, Timestamp,
     arrayUnion, arrayRemove, writeBatch, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import {
@@ -516,7 +516,20 @@ export async function renderStoriesBar() {
     if (!bar || !user?.uid) return;
 
     const uid = user.uid;
-    const profile = authState.userData || {};
+    let profile = authState.userData || {};
+
+    // Refresh the signed-in user's profile from Firestore before rendering the
+    // avatar. This is owner-only and works with the existing rules.
+    try {
+        const freshProfile = await getDocFromServer(doc(db, 'users', uid));
+        if (freshProfile.exists()) {
+            profile = { ...profile, ...freshProfile.data() };
+            authState.userData = profile;
+        }
+    } catch (error) {
+        console.warn('[Stories] Could not refresh own profile from server:', error?.code || error);
+    }
+
     const ownName = profile.nickname || profile.globalId || 'Вы';
     bar.replaceChildren();
 
@@ -596,7 +609,7 @@ export async function renderStoriesBar() {
         try {
             const [stories, publicSnapshot] = await Promise.all([
                 fetchUserStories(contact.uid),
-                getDoc(doc(db, 'public_profiles', contact.uid)).catch(() => null)
+                getDocFromServer(doc(db, 'public_profiles', contact.uid)).catch(() => getDoc(doc(db, 'public_profiles', contact.uid)).catch(() => null))
             ]);
             if (!stories.length) return null;
 
@@ -835,7 +848,16 @@ async function fetchUserStories(uid) {
         orderBy('expiresAt', 'asc'),
         limit(MAX_STORIES)
     );
-    const snap = await getDocs(q);
+
+    // Story strips must reflect server state, not an old IndexedDB snapshot.
+    // If the device is offline, fall back to the normal cache-aware read.
+    let snap;
+    try {
+        snap = await getDocsFromServer(q);
+    } catch (serverError) {
+        if (serverError?.code === 'permission-denied') throw serverError;
+        snap = await getDocs(q);
+    }
     return snap.docs.map(d => ({ id: d.id, ...d.data(), ownerUid: uid }));
 }
 
