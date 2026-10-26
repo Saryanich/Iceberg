@@ -3544,11 +3544,21 @@ export function openAutoDelete() {
         const el = document.getElementById('ad-' + opt.hours);
         if (el) el.textContent = uiState.autoDeleteHours === opt.hours ? '✓' : '';
     }
-    document.getElementById('autoDeleteModal').classList.add('active');
+    const main = document.getElementById('settingsMainContent');
+    const pane = document.getElementById('autoDeletePane');
+    const title = document.getElementById('settingsModalTitle');
+    if (main) main.hidden = true;
+    if (pane) pane.hidden = false;
+    if (title) title.textContent = 'Автоудаление';
 }
 
 export function closeAutoDelete() {
-    document.getElementById('autoDeleteModal').classList.remove('active');
+    const main = document.getElementById('settingsMainContent');
+    const pane = document.getElementById('autoDeletePane');
+    const title = document.getElementById('settingsModalTitle');
+    if (main) main.hidden = false;
+    if (pane) pane.hidden = true;
+    if (title) title.textContent = 'Настройки';
 }
 
 export {
