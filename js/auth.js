@@ -249,9 +249,20 @@ async function isDeviceKnown(uid) {
 
 async function isAccountLocked(uid) {
     try {
-        const d = await getDoc(doc(db, 'users', uid));
-        // A missing profile or an unreadable lock state must not be treated as unlocked.
-        if (!d.exists() || d.data()?.accountLocked === true) return true;
+        const userRef = doc(db, 'users', uid);
+        let d = null;
+
+        // A newly created Firebase Auth user can become visible to the auth observer
+        // a moment before the corresponding Firestore profile write is readable.
+        // Retry only a missing document; permission/network failures remain fail-closed.
+        for (let attempt = 0; attempt < 4; attempt++) {
+            d = await getDoc(userRef);
+            if (d.exists()) break;
+            if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 250));
+        }
+
+        // Never treat a profile that remains missing as an unlocked account.
+        if (!d?.exists() || d.data()?.accountLocked === true) return true;
         const token = authState.deviceToken || getPersistentDeviceToken();
         return !!token && (d.data()?.revokedDeviceTokens || []).includes(token);
     } catch (e) {
