@@ -1,5 +1,5 @@
 import { APP_LOGO, STICKERS } from './config.js'; 
- 
+
 import {
     authState,
     handleAuthLogin,
