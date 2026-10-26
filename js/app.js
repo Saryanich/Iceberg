@@ -1044,10 +1044,12 @@ function bindUIEvents() {
         document.getElementById('sedaKeyScreen').classList.remove('active');
     };
 
-    document.querySelectorAll('#autoDeleteModal .settings-row').forEach((row, i) => {
+    document.querySelectorAll('#autoDeletePane .settings-row').forEach((row, i) => {
         const hours = [0, 24, 168, 720][i];
         row.onclick = () => setAutoDelete(hours);
     });
+
+    document.getElementById('backFromAutoDeleteBtn')?.addEventListener('click', closeAutoDelete);
 
     document.querySelectorAll('#settingsModal .settings-row[data-action]').forEach(row => {
         const action = row.dataset.action;
