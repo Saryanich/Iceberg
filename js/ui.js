@@ -511,19 +511,143 @@ function renderChatItem(chat) {
 }
 
 export async function renderStoriesBar() {
-    const bar=document.getElementById('storiesBar'); if(!bar||!authState.user?.uid)return;
+    const bar = document.getElementById('storiesBar');
+    const user = authState.user || auth.currentUser;
+    if (!bar || !user?.uid) return;
+
+    const uid = user.uid;
+    const profile = authState.userData || {};
+    const ownName = profile.nickname || profile.globalId || 'Вы';
     bar.replaceChildren();
-    const own=document.createElement('button'); own.type='button'; own.className='story-add-item'; own.id='headerAddStoryBtn';
-    own.innerHTML='<span class="story-add-circle"><span aria-hidden="true">+</span></span><span>Моя история</span>';
-    own.onclick=async()=>{document.getElementById('storiesModal')?.classList.add('active');await loadOwnStories();}; bar.appendChild(own);
-    const contacts=ensureArray(authState.userData?.contacts).filter(c=>c?.uid&&c.uid!==authState.user.uid);
-    const rows=await Promise.all(contacts.slice(0,80).map(async contact=>{try{const stories=await fetchUserStories(contact.uid);return stories.length?{contact,stories}:null;}catch(err){console.warn('[Stories] Cannot load contact stories',err);return null;}}));
-    rows.filter(Boolean).forEach(({contact,stories})=>{
-        const button=document.createElement('button');button.type='button';button.className='story-add-item story-contact-item';
-        const circle=document.createElement('span');circle.className='story-contact-circle has-story';
-        if(contact.avatar){const img=document.createElement('img');img.src=contact.avatar;img.alt='';circle.appendChild(img);}else circle.textContent=(contact.nickname||'👤').charAt(0).toUpperCase();
-        const label=document.createElement('span');label.className='story-name';label.textContent=contact.nickname||contact.globalId||'Контакт';
-        button.append(circle,label);button.onclick=()=>{uiState.currentStories=stories.map(item=>({...item,ownerUid:contact.uid,ownerName:contact.nickname||contact.globalId||'Контакт'}));uiState.storyViewerIndex=0;renderStoryViewer();};bar.appendChild(button);
+
+    let ownStories = [];
+    try {
+        ownStories = await fetchUserStories(uid);
+    } catch (error) {
+        console.warn('[Stories] Cannot load own stories for the strip:', error);
+    }
+
+    const openOwnStoryViewer = () => {
+        if (!ownStories.length) return;
+        uiState.currentStories = ownStories.map(item => ({
+            ...item, ownerUid: uid, ownerName: ownName
+        }));
+        uiState.storyViewerIndex = 0;
+        renderStoryViewer();
+    };
+
+    const openOwnStoryManager = async () => {
+        document.getElementById('storiesModal')?.classList.add('active');
+        await loadOwnStories();
+    };
+
+    const ownWrap = document.createElement('div');
+    ownWrap.className = 'story-own-wrap';
+
+    const ownButton = document.createElement('button');
+    ownButton.type = 'button';
+    ownButton.className = 'story-add-item story-own-item';
+    ownButton.id = 'headerAddStoryBtn';
+    ownButton.setAttribute('aria-label', ownStories.length ? 'Открыть мои истории' : 'Добавить историю');
+
+    const ownCircle = document.createElement('span');
+    if (ownStories.length) {
+        ownCircle.className = 'story-contact-circle has-story';
+        if (profile.avatar) {
+            const image = document.createElement('img');
+            image.src = profile.avatar;
+            image.alt = '';
+            ownCircle.appendChild(image);
+        } else {
+            ownCircle.textContent = (ownName || '👤').replace(/^@/, '').charAt(0).toUpperCase();
+        }
+        const label = document.createElement('span');
+        label.className = 'story-name';
+        label.textContent = 'Моя история';
+        ownButton.append(ownCircle, label);
+        ownButton.onclick = openOwnStoryViewer;
+
+        const addButton = document.createElement('button');
+        addButton.type = 'button';
+        addButton.className = 'story-own-add';
+        addButton.textContent = '+';
+        addButton.setAttribute('aria-label', 'Добавить ещё историю');
+        addButton.title = 'Добавить ещё историю';
+        addButton.onclick = event => {
+            event.stopPropagation();
+            openOwnStoryManager();
+        };
+        ownWrap.append(ownButton, addButton);
+    } else {
+        ownCircle.className = 'story-add-circle';
+        ownCircle.innerHTML = '<span aria-hidden="true">+</span>';
+        const label = document.createElement('span');
+        label.textContent = 'Моя история';
+        ownButton.append(ownCircle, label);
+        ownButton.onclick = openOwnStoryManager;
+        ownWrap.appendChild(ownButton);
+    }
+    bar.appendChild(ownWrap);
+
+    const contacts = ensureArray(profile.contacts)
+        .filter(contact => contact?.uid && contact.uid !== uid);
+
+    const rows = await Promise.all(contacts.slice(0, 80).map(async contact => {
+        try {
+            const [stories, publicSnapshot] = await Promise.all([
+                fetchUserStories(contact.uid),
+                getDoc(doc(db, 'public_profiles', contact.uid)).catch(() => null)
+            ]);
+            if (!stories.length) return null;
+
+            // Saved contact data can contain an old avatar. Prefer the latest public profile.
+            const publicProfile = publicSnapshot?.exists() ? publicSnapshot.data() : null;
+            const currentContact = {
+                ...contact,
+                nickname: publicProfile?.nickname || contact.nickname,
+                globalId: publicProfile?.globalId || contact.globalId,
+                avatar: publicProfile
+                    ? (publicProfile.avatar || null)
+                    : (contact.avatar || null)
+            };
+            return { contact: currentContact, stories };
+        } catch (error) {
+            console.warn('[Stories] Cannot load contact stories:', contact.uid, error);
+            return null;
+        }
+    }));
+
+    rows.filter(Boolean).forEach(({ contact, stories }) => {
+        const ownerName = contact.nickname || contact.globalId || 'Контакт';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'story-add-item story-contact-item';
+        button.setAttribute('aria-label', 'Открыть истории: ' + ownerName);
+
+        const circle = document.createElement('span');
+        circle.className = 'story-contact-circle has-story';
+        if (contact.avatar) {
+            const image = document.createElement('img');
+            image.src = contact.avatar;
+            image.alt = '';
+            circle.appendChild(image);
+        } else {
+            circle.textContent = ownerName.replace(/^@/, '').charAt(0).toUpperCase();
+        }
+
+        const label = document.createElement('span');
+        label.className = 'story-name';
+        label.textContent = ownerName;
+
+        button.append(circle, label);
+        button.onclick = () => {
+            uiState.currentStories = stories.map(item => ({
+                ...item, ownerUid: contact.uid, ownerName
+            }));
+            uiState.storyViewerIndex = 0;
+            renderStoryViewer();
+        };
+        bar.appendChild(button);
     });
 }
 export async function loadContacts() {
