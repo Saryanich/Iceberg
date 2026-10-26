@@ -202,30 +202,15 @@
     </div>
 
     <!-- ================================================================
-         МОДАЛКА: АВТОУДАЛЕНИЕ
-    ================================================================= -->
-    <div id="autoDeleteModal" class="modal-overlay">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Автоудаление сообщений</h3>
-                <button class="close-modal" aria-label="Закрыть">&times;</button>
-            </div>
-            <div class="settings-row"><span class="settings-row-label">Выключено</span><span id="ad-0" class="settings-check"></span></div>
-            <div class="settings-row"><span class="settings-row-label">24 часа</span><span id="ad-24" class="settings-check"></span></div>
-            <div class="settings-row"><span class="settings-row-label">7 дней</span><span id="ad-168" class="settings-check"></span></div>
-            <div class="settings-row"><span class="settings-row-label">30 дней</span><span id="ad-720" class="settings-check"></span></div>
-        </div>
-    </div>
-
-    <!-- ================================================================
          МОДАЛКА: НАСТРОЙКИ
     ================================================================= -->
     <div id="settingsModal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Настройки</h3>
+                <h3 id="settingsModalTitle">Настройки</h3>
                 <button class="close-modal" aria-label="Закрыть">&times;</button>
             </div>
+            <div id="settingsMainContent">
             <div class="settings-section">
                 <div class="settings-title">🎨 Тема оформления</div>
                 <div class="theme-grid">
@@ -263,6 +248,16 @@
             </div>
             <button class="btn btn-danger fullwidth-btn" id="settingsLogoutBtn" type="button">Выйти из аккаунта</button>
             <button class="btn btn-secondary close-settings-btn">Закрыть</button>
+            </div>
+            <div id="autoDeletePane" class="settings-section" hidden>
+                <div class="settings-title">⏱ Автоудаление сообщений</div>
+                <p class="settings-row-label" style="font-size:13px;line-height:1.45;margin:0 0 10px;">Выберите, через какое время сообщения будут скрываться из вашей истории на этом устройстве.</p>
+                <div class="settings-row"><span class="settings-row-label">Выключено</span><span id="ad-0" class="settings-check"></span></div>
+                <div class="settings-row"><span class="settings-row-label">24 часа</span><span id="ad-24" class="settings-check"></span></div>
+                <div class="settings-row"><span class="settings-row-label">7 дней</span><span id="ad-168" class="settings-check"></span></div>
+                <div class="settings-row"><span class="settings-row-label">30 дней</span><span id="ad-720" class="settings-check"></span></div>
+                <button class="btn btn-secondary fullwidth-btn" id="backFromAutoDeleteBtn" type="button">← Назад к настройкам</button>
+            </div>
         </div>
     </div>
 
