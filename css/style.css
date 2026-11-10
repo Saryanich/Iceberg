@@ -4000,3 +4000,73 @@ body {
         }
     }
 }
+
+
+/* Низкая нагрузка: отключаем дорогостоящие эффекты на мобильных и слабых устройствах. */
+html.iceberg-lite #particles-js { display: none !important; }
+html.iceberg-lite *,
+html.iceberg-lite *::before,
+html.iceberg-lite *::after {
+    scroll-behavior: auto !important;
+}
+html.iceberg-lite .modal-overlay,
+html.iceberg-lite .auth-card,
+html.iceberg-lite .modal-content,
+html.iceberg-lite .toast,
+html.iceberg-lite .bottom-navigation,
+html.iceberg-lite .plus-menu,
+html.iceberg-lite .sticker-picker {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+html.iceberg-lite .loading-logo-wrap,
+html.iceberg-lite .loading-logo-wrap::before,
+html.iceberg-lite .loading-ring,
+html.iceberg-lite #loadingScreen::before,
+html.iceberg-lite #loadingScreen::after {
+    animation: none !important;
+}
+html.iceberg-lite .message-bubble,
+html.iceberg-lite .chat-item,
+html.iceberg-lite .tab,
+html.iceberg-lite .btn {
+    transition-duration: .12s !important;
+}
+html.iceberg-lite .message-bubble {
+    box-shadow: none !important;
+}
+html.iceberg-lite .bottom-navigation {
+    background: var(--bg-secondary) !important;
+}
+
+/* Полноэкранный iPhone: нижняя навигация и поле ввода доходят до физического края. */
+@supports (-webkit-touch-callout: none) {
+    @media (max-width: 768px) and (orientation: portrait) {
+        body, .app-container, #messengerApp, #sidebar,
+        #chatScreen.chat-screen {
+            padding-bottom: 0 !important;
+            margin-bottom: 0 !important;
+        }
+        .tabs-container.bottom-navigation {
+            bottom: 0 !important;
+            padding-bottom: 0 !important;
+            min-height: 50px !important;
+        }
+        #sidebar .tab-content {
+            padding-bottom: 58px !important;
+        }
+        #chatScreen.chat-screen {
+            padding-bottom: 0 !important;
+        }
+        .chat-input-area {
+            padding-bottom: 0 !important;
+            margin-bottom: 0 !important;
+        }
+        .chat-input-bar {
+            margin-bottom: 0 !important;
+        }
+    }
+}
+
+/* Диагностическая кнопка и её панель удалены из интерфейса. */
+#icebergDiagnosticsButton, #icebergDiagnosticsPanel { display: none !important; }
