@@ -986,11 +986,8 @@ function bindUIEvents() {
 
     document.querySelector('.back-btn').onclick = closeChat;
     document.getElementById('sedaModeBtn').onclick = startSedaChat;
-    document.getElementById('sedaKeyBtn').onclick = showCurrentSedaKey;
     document.getElementById('clearChatBtn').onclick = clearCurrentChat;
     document.getElementById('deleteChatBtn').onclick = deleteCurrentChat;
-    document.getElementById('groupInfoBtn').onclick = showGroupInfo;
-    document.getElementById('channelManageBtn').onclick = showChannelSettings;
 
     document.getElementById('chatSend').onclick = sendMessage;
     document.getElementById('messageInput').addEventListener('keydown', (e) => {
