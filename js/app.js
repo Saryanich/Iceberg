@@ -80,32 +80,13 @@ import {
 } from './push.js';
 
 function initParticles() {
-    if (typeof particlesJS === 'undefined') return;
-    particlesJS('particles-js', {
-        particles: {
-            number: { value: 60, density: { enable: true, value_area: 800 } },
-            color: { value: '#64B5F6' },
-            opacity: { value: 0.4, random: true },
-            size: { value: 3, random: true },
-            line_linked: {
-                enable: true, color: '#64B5F6', opacity: 0.3, distance: 150
-            },
-            move: {
-                enable: true, speed: 1.2, direction: 'none', random: true, out_mode: 'out'
-            }
-        },
-        interactivity: {
-            detect_on: 'canvas',
-            events: {
-                onhover: { enable: true, mode: 'grab' },
-                onclick: { enable: true, mode: 'push' }
-            },
-            modes: {
-                grab: { distance: 140, line_linked: { opacity: 0.5 } },
-                push: { particles_nb: 3 }
-            }
-        }
-    });
+    // Движущийся canvas-фон отключён: на мобильных устройствах он постоянно
+    // расходовал CPU/GPU даже когда пользователь не взаимодействовал с ним.
+    const isMobile = window.matchMedia?.('(max-width: 768px)').matches;
+    const lowMemory = Number(navigator.deviceMemory || 0) > 0 && navigator.deviceMemory <= 4;
+    const lowCpu = Number(navigator.hardwareConcurrency || 0) > 0 && navigator.hardwareConcurrency <= 4;
+    const saveData = navigator.connection?.saveData === true;
+    if (isMobile || lowMemory || lowCpu || saveData || typeof particlesJS === 'undefined') return;
 }
 
 let loadingStartedAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -130,7 +111,7 @@ function hideLoading() {
     // Keep the cinematic intro on screen for at least 3 seconds, even on instant restore.
     const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     const elapsed = now - loadingStartedAt;
-    const remaining = Math.max(0, 5000 - elapsed);
+    const remaining = Math.max(0, 1100 - elapsed);
     loadingHideTimer = setTimeout(() => {
         screen.classList.add('loading-exit');
         // Let the exit animation finish before removing the overlay.
@@ -2031,6 +2012,12 @@ async function waitForFirebaseAuthAndRoute() {
 }
 
 async function init() {
+    const isMobile = window.matchMedia?.('(max-width: 768px)').matches;
+    const lowMemory = Number(navigator.deviceMemory || 0) > 0 && navigator.deviceMemory <= 4;
+    const lowCpu = Number(navigator.hardwareConcurrency || 0) > 0 && navigator.hardwareConcurrency <= 4;
+    if (isMobile || lowMemory || lowCpu || navigator.connection?.saveData) {
+        document.documentElement.classList.add('iceberg-lite');
+    }
     loadTheme();
     initParticles();
 
