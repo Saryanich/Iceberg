@@ -160,15 +160,22 @@ function removeOperationIndicator(indicator) {
 async function renderMessagesSequentially(area, messages, loadVersion, chatId) {
     const renderVersion = ++messageRenderSequence;
     const operationRows = Array.from(area.querySelectorAll('.chat-operation-indicator'));
-    area.innerHTML = '';
-    for (const row of operationRows) area.appendChild(row);
-    for (let i = 0; i < messages.length; i++) {
+    area.replaceChildren(...operationRows);
+    const batchSize = 8;
+    for (let i = 0; i < messages.length; i += batchSize) {
         if (loadVersion !== messageLoadVersion ||
             renderVersion !== messageRenderSequence ||
             uiState.currentChatId !== chatId) return false;
-        area.appendChild(await renderMessage(messages[i]));
-        if (i > 0 && i % 8 === 0) {
-            await new Promise(resolve => requestAnimationFrame(() => resolve()));
+        const batch = messages.slice(i, i + batchSize);
+        const nodes = await Promise.all(batch.map(message => renderMessage(message)));
+        if (loadVersion !== messageLoadVersion ||
+            renderVersion !== messageRenderSequence ||
+            uiState.currentChatId !== chatId) return false;
+        const fragment = document.createDocumentFragment();
+        for (const node of nodes) if (node) fragment.appendChild(node);
+        area.appendChild(fragment);
+        if (i + batchSize < messages.length) {
+            await new Promise(resolve => requestAnimationFrame(resolve));
         }
     }
     if (loadVersion === messageLoadVersion && renderVersion === messageRenderSequence &&
