@@ -1582,8 +1582,6 @@ export async function selectChat(chat) {
     document.getElementById('chatInputArea').style.display = 'flex';
     document.getElementById('clearChatBtn').style.display = 'inline-block';
     document.getElementById('deleteChatBtn').style.display = 'inline-block';
-    document.getElementById('groupInfoBtn').style.display = 'none';
-    document.getElementById('channelManageBtn').style.display = 'none';
 
     updateSedaUI();
     moveToChatOnMobile();
@@ -1649,8 +1647,6 @@ export async function selectGroup(group) {
         showToast('Не удалось подготовить историю группы. Проверьте права Firestore.', 'error', 4000);
     }
     document.getElementById('chatInputArea').style.display = 'flex';
-    document.getElementById('groupInfoBtn').style.display = 'inline-block';
-    document.getElementById('channelManageBtn').style.display = 'none';
     document.getElementById('clearChatBtn').style.display = 'inline-block';
     document.getElementById('deleteChatBtn').style.display = 'none';
 
@@ -1704,8 +1700,6 @@ export async function selectChannel(channel) {
     }
 
     renderChatHeader();
-    document.getElementById('groupInfoBtn').style.display = 'none';
-    document.getElementById('channelManageBtn').style.display = channel.isAdmin ? 'inline-block' : 'none';
     document.getElementById('clearChatBtn').style.display = channel.isAdmin ? 'inline-block' : 'none';
     document.getElementById('deleteChatBtn').style.display = 'none';
 
@@ -1792,7 +1786,7 @@ export function closeChat() {
     uiState.sedaEnabledForCurrentChat = false;
     uiState.currentSedaKey = null;
     uiState.replyTo = null;
-    ['groupInfoBtn', 'clearChatBtn', 'deleteChatBtn', 'sedaModeBtn', 'sedaKeyBtn', 'channelManageBtn'].forEach(id => {
+    ['clearChatBtn', 'deleteChatBtn', 'sedaModeBtn'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
