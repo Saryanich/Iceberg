@@ -723,22 +723,19 @@ function bindUIEvents() {
             }
             if (!dataUrl || dataUrl.length > 220000) throw new Error('Фото не удалось сжать до безопасного размера');
 
-            const { doc, updateDoc, getDocFromServer } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+            const { doc, setDoc, getDocFromServer } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
             const { db, auth } = await import('./config.js');
             const activeUser = authState.user || auth.currentUser;
             const uid = activeUser?.uid;
             if (!uid) throw new Error('Сессия завершена. Войдите в Айсберг повторно.');
             authState.user = activeUser;
-            if (!authState.userData) {
-                const existingProfile = await getDoc(doc(db, 'users', uid));
-                if (existingProfile.exists()) authState.userData = existingProfile.data();
-            }
 
-            await updateDoc(doc(db, 'users', uid), { avatar: dataUrl });
+            const userRef = doc(db, 'users', uid);
+            // Merge keeps chats, contacts, device tokens and all unrelated account data intact.
+            await setDoc(userRef, { avatar: dataUrl }, { merge: true });
 
-            // Read the saved value back from the server so the visible avatar and
-            // offline profile cache cannot continue displaying an older local value.
-            const confirmedProfile = await getDocFromServer(doc(db, 'users', uid));
+            // Confirm the server-side write before updating the local profile.
+            const confirmedProfile = await getDocFromServer(userRef);
             if (!confirmedProfile.exists() || confirmedProfile.data().avatar !== dataUrl) {
                 throw new Error('Firebase не подтвердил сохранение новой фотографии.');
             }
@@ -786,49 +783,68 @@ function bindUIEvents() {
         }
     });
 
-    document.querySelector('#profileModal .btn-primary').onclick = async () => {
+    document.querySelector('#profileModal .btn-primary').onclick = async (event) => {
+        const saveButton = event.currentTarget;
+        if (saveButton.dataset.saving === 'true') return;
         const fn = document.getElementById('profileFirstName').value.trim();
         const ln = document.getElementById('profileLastName').value.trim();
         const mood = document.getElementById('profileMood').value.trim();
         const nickInput = document.getElementById('profileNickname').value.trim();
-        const nick = nickInput ? '@' + nickInput.replace(/^@+/, '').trim() : (authState.userData.globalId ? '@' + authState.userData.globalId : '@user');
+        const activeUser = authState.user || (await import('./config.js')).auth.currentUser;
+        const uid = activeUser?.uid;
+        if (!uid) {
+            showToast('Сессия Firebase завершена. Войдите в Айсберг повторно.', 'error', 6000);
+            return;
+        }
+        const nick = nickInput ? '@' + nickInput.replace(/^@+/, '').trim() : (authState.userData?.globalId ? '@' + authState.userData.globalId : '@user');
+        saveButton.dataset.saving = 'true';
+        saveButton.disabled = true;
+        const originalLabel = saveButton.textContent;
+        saveButton.textContent = 'Сохранение…';
         try {
-            const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+            const { doc, setDoc, getDocFromServer } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
             const { db } = await import('./config.js');
-            await updateDoc(doc(db, 'users', authState.user.uid), {
-                firstName: fn, lastName: ln, mood, nickname: nick,
-                avatar: authState.userData.avatar || null
-            });
-            authState.userData.firstName = fn;
-            authState.userData.lastName = ln;
-            authState.userData.mood = mood;
-            authState.userData.nickname = nick;
+            authState.user = activeUser;
+            const userRef = doc(db, 'users', uid);
+            const profilePatch = { firstName: fn, lastName: ln, mood, nickname: nick };
+
+            // Merge only editable profile fields. Never overwrite avatar or messenger data
+            // with an old in-memory copy of the user document.
+            await setDoc(userRef, profilePatch, { merge: true });
+            const confirmedProfile = await getDocFromServer(userRef);
+            if (!confirmedProfile.exists()) throw new Error('Firebase не вернул сохранённый профиль.');
+            const saved = confirmedProfile.data() || {};
+            for (const [key, value] of Object.entries(profilePatch)) {
+                if ((saved[key] ?? '') !== value) throw new Error('Firebase не подтвердил поле профиля: ' + key);
+            }
+
+            authState.userData = { ...(authState.userData || {}), ...saved };
             renderUserProfile();
             try {
-                await DB.setCachedProfile(authState.user.uid, authState.userData);
+                await DB.setCachedProfile(uid, authState.userData);
             } catch (cacheError) {
                 console.warn('[Profile] Profile saved remotely; local cache unavailable:', cacheError);
             }
             try {
-                await syncPublicProfile();
+                await syncPublicProfile(activeUser, authState.userData);
             } catch (publicError) {
                 console.warn('[Profile] Public profile sync failed:', publicError);
-                showToast('Профиль сохранён, но обновление для контактов не удалось.', 'warning', 4500);
+                showToast('Основной профиль сохранён. Не удалось обновить публичную карточку контактов: ' + (publicError?.code || publicError?.message || 'ошибка Firebase'), 'warning', 6000);
             }
             await renderStoriesBar().catch(error => console.warn('[Stories] Не удалось обновить полосу после сохранения профиля:', error));
             showToast('✅ Профиль сохранён', 'success');
-            setTimeout(() => {
-                document.getElementById('profileModal').classList.remove('active');
-            }, 600);
+            setTimeout(() => document.getElementById('profileModal')?.classList.remove('active'), 600);
         } catch (e) {
             console.error('[Profile] Save failed:', e?.code || e, e);
-            showToast(
-                e?.code === 'permission-denied'
-                    ? 'Firebase отклонил сохранение профиля. Правила не менялись.'
-                    : 'Не удалось сохранить профиль: ' + (e?.message || 'проверьте соединение'),
-                'error',
-                6000
-            );
+            const code = e?.code || 'unknown';
+            const details = e?.code === 'permission-denied'
+                ? 'Firebase Rules запрещают запись в users/' + uid + '. Нужны правила для изменения собственного документа.'
+                : (e?.message || 'Проверьте подключение к Firebase.');
+            showToast('Не удалось сохранить профиль [' + code + ']: ' + details, 'error', 7500);
+        } finally {
+            saveButton.dataset.saving = 'false';
+            saveButton.disabled = false;
+            saveButton.textContent = originalLabel;
         }
     };
 
