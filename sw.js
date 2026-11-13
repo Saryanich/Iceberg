@@ -74,7 +74,9 @@ self.addEventListener('activate', (event) => {
             .then((cacheNames) => {
                 return Promise.all(
                     cacheNames
-                        .filter(name => name !== CACHE_NAME && name !== RUNTIME_CACHE)
+                        // CacheStorage is shared by the whole origin; only remove
+                        // obsolete caches owned by Iceberg, never another app's caches.
+                        .filter(name => name.startsWith('iceberg-') && name !== CACHE_NAME && name !== RUNTIME_CACHE)
                         .map(name => {
                             console.log('[SW] Удаляю старый кэш:', name);
                             return caches.delete(name);
