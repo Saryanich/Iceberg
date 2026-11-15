@@ -1,6 +1,6 @@
 
 const DB_NAME = 'iceberg_cache';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
  
 const STORES = {
     profile:    'profile',      // { uid, data, updatedAt }
@@ -10,7 +10,7 @@ const STORES = {
     channels:   'channels',     // { uid, list, updatedAt }
     messages:   'messages',     // { chatId, list, updatedAt }
     ecdhKeys:   'ecdhKeys',     // { chatId, publicKey, privateKey, createdAt }
-    sedaKeys:   'sedaKeys',     // { chatId, key, encrypted }
+    chatKeys:   'chatKeys',     // { chatId, key, shared }
     settings:   'settings'      // { uid, theme, autoDeleteHours, ... }
 };
 
@@ -34,9 +34,11 @@ function openDB() {
         };
         req.onupgradeneeded = (e) => {
             const db = e.target.result;
+            if (db.objectStoreNames.contains('sedaKeys')) db.deleteObjectStore('sedaKeys');
+            if (db.objectStoreNames.contains('ecdhKeys')) db.deleteObjectStore('ecdhKeys');
             for (const name of Object.values(STORES)) {
                 if (!db.objectStoreNames.contains(name)) {
-                    db.createObjectStore(name, { keyPath: name === 'messages' ? 'chatId' : (name === 'profile' || name === 'settings' ? 'uid' : name === 'ecdhKeys' || name === 'sedaKeys' ? 'chatId' : 'uid') });
+                    db.createObjectStore(name, { keyPath: name === 'messages' ? 'chatId' : (name === 'profile' || name === 'settings' ? 'uid' : name === 'ecdhKeys' || name === 'chatKeys' ? 'chatId' : 'uid') });
                 }
             }
         };
@@ -199,34 +201,34 @@ export async function deleteECDHKeys(chatId) {
 // ===================================================================
 // SEDA КЛЮЧИ
 // ===================================================================
-export async function saveSedaKey(chatId, key, encrypted = false, shared = false) {
-    return await cachePut(STORES.sedaKeys, {
+export async function saveChatKey(chatId, key, encrypted = false, shared = false) {
+    return await cachePut(STORES.chatKeys, {
         chatId, key, encrypted, shared: !!shared,
         savedAt: Date.now()
     });
 }
 
-export async function getSedaKey(chatId) {
-    const entry = await cacheGet(STORES.sedaKeys, chatId);
+export async function getChatKey(chatId) {
+    const entry = await cacheGet(STORES.chatKeys, chatId);
     return entry ? entry.key : null;
 }
 
 // A key is not considered ready for chat encryption until the peer confirms that
 // the same key was derived/decrypted and persisted on the other device.
-export async function isSedaKeyShared(chatId) {
-    const entry = await cacheGet(STORES.sedaKeys, chatId);
+export async function isChatKeyShared(chatId) {
+    const entry = await cacheGet(STORES.chatKeys, chatId);
     return entry?.shared === true;
 }
 
-export async function markSedaKeyShared(chatId) {
-    const entry = await cacheGet(STORES.sedaKeys, chatId);
+export async function markChatKeyShared(chatId) {
+    const entry = await cacheGet(STORES.chatKeys, chatId);
     if (!entry?.key) return false;
-    await cachePut(STORES.sedaKeys, { ...entry, shared: true, sharedAt: Date.now() });
+    await cachePut(STORES.chatKeys, { ...entry, shared: true, sharedAt: Date.now() });
     return true;
 }
 
-export async function deleteSedaKey(chatId) {
-    return await cacheDelete(STORES.sedaKeys, chatId);
+export async function deleteChatKey(chatId) {
+    return await cacheDelete(STORES.chatKeys, chatId);
 }
 
 // ===================================================================
