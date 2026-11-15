@@ -1,104 +1,12 @@
-// SEDA Ultra v1 — isolated crypto module.
-// Legacy envelope and key derivation are intentionally preserved for compatibility.
-
-const ULTRA_PREFIX = 'SEDAULTRA1:';
-const ULTRA_LAYERS = 5;
-
-function ultraToBase64(value) {
-    const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
-    let binary = '';
-    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-    }
-    return btoa(binary);
-}
-
-function ultraFromBase64(value) {
-    const binary = atob(value);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return bytes.buffer;
-}
-
-async function deriveUltraKeys(keyStr) {
-    if (typeof keyStr !== 'string' || !keyStr.startsWith('SEDAKEY:')) {
-        throw new Error('Некорректный ключ SEDA');
-    }
-    const raw = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(keyStr));
-    const material = await crypto.subtle.importKey('raw', raw, 'HKDF', false, ['deriveKey']);
-    const salt = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('Iceberg SEDA Ultra v1'));
-    const keys = [];
-    for (let i = 0; i < ULTRA_LAYERS; i++) {
-        keys.push(await crypto.subtle.deriveKey({
-            name: 'HKDF', hash: 'SHA-256', salt,
-            info: new TextEncoder().encode('Iceberg SEDA Ultra v1 / AES-256-GCM / layer ' + i)
-        }, material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']));
-    }
-    return keys;
-}
-
-async function ultraSealBytes(bytes, key) {
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, tagLength: 128 }, key, bytes);
-    return { iv: ultraToBase64(iv), cipher: new Uint8Array(cipher) };
-}
-
-async function ultraOpenBytes(cipher, ivBase64, key) {
-    const iv = new Uint8Array(ultraFromBase64(ivBase64));
-    if (iv.length !== 12) throw new Error('Некорректный AES-GCM IV');
-    return new Uint8Array(await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv, tagLength: 128 }, key, cipher
-    ));
-}
-
-export async function sedaUltraEncryptWithKey(text, keyStr) {
-    const keys = await deriveUltraKeys(keyStr);
-    let payload = new TextEncoder().encode(String(text));
-    const ivs = [];
-    for (const key of keys) {
-        const sealed = await ultraSealBytes(payload, key);
-        ivs.push(sealed.iv);
-        payload = sealed.cipher;
-    }
-    return ULTRA_PREFIX + JSON.stringify({ v: 1, ivs, c: ultraToBase64(payload) });
-}
-
-export async function sedaUltraDecrypt(payload, keyStr) {
-    try {
-        if (typeof payload !== 'string' || !payload.startsWith(ULTRA_PREFIX)) return null;
-        const envelope = JSON.parse(payload.slice(ULTRA_PREFIX.length));
-        if (envelope?.v !== 1 || !Array.isArray(envelope.ivs) ||
-            envelope.ivs.length !== ULTRA_LAYERS || typeof envelope.c !== 'string') return null;
-        const keys = await deriveUltraKeys(keyStr);
-        let bytes = new Uint8Array(ultraFromBase64(envelope.c));
-        for (let i = keys.length - 1; i >= 0; i--) {
-            bytes = await ultraOpenBytes(bytes, envelope.ivs[i], keys[i]);
-        }
-        return new TextDecoder().decode(bytes);
-    } catch (e) {
-        console.error('[SEDA Ultra] decrypt error:', e);
-        return null;
-    }
-}
-
-export function isSedaUltraPayload(payload) {
-    return typeof payload === 'string' && payload.startsWith(ULTRA_PREFIX);
-}
- 
-
-export function isSedaChatKey(value) {
-    return typeof value === 'string' && value.startsWith('SEDAKEY:');
-}
-
-// A comparison code for users to verify out-of-band. It is not an authenticated
-// Signal safety number: the legacy handshake still lacks signed device identities.
-export async function createSedaMessageKeyCheck(keyStr, uidA, uidB) {
-    if (typeof keyStr !== 'string' || !keyStr.startsWith('SEDAKEY:')) {
-        throw new Error('Некорректный ключ SEDA');
-    }
-    const participants = [String(uidA || ''), String(uidB || '')].sort().join('|');
-    const input = new TextEncoder().encode('Iceberg SEDA safety number v1|' + participants + '|' + keyStr);
-    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', input));
-    return Array.from(digest.subarray(0, 30), byte => String(byte % 10))
-        .join('').match(/.{1,5}/g).join(' ');
-}
+// SEDA Ultra v1 — five-layer AES-256-GCM for text and binary data.
+const PREFIX='SEDAULTRA1:',LAYERS=5;
+function b64(v){const a=v instanceof Uint8Array?v:new Uint8Array(v);let s='';for(let i=0;i<a.length;i+=32768)s+=String.fromCharCode(...a.subarray(i,i+32768));return btoa(s);}
+function un64(s){const b=atob(s),a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a;}
+async function derive(k){if(typeof k!=='string'||!k.startsWith('SEDAKEY:'))throw Error('Некорректный ключ SEDA');const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(k)),m=await crypto.subtle.importKey('raw',h,'HKDF',false,['deriveKey']),salt=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('Iceberg SEDA Ultra v1')),out=[];for(let i=0;i<LAYERS;i++)out.push(await crypto.subtle.deriveKey({name:'HKDF',hash:'SHA-256',salt,info:new TextEncoder().encode('Iceberg SEDA Ultra v1 / AES-256-GCM / layer '+i)},m,{name:'AES-GCM',length:256},false,['encrypt','decrypt']));return out;}
+export async function sedaUltraEncryptBytes(input,key){const ks=await derive(key);let bytes=input instanceof Uint8Array?input:new Uint8Array(input);const ivs=[];for(const k of ks){const iv=crypto.getRandomValues(new Uint8Array(12));bytes=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv,tagLength:128},k,bytes));ivs.push(b64(iv));}return{v:1,ivs,ciphertext:bytes};}
+export async function sedaUltraDecryptBytes(input,ivs,key){if(!Array.isArray(ivs)||ivs.length!==LAYERS)throw Error('Некорректные параметры SEDA');const ks=await derive(key);let bytes=input instanceof Uint8Array?input:new Uint8Array(input);for(let i=ks.length-1;i>=0;i--){const iv=un64(ivs[i]);if(iv.length!==12)throw Error('Некорректный IV');bytes=new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv,tagLength:128},ks[i],bytes));}return bytes;}
+export async function sedaUltraEncryptWithKey(text,key){const e=await sedaUltraEncryptBytes(new TextEncoder().encode(String(text)),key);return PREFIX+JSON.stringify({v:1,ivs:e.ivs,c:b64(e.ciphertext)});}
+export async function sedaUltraDecrypt(payload,key){try{if(typeof payload!=='string'||!payload.startsWith(PREFIX))return null;const e=JSON.parse(payload.slice(PREFIX.length));if(e?.v!==1||typeof e.c!=='string')return null;return new TextDecoder().decode(await sedaUltraDecryptBytes(un64(e.c),e.ivs,key));}catch(e){console.error('[SEDA Ultra]',e);return null;}}
+export function isSedaUltraPayload(v){return typeof v==='string'&&v.startsWith(PREFIX);}
+export function isSedaChatKey(v){return typeof v==='string'&&v.startsWith('SEDAKEY:');}
+export async function createSedaMessageKeyCheck(key,a,b){if(!isSedaChatKey(key))throw Error('Некорректный ключ SEDA');const p=[String(a||''),String(b||'')].sort().join('|'),h=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode('Iceberg SEDA safety number v1|'+p+'|'+key)));return Array.from(h.subarray(0,30),x=>String(x%10)).join('').match(/.{1,5}/g).join(' ');}
