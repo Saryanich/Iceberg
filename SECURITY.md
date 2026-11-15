@@ -1,23 +1,10 @@
-# Security policy
+# Security notes
 
-## Reporting vulnerabilities
-Please do not publish exploit details, authentication tokens, private keys, personal data, or message contents in public issues. Report vulnerabilities privately to the repository maintainer with the affected component, reproduction steps, impact, and a safe proof of concept.
-
-## Public source code
-Iceberg is a browser application and its client-side source is public by design. Minification or obfuscation cannot make browser code secret. Firebase Web API keys and VAPID public keys are client configuration, not server credentials. Never commit Firebase Admin SDK service-account JSON, private signing keys, passwords, refresh tokens, private user data, or production exports.
-
-## Cryptography status
-- SEDA Ultra v1 has been moved into `js/seda-ultra.js`; its existing payload prefix and key derivation are preserved for compatibility.
-- SEDA Ultra v1 currently applies five sequential AES-256-GCM layers. Layer count is not a substitute for a reviewed end-to-end protocol.
-- The current ECDH P-256 handshake is not Signal Protocol. It does not yet authenticate peer identity using signed prekeys, and it does not implement Double Ratchet, post-compromise security, or PQXDH.
-- Any safety/comparison number must be compared through an independent trusted channel. It does not authenticate the existing handshake by itself.
-- C2A is a reversible file container/checksum format, not encryption. SEDA encryption must protect its contents independently.
-- Legacy `ICEBERGBASE1:` and `SEDAULTRA1:` messages must remain decryptable during migration.
-
-Do not claim WhatsApp/Signal-equivalent security until a reviewed Signal Protocol implementation and device identity verification have been integrated and tested.
-
-## Firebase deployment
-Client code cannot replace Firestore or Firebase Storage Security Rules. Rules must restrict reads and writes to authenticated thread participants, validate message ownership and schema, and deny public access. Enable Firebase App Check and monitor abuse/quotas. Storage rules must be deployed separately before any encrypted-attachment upload feature is enabled.
-
-## Repository settings
-Enable secret scanning, push protection, Dependabot alerts, and private vulnerability reporting in GitHub repository settings. GitHub Actions workflows in this repository do not automatically enable account-level security settings or branch protection.
+- Every direct conversation uses SEDA Ultra. There is no Basic/Pro mode or activation gate.
+- New direct conversations use the `sedaultra_` thread namespace and one shared chat key established through an ECDH P-256 handshake.
+- Direct-message text uses five AES-256-GCM layers.
+- Direct-chat attachments use random per-file keys, encrypted metadata, five AES-256-GCM layers and 1 MiB chunks. Ciphertext is uploaded to Firebase Storage; the file key is wrapped by the chat key.
+- This project-specific ECDH exchange is **not Signal Protocol**: there is no Double Ratchet, X3DH/PQXDH, signed prekey rotation or authenticated device identity verification. Do not describe it as Signal/WhatsApp-grade.
+- Firestore and Firebase Storage security rules are essential. Client-side encryption does not replace server-side authorization.
+- The JavaScript client is public by design. Firebase web API keys and VAPID public keys are client configuration, not server secrets.
+- Never commit service-account JSON, private signing keys, passwords, refresh tokens or personal data.
