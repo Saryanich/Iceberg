@@ -6,12 +6,14 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import {
     generateSedaKey, serializeKey, sedaUltraEncryptWithKey, sedaUltraDecrypt, isSedaUltraPayload,
-    icebergBaseEncrypt, icebergBaseDecrypt, isIcebergBasePayload, generateIcebergBaseKey,
     generateECDHKeyPair, exportPublicKey, importPublicKey,
     exportPrivateKey, deriveSharedKey, aesEncrypt, aesDecrypt
 } from './crypto.js';
 
 import * as DB from './db.js';
+import { storage } from './config.js';
+import { ref as storageRef, uploadBytes, getBytes } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js';
+import { encryptSedaAttachment, decryptSedaAttachment } from './seda-attachments.js';
 import { authState } from './auth.js';
 
 // Keep text messages comfortably below Firestore's document-size ceiling.
@@ -29,8 +31,8 @@ export const uiState = {
     editingMessage: null,
     currentTheme: 'dark',
     autoDeleteHours: 0,
-    sedaEnabledForCurrentChat: false,
-    currentSedaKey: null,
+    sedaSessionReady: false,
+    currentChatKey: null,
     typingTimeout: null,
     isSending: false,
     messageTimes: [],
@@ -82,8 +84,7 @@ function queueDirectChatSync(context, previewText) {
         currentChat: {
             uid: chat.uid, nickname: chat.nickname || 'Пользователь',
             globalId: chat.globalId || '', avatar: chat.avatar || null,
-            mood: chat.mood || null, isSeda: !!chat.isSeda,
-            sedaChatId: chat.sedaChatId || null
+            mood: chat.mood || null
         }
     };
     const items = readPendingChatSyncs();
@@ -321,9 +322,7 @@ export async function loadChats(forceRefresh = false) {
     const rawChats = authState.userData?.chats;
     const profileChats = ensureArray(rawChats);
     const cachedChats = ensureArray(await DB.Lists.getChats(uid).catch(() => []));
-    const identity = chat => chat?.isSeda && chat.sedaChatId
-        ? 'seda:' + chat.sedaChatId
-        : (chat?.isGroup ? 'group:' + (chat.id || chat.uid || '') : 'direct:' + (chat?.uid || ''));
+    const identity = chat => (chat?.isGroup ? 'group:' + (chat.id || chat.uid || '') : 'direct:' + (chat?.uid || ''));
     const merged = new Map();
     for (const chat of [...cachedChats, ...profileChats]) {
         if (!chat || chat.isChannel || !identity(chat).split(':').pop()) continue;
@@ -355,7 +354,7 @@ export async function loadChats(forceRefresh = false) {
                 const participants = Array.isArray(data.participants) ? data.participants : [];
                 const peerUid = participants.find(participant => typeof participant === 'string' && participant !== uid);
                 if (!peerUid) continue;
-                let index = chats.findIndex(chat => chat.uid === peerUid && !chat.isGroup && !chat.isSeda);
+                let index = chats.findIndex(chat => chat.uid === peerUid && !chat.isGroup);
                 // Hiding a chat is local to this account and survives reloads.
                 // A newer message reopens it; old messages never undo the delete.
                 try {
@@ -389,7 +388,6 @@ export async function loadChats(forceRefresh = false) {
                         avatar: publicProfile.avatar || null,
                         mood: publicProfile.mood || '',
                         isGroup: false,
-                        isSeda: false,
                         unread: !!(data.lastMessageSenderId && data.lastMessageSenderId !== uid),
                         lastMessage: data.lastMessage || '',
                         lastMessageTime: data.lastMessageTime || data.updatedAt || data.createdAt || null
@@ -480,18 +478,11 @@ function renderChatItem(chat) {
         nameRow.appendChild(mb);
     }
 
-    if (chat.isSeda) {
-        const b = document.createElement('span');
-        b.style.cssText = 'background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:1px 6px;border-radius:8px;font-size:9px;';
-        b.textContent = '🔮 SEDA';
-        nameRow.appendChild(b);
-    }
-
     const sub = document.createElement('div');
     sub.className = 'item-subtitle';
     sub.textContent = chat.lastMessage
         ? chat.lastMessage.substring(0, 40)
-        : (chat.isSeda ? '🔒 Зашифрованный чат' : '🔒 Чат');
+        : '🔐 SEDA Ultra';
 
     info.appendChild(nameRow);
     info.appendChild(sub);
@@ -501,11 +492,11 @@ function renderChatItem(chat) {
     const btnClear = document.createElement('button');
     btnClear.className = 'action-btn warning';
     btnClear.textContent = '🗑';
-    btnClear.onclick = (e) => { e.stopPropagation(); clearChatById(chat.uid, chat.sedaChatId || ''); };
+    btnClear.onclick = (e) => { e.stopPropagation(); clearChatById(chat.uid, ); };
     const btnDel = document.createElement('button');
     btnDel.className = 'action-btn danger';
     btnDel.textContent = '❌';
-    btnDel.onclick = (e) => { e.stopPropagation(); deleteChatById(chat.uid, chat.sedaChatId || ''); };
+    btnDel.onclick = (e) => { e.stopPropagation(); deleteChatById(chat.uid, ); };
     actions.appendChild(btnClear);
     actions.appendChild(btnDel);
 
@@ -814,18 +805,7 @@ export async function showContactCard(contact) {
         modal.classList.remove('active');
         await openChatWithContact(profile);
     };
-    const sedaButton = document.createElement('button');
-    sedaButton.type = 'button';
-    sedaButton.className = 'btn btn-secondary';
-    sedaButton.textContent = '🔮 Создать SEDA-чат';
-    sedaButton.onclick = async () => {
-        modal.classList.remove('active');
-        await openChatWithContact(profile);
-        await startSedaChat();
-    };
-
-    body.append(top, avatar, name, gid, mood, hint, actions);
-    actions.append(chatButton, sedaButton);
+    actions.append(chatButton);
     modal.classList.add('active');
 }
 
@@ -1289,158 +1269,8 @@ export async function loadChannels() {
         list.appendChild(div);
     }
 }
-// Automatic E2E key agreement for ordinary direct chats; no subscription or confirmation.
-const baseHandshakeListeners = new Map();
-async function ensureIcebergBaseKey(chatId, peerUid) {
-    if (!authState.user?.uid || !chatId || !peerUid || uiState.currentChat?.isSeda) return null;
-    let cached = await DB.getSedaKey(chatId);
-    const handshakeId = 'base_' + chatId;
-    const ref = doc(db, 'seda_handshakes', handshakeId);
-    let existing = await getDoc(ref);
-    if (existing.exists()) {
-        const previous = existing.data();
-        const expired = Number(previous.expiresAt) > 0 && Number(previous.expiresAt) <= Date.now();
-        // Only the initiator replaces an expired unfinished handshake. This avoids
-        // both users deleting/recreating the deterministic document at the same time.
-        if (previous.mode === 'iceberg-base'
-            && previous.initiator === authState.user.uid
-            && expired
-            && previous.peerKeyStored !== true) {
-            await deleteDoc(ref);
-            await DB.deleteECDHKeys(handshakeId);
-            await DB.deleteSedaKey(chatId);
-            cached = null;
-            existing = await getDoc(ref);
-        }
-    }
-    let privJwk, baseKey, pendingHandshake = false;
-    if (cached?.startsWith('ICEBERGBASEKEY:')) {
-        if (!existing.exists()) {
-            if (await DB.isSedaKeyShared(chatId)) {
-                if (uiState.currentChatId === chatId) uiState.currentSedaKey = cached;
-                return cached;
-            }
-            // A legacy/local-only Base key was never confirmed by the peer.
-            // Discard it and negotiate a fresh shared key instead of silently using it.
-            await DB.deleteSedaKey(chatId);
-            await DB.deleteECDHKeys(handshakeId);
-            cached = null;
-            if (uiState.currentChatId === chatId) uiState.currentSedaKey = null;
-        } else {
-            const status = existing.data();
-            if (status.mode === 'iceberg-base' && status.peerKeyStored === true) {
-                if (status.initiator === authState.user.uid) {
-                    // The initiator generated this exact key and the peer confirmed storing it.
-                    await DB.markSedaKeyShared(chatId);
-                    await updateDoc(ref, { initiatorAck: true, initiatorAckAt: Date.now() }).catch(() => {});
-                    if (uiState.currentChatId === chatId) uiState.currentSedaKey = cached;
-                    return cached;
-                }
-                // As the responder, trust only a key that this device itself persisted
-                // after decrypting the handshake. If the marker is missing, recover below.
-                if (await DB.isSedaKeyShared(chatId)) {
-                    if (uiState.currentChatId === chatId) uiState.currentSedaKey = cached;
-                    return cached;
-                }
-                await DB.deleteSedaKey(chatId);
-                cached = null;
-                if (uiState.currentChatId === chatId) uiState.currentSedaKey = null;
-                return null;
-            }
-            if (status.mode !== 'iceberg-base' || status.initiator !== authState.user.uid || status.peer !== peerUid) {
-                // The other participant is initiating a fresh exchange. A stale local key must
-                // not remain usable while the responder listener installs the new one.
-                await DB.deleteSedaKey(chatId);
-                if (uiState.currentChatId === chatId) uiState.currentSedaKey = null;
-                return null;
-            }
-        }
-        // Resume the pending initiator handshake after reload.
-        const saved = await DB.getECDHKeys(handshakeId);
-        if (!saved) throw new Error('Нет локального ключа рукопожатия');
-        privJwk = saved.privateKey;
-        baseKey = cached;
-        pendingHandshake = true;
-    }
-    if (existing.exists()) {
-        const data = existing.data();
-        if (data.mode !== 'iceberg-base' || data.initiator !== authState.user.uid || data.peer !== peerUid) return null;
-        const saved = await DB.getECDHKeys(handshakeId);
-        if (!saved) throw new Error('Нет локального ключа рукопожатия');
-        privJwk = saved.privateKey;
-        baseKey = await DB.getSedaKey(chatId);
-        if (!baseKey?.startsWith('ICEBERGBASEKEY:')) return null;
-    } else {
-        const pair = await generateECDHKeyPair();
-        const pub = await exportPublicKey(pair);
-        privJwk = await exportPrivateKey(pair);
-        baseKey = generateIcebergBaseKey();
-
-        // Two users may open the same empty chat at the same time. Claim the
-        // deterministic handshake document transactionally so there is only one
-        // initiator and the two sides never overwrite each other's public keys.
-        const created = await runTransaction(db, async transaction => {
-            const current = await transaction.get(ref);
-            if (current.exists()) return false;
-            transaction.set(ref, {
-                mode: 'iceberg-base', chatId, initiator: authState.user.uid, peer: peerUid,
-                initiatorPublicKey: pub, peerPublicKey: null, encryptedBaseKey: null,
-                peerKeyStored: false, initiatorAck: false, createdAt: Date.now(),
-                expiresAt: Date.now() + 10 * 60 * 1000
-            });
-            return true;
-        });
-        if (!created) {
-            return null;
-        }
-        await DB.saveECDHKeys(handshakeId, pub, privJwk);
-        await DB.saveSedaKey(chatId, baseKey);
-        // The initiator's local key is not usable for sending until the peer
-        // confirms that the same key has been decrypted and saved.
-        pendingHandshake = true;
-    }
-    const listenerId = handshakeId + ':' + authState.user.uid;
-    if (!baseHandshakeListeners.has(listenerId)) {
-        const unsub = onSnapshot(ref, async snap => {
-            if (!snap.exists()) {
-                try { unsub(); } catch {}
-                baseHandshakeListeners.delete(listenerId);
-                return;
-            }
-            const data = snap.data();
-            if (data.mode !== 'iceberg-base') return;
-            try {
-                const privateKey = await crypto.subtle.importKey('jwk', privJwk,
-                    { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
-                if (data.peerKeyStored) {
-                    await DB.markSedaKeyShared(chatId);
-                    await updateDoc(ref, { initiatorAck: true, initiatorAckAt: Date.now() });
-                    if (uiState.currentChatId === chatId) {
-                        uiState.currentSedaKey = baseKey;
-                        await loadMessages();
-                    }
-                    try { unsub(); } catch {}
-                    baseHandshakeListeners.delete(listenerId);
-                    return;
-                }
-                if (!data.peerPublicKey || data.encryptedBaseKey) return;
-                const peerPublic = await importPublicKey(data.peerPublicKey);
-                const shared = await deriveSharedKey(privateKey, peerPublic, 'iceberg-base-handshake-v1');
-                await updateDoc(ref, { encryptedBaseKey: await aesEncrypt(baseKey, shared), baseKeySentAt: Date.now() });
-            } catch (err) {
-                console.error('[Iceberg Base initiator]', err);
-            }
-        }, err => {
-            console.error('[Iceberg Base listener]', { code: err?.code || 'unknown', message: err?.message || String(err) });
-            try { unsub(); } catch {}
-            baseHandshakeListeners.delete(listenerId);
-        });
-        baseHandshakeListeners.set(listenerId, unsub);
-    }
-    return pendingHandshake ? null : baseKey;
-}
-
-
+// Automatically negotiate one SEDA Ultra session for each direct conversation.
+async function ensureSedaKey(chatId,peerUid){const uid=authState.user?.uid;if(!uid||!chatId||!peerUid)return null;const cached=await DB.getChatKey(chatId);if(cached?.startsWith('SEDAKEY:')&&await DB.isChatKeyShared(chatId)){uiState.currentChatKey=cached;uiState.sedaSessionReady=true;return cached;}const ref=doc(db,'seda_handshakes',chatId);let snap=await getDoc(ref);if(snap.exists()){const d=snap.data(),expired=Number(d.expiresAt)>0&&Number(d.expiresAt)<=Date.now();if(d.initiator===uid&&d.peer===peerUid&&!expired){watchSedaInitiatorHandshake(chatId);return null;}if(d.peer===uid&&d.initiator===peerUid&&!expired)return null;if(!(expired&&d.initiator===uid&&d.peer===peerUid))return null;await deleteDoc(ref);await DB.deleteECDHKeys(chatId);await DB.deleteChatKey(chatId);}const pair=await generateECDHKeyPair(),pub=await exportPublicKey(pair),priv=await exportPrivateKey(pair);const made=await runTransaction(db,async tx=>{const cur=await tx.get(ref);if(cur.exists())return false;tx.set(ref,{chatId,initiator:uid,peer:peerUid,initiatorPublicKey:pub,peerPublicKey:null,encryptedSedaKey:null,peerKeyStored:false,createdAt:Date.now(),expiresAt:Date.now()+600000});return true;});if(!made)return null;await DB.saveECDHKeys(chatId,pub,priv);watchSedaInitiatorHandshake(chatId);return null;}
 // Ensure the parent document exists: Firestore rules for message subcollections
 // must be able to verify membership against messages/{chatId}.
 async function ensureMessageThread(chatId, membership) {
@@ -1516,68 +1346,11 @@ export async function selectChat(chat) {
     uiState.currentGroup = null;
     uiState.currentChannel = null;
 
-    if (chat.isSeda && chat.sedaChatId) {
-        uiState.currentChatId = chat.sedaChatId;
-        const localSedaKey = authState.sedaProActivated ? await DB.getSedaKey(chat.sedaChatId) : null;
-        const localSedaKeyShared = localSedaKey?.startsWith('SEDAKEY:')
-            && await DB.isSedaKeyShared(chat.sedaChatId);
-        uiState.currentSedaKey = localSedaKeyShared ? localSedaKey : null;
-        uiState.sedaEnabledForCurrentChat = !!localSedaKeyShared;
-        if (authState.sedaProActivated && !localSedaKeyShared) {
-            // The initiator may have opened this chat before the peer responded,
-            // then left/reloaded. Resume its pending handshake using the saved private key.
-            watchSedaInitiatorHandshake(chat.sedaChatId);
-        }
-    } else {
-        uiState.currentChatId = [authState.user.uid, chat.uid].sort().join('_');
-        uiState.sedaEnabledForCurrentChat = false;
-        const localBaseKey = await DB.getSedaKey(uiState.currentChatId);
-        const localBaseKeyShared = localBaseKey?.startsWith('ICEBERGBASEKEY:')
-            && await DB.isSedaKeyShared(uiState.currentChatId);
-        uiState.currentSedaKey = localBaseKeyShared ? localBaseKey : null;
-        // Validate the shared-key handshake on every open, even if a key exists locally.
-        // A locally cached Base key alone does not prove that the peer received it.
-        const openingChatId = uiState.currentChatId;
-        ensureIcebergBaseKey(openingChatId, chat.uid).then(async key => {
-            if (uiState.currentChatId !== openingChatId) return;
-            if (key?.startsWith('ICEBERGBASEKEY:')) {
-                uiState.currentSedaKey = key;
-                const status = document.getElementById('chatStatus');
-                if (status) status.textContent = '🔒 Защищённое соединение готово';
-                await loadMessages();
-                return;
-            }
-            const status = document.getElementById('chatStatus');
-            if (status) status.textContent = '🔒 Устанавливаем защищённое соединение…';
-        }).catch(err => {
-            console.error('[Iceberg Base handshake]', {
-                code: err?.code || 'unknown',
-                message: err?.message || String(err),
-                chatId: openingChatId
-            });
-            const status = document.getElementById('chatStatus');
-            if (status && uiState.currentChatId === openingChatId) status.textContent = 'Не удалось установить защищённое соединение';
-            showToast('Не удалось установить базовое шифрование. Проверьте доступ к Firestore и откройте чат снова.', 'error', 4500);
-        });
-    }
-
-    renderChatHeader();
-
-    try {
-        await ensureMessageThread(uiState.currentChatId, {
-            kind: chat.isSeda ? 'seda' : 'direct',
-            participants: [chat.uid]
-        });
-    } catch (err) {
-        console.error('[Messages] Не удалось подготовить личный чат:', err);
-        showToast('Не удалось подготовить историю чата. Проверьте права Firestore.', 'error', 4000);
-    }
-
+    uiState.currentChatId='sedaultra_'+[authState.user.uid,chat.uid].sort().join('_');const cachedKey=await DB.getChatKey(uiState.currentChatId);const keyReady=cachedKey?.startsWith('SEDAKEY:')&&await DB.isChatKeyShared(uiState.currentChatId);uiState.currentChatKey=keyReady?cachedKey:null;uiState.sedaSessionReady=!!keyReady;renderChatHeader();try{await ensureMessageThread(uiState.currentChatId,{kind:'direct',participants:[chat.uid]});}catch(err){console.error('[Messages] Thread setup:',err);showToast('Не удалось подготовить историю чата. Проверьте права Firestore.','error',4000);}const openingId=uiState.currentChatId;ensureSedaKey(openingId,chat.uid).then(async key=>{if(uiState.currentChatId!==openingId)return;if(key){uiState.currentChatKey=key;uiState.sedaSessionReady=true;const st=document.getElementById('chatStatus');if(st)st.textContent='🔐 SEDA Ultra • защищено';await loadMessages();}else if(!uiState.sedaSessionReady){const st=document.getElementById('chatStatus');if(st)st.textContent='🔐 SEDA Ultra • устанавливаем соединение…';}}).catch(err=>{console.error('[SEDA session]',err);const st=document.getElementById('chatStatus');if(st&&uiState.currentChatId===openingId)st.textContent='SEDA Ultra: ошибка соединения';});
     document.getElementById('chatInputArea').style.display = 'flex';
     document.getElementById('clearChatBtn').style.display = 'inline-block';
     document.getElementById('deleteChatBtn').style.display = 'inline-block';
 
-    updateSedaUI();
     moveToChatOnMobile();
     await markChatRead(chat);
     await loadMessages();
@@ -1622,9 +1395,9 @@ export async function selectGroup(group) {
     uiState.currentChannel = null;
     uiState.currentChatId = `group_${freshGroup.id}`;
 
-    const savedKey = await DB.getSedaKey(uiState.currentChatId);
-    uiState.sedaEnabledForCurrentChat = !!(savedKey?.startsWith('SEDAKEY:') && authState.sedaProActivated);
-    uiState.currentSedaKey = savedKey;
+    const savedKey = await DB.getChatKey(uiState.currentChatId);
+    uiState.sedaSessionReady = !!(savedKey?.startsWith('SEDAKEY:') && true);
+    uiState.currentChatKey = savedKey;
 
     renderChatHeader();
     try {
@@ -1644,7 +1417,6 @@ export async function selectGroup(group) {
     document.getElementById('clearChatBtn').style.display = 'inline-block';
     document.getElementById('deleteChatBtn').style.display = 'none';
 
-    updateSedaUI();
     moveToChatOnMobile();
     await loadMessages();
     startChatMetaListener();
@@ -1676,8 +1448,8 @@ export async function selectChannel(channel) {
     uiState.currentChat = null;
     uiState.currentGroup = null;
     uiState.currentChatId = `channel_${freshChannel.id}`;
-    uiState.sedaEnabledForCurrentChat = false;
-    uiState.currentSedaKey = null;
+    uiState.sedaSessionReady = false;
+    uiState.currentChatKey = null;
 
     try {
         const channelMembers = Array.isArray(freshChannel.members) ? freshChannel.members : [authState.user.uid];
@@ -1706,7 +1478,6 @@ export async function selectChannel(channel) {
         document.getElementById('chatInputArea').style.display = 'none';
     }
 
-    updateSedaUI();
     moveToChatOnMobile();
     await loadMessages();
 }
@@ -1723,7 +1494,7 @@ function renderChatHeader() {
     avEl.innerHTML = '';
 
     if (c) {
-        nameEl.textContent = (c.isSeda ? '🔮 ' : '') + (c.nickname || c.globalId?.substring(0, 12) || 'Пользователь');
+        nameEl.textContent = (c.nickname || c.globalId?.substring(0, 12) || 'Пользователь');
         if (c.avatar) {
             const img = document.createElement('img');
             img.src = c.avatar;
@@ -1731,9 +1502,7 @@ function renderChatHeader() {
         } else {
             avEl.textContent = (c.nickname?.charAt(0) || '👤').toUpperCase();
         }
-        statusEl.textContent = uiState.sedaEnabledForCurrentChat
-            ? '🔮 SEDA Pro активен'
-            : (c.mood || '🔒 Личный чат');
+        statusEl.textContent = '🔐 SEDA Ultra • сквозное шифрование';
     } else if (g) {
         nameEl.textContent = g.name || 'Группа';
         if (g.avatar) {
@@ -1742,9 +1511,7 @@ function renderChatHeader() {
             img.alt = 'Аватар группы';
             avEl.appendChild(img);
         } else avEl.textContent = '👥';
-        statusEl.textContent = uiState.sedaEnabledForCurrentChat
-            ? '🔮 SEDA Pro активен'
-            : `👥 ${g.memberCount || g.memberIds?.length || 0} участников`;
+        statusEl.textContent = '🔐 SEDA Ultra • сквозное шифрование';
     } else if (ch) {
         nameEl.textContent = ch.name || 'Канал';
         if (ch.avatar) {
@@ -1777,10 +1544,10 @@ export function closeChat() {
     uiState.currentGroup = null;
     uiState.currentChannel = null;
     uiState.currentChatId = null;
-    uiState.sedaEnabledForCurrentChat = false;
-    uiState.currentSedaKey = null;
+    uiState.sedaSessionReady = false;
+    uiState.currentChatKey = null;
     uiState.replyTo = null;
-    ['clearChatBtn', 'deleteChatBtn', 'sedaModeBtn'].forEach(id => {
+    ['clearChatBtn', 'deleteChatBtn'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
@@ -1805,9 +1572,7 @@ export function closeAllSubscriptions() {
 async function markChatRead(chat) {
     if (!chat) return;
     let chats = ensureArray(authState.userData?.chats);
-    let idx = chat.isSeda && chat.sedaChatId
-        ? chats.findIndex(c => c.sedaChatId === chat.sedaChatId)
-        : chats.findIndex(c => c.uid === chat.uid && !c.isGroup && !c.isSeda);
+    let idx = chats.findIndex(c => c.uid === chat.uid && !c.isGroup);
     if (idx === -1) return;
     if (!chats[idx].unread) return;
     const updated = [...chats];
@@ -2055,32 +1820,7 @@ async function renderMessage(msg) {
     let isEncrypted = msg.encrypted === true;
     let isDecrypted = false;
 
-    if (isEncrypted && msg.text) {
-        if (uiState.currentChat?.isSeda && uiState.currentSedaKey && authState.sedaProActivated && isSedaUltraPayload(msg.text)) {
-            const dec = await sedaUltraDecrypt(msg.text, uiState.currentSedaKey);
-            if (dec !== null) { displayText = dec; isDecrypted = true; div.classList.add('message-seda'); }
-            else { displayText = '[Не удалось расшифровать SEDA Ultra]'; div.classList.add('message-seda'); }
-        } else if (!isSedaUltraPayload(msg.text) && uiState.currentSedaKey && isIcebergBasePayload(msg.text)) {
-            const dec = await icebergBaseDecrypt(msg.text, uiState.currentSedaKey);
-            if (dec !== null) { displayText = dec; isDecrypted = true; }
-            else displayText = '[Не удалось расшифровать сообщение Iceberg]';
-        } else if (isSedaUltraPayload(msg.text) || isIcebergBasePayload(msg.text)) {
-            displayText = '[Зашифровано — ожидается ключ чата]';
-            div.classList.add('message-seda');
-        }
-    }
-
-    let mediaSrc = null;
-    if ((msg.type === 'photo' || msg.type === 'video' || msg.type === 'file' || msg.type === 'audio') && msg.media) {
-        if (msg.mediaEncrypted && uiState.currentSedaKey) {
-            mediaSrc = isSedaUltraPayload(msg.media)
-                ? (uiState.currentChat?.isSeda ? await sedaUltraDecrypt(msg.media, uiState.currentSedaKey) : null)
-                : await icebergBaseDecrypt(msg.media, uiState.currentSedaKey);
-        } else {
-            mediaSrc = msg.mediaEncrypted ? null : msg.media;
-        }
-    }
-
+    if(isEncrypted&&msg.text){if(uiState.currentChatKey&&isSedaUltraPayload(msg.text)){const dec=await sedaUltraDecrypt(msg.text,uiState.currentChatKey);if(dec!==null){displayText=dec;isDecrypted=true;div.classList.add('message-seda');}else displayText='[Не удалось расшифровать SEDA Ultra]';}else{displayText='[Зашифровано — ожидается ключ SEDA Ultra]';div.classList.add('message-seda');}}let mediaSrc=null,decryptedAttachment=null;if(msg.attachment?.path&&uiState.currentChatKey){try{const bytes=await getBytes(storageRef(storage,msg.attachment.path));decryptedAttachment=await decryptSedaAttachment(bytes,msg.attachment,uiState.currentChatKey);mediaSrc=URL.createObjectURL(decryptedAttachment.blob);}catch(e){console.error('[SEDA attachment]',e);}}else if(msg.media&&!msg.mediaEncrypted)mediaSrc=msg.media;
     if (msg.replyTo) {
         const r = document.createElement('div');
         r.className = 'chat-msg-reply';
@@ -2123,7 +1863,7 @@ async function renderMessage(msg) {
         const link = document.createElement('a');
         link.className = 'chat-msg-file';
         link.href = mediaSrc;
-        link.download = msg.fileName || 'file';
+        link.download = decryptedAttachment?.fileName || 'file';
         const icon = document.createElement('div');
         icon.className = 'file-icon';
         icon.textContent = '📄';
@@ -2131,10 +1871,10 @@ async function renderMessage(msg) {
         info.className = 'file-info';
         const n = document.createElement('div');
         n.className = 'file-name';
-        n.textContent = msg.fileName || 'Файл';
+        n.textContent = decryptedAttachment?.fileName || 'Файл';
         const sz = document.createElement('div');
         sz.className = 'file-size';
-        sz.textContent = formatBytes(msg.fileSize);
+        sz.textContent = formatBytes(decryptedAttachment?.size ?? msg.fileSize ?? 0);
         info.appendChild(n);
         info.appendChild(sz);
         link.appendChild(icon);
@@ -2150,8 +1890,8 @@ async function renderMessage(msg) {
     if (isEncrypted && !isDecrypted) {
         const btn = document.createElement('button');
         btn.className = 'seda-decrypt-btn';
-        btn.textContent = '🔑 Вставить ключ';
-        btn.onclick = (e) => { e.stopPropagation(); pasteSedaKeyFromClipboard(); };
+        btn.textContent = '🔐 Ожидается установка SEDA Ultra';
+        btn.disabled = true;
         div.appendChild(btn);
     }
     if (isDecrypted) {
@@ -2180,7 +1920,7 @@ async function renderMessage(msg) {
     if (isEncrypted) {
         const badge = document.createElement('div');
         badge.className = 'seda-badge-msg';
-        badge.textContent = isSedaUltraPayload(msg.text) ? '🔮 SEDA Pro' : '🔒 Сквозное шифрование';
+        badge.textContent = '🔐 SEDA Ultra • E2E';
         div.appendChild(badge);
     }
 
@@ -2223,8 +1963,8 @@ export async function sendMessage() {
         currentChat: uiState.currentChat,
         currentGroup: uiState.currentGroup,
         currentChannel: uiState.currentChannel,
-        sedaEnabled: uiState.sedaEnabledForCurrentChat,
-        sedaKey: uiState.currentSedaKey
+        sedaEnabled: uiState.sedaSessionReady,
+        sedaKey: uiState.currentChatKey
     };
     const originalText = text;
     input.value = '';
@@ -2234,62 +1974,8 @@ export async function sendMessage() {
         if (uiState.editingMessage) {
             const editId = uiState.editingMessage;
             uiState.editingMessage = null;
-            let editText = originalText;
-            if (chatContext.currentChat && !chatContext.currentChat.isSeda) {
-                let baseKey = chatContext.sedaKey;
-                if (!baseKey?.startsWith('ICEBERGBASEKEY:')) baseKey = await ensureIcebergBaseKey(chatIdAtSend, chatContext.currentChat.uid);
-                if (!baseKey?.startsWith('ICEBERGBASEKEY:')) throw new Error('Защищённый ключ чата ещё не готов');
-                editText = await icebergBaseEncrypt(originalText, baseKey);
-            } else if (chatContext.currentChat?.isSeda && authState.sedaProActivated) {
-                if (!chatContext.sedaKey?.startsWith('SEDAKEY:')) {
-                    uiState.editingMessage = editId;
-                    throw new Error('Ключ SEDA ещё не получен от второго участника');
-                }
-                editText = await sedaUltraEncryptWithKey(originalText, chatContext.sedaKey);
-            }
-            await updateDoc(doc(db, 'messages', chatIdAtSend, 'msgs', editId), {
-                text: editText,
-                edited: true,
-                editedAt: serverTimestamp(),
-                cryptoVersion: chatContext.currentChat?.isSeda ? (chatContext.sedaEnabled ? 'SEDA_ULTRA_1' : null) : (chatContext.currentChat ? 'ICEBERG_BASE_1' : null)
-            });
-            document.getElementById('replyPreview')?.classList.add('hidden');
-            return;
-        }
-
-        let textToSend = originalText;
-        let encrypted = false;
-        if (chatContext.currentChat && !chatContext.currentChat.isSeda) {
-            let baseKey = chatContext.sedaKey;
-            if (!baseKey?.startsWith('ICEBERGBASEKEY:')) baseKey = await ensureIcebergBaseKey(chatIdAtSend, chatContext.currentChat.uid);
-            if (!baseKey?.startsWith('ICEBERGBASEKEY:')) {
-                showToast('Устанавливаем защищённое соединение. Повторите отправку через несколько секунд.', 'info', 4000);
-                input.value = originalText;
-                return;
-            }
-            textToSend = await icebergBaseEncrypt(originalText, baseKey);
-            encrypted = true;
-            chatContext.sedaKey = baseKey;
-            if (uiState.currentChatId === chatIdAtSend) uiState.currentSedaKey = baseKey;
-        }
-
-        if (chatContext.currentChat?.isSeda && !authState.sedaProActivated) {
-            showToast('SEDA-чаты доступны только с активной подпиской', 'error');
-            input.value = originalText;
-            return;
-        }
-
-        if (chatContext.currentChat?.isSeda) {
-            const keyStr = chatContext.sedaKey;
-            if (!keyStr?.startsWith('SEDAKEY:')) {
-                showToast('🔮 Защищённое соединение SEDA ещё устанавливается. Повторите отправку через несколько секунд.', 'info', 4500);
-                input.value = originalText;
-                return;
-            }
-            textToSend = await sedaUltraEncryptWithKey(originalText, keyStr);
-            encrypted = true;
-        }
-
+            let editText=originalText;if(chatContext.currentChat){let key=chatContext.sedaKey;if(!key?.startsWith('SEDAKEY:'))key=await ensureSedaKey(chatIdAtSend,chatContext.currentChat.uid);if(!key?.startsWith('SEDAKEY:')){uiState.editingMessage=editId;throw Error('SEDA Ultra ещё устанавливает защищённое соединение');}editText=await sedaUltraEncryptWithKey(originalText,key);}await updateDoc(doc(db,'messages',chatIdAtSend,'msgs',editId),{text:editText,edited:true,editedAt:serverTimestamp(),cryptoVersion:chatContext.currentChat?'SEDA_ULTRA_1':null});document.getElementById('replyPreview')?.classList.add('hidden');return;}
+        let textToSend=originalText,encrypted=false;if(chatContext.currentChat){let key=chatContext.sedaKey;if(!key?.startsWith('SEDAKEY:'))key=await ensureSedaKey(chatIdAtSend,chatContext.currentChat.uid);if(!key?.startsWith('SEDAKEY:')){showToast('SEDA Ultra устанавливает соединение. Повторите отправку через несколько секунд.','info',4000);input.value=originalText;return;}textToSend=await sedaUltraEncryptWithKey(originalText,key);encrypted=true;chatContext.sedaKey=key;if(uiState.currentChatId===chatIdAtSend)uiState.currentChatKey=key;}
         const message = {
             text: textToSend,
             senderId: authState.user.uid,
@@ -2297,7 +1983,7 @@ export async function sendMessage() {
             timestamp: serverTimestamp(),
             read: false,
             encrypted,
-            cryptoVersion: encrypted ? (chatContext.currentChat?.isSeda ? 'SEDA_ULTRA_1' : 'ICEBERG_BASE_1') : null,
+            cryptoVersion: encrypted ? 'SEDA_ULTRA_1' : null,
             type: 'text',
             replyTo: uiState.replyTo || null,
             reactions: {}
@@ -2375,18 +2061,7 @@ async function updateChatLastMessage(previewText, context, fromQueue = false) {
         }
 
         if (currentChat?.uid && !currentGroup && !currentChannel) {
-            const chats = ensureArray(authState.userData?.chats);
-            const isSeda = !!currentChat.isSeda;
-            const index = isSeda && currentChat.sedaChatId
-                ? chats.findIndex(chat => chat.sedaChatId === currentChat.sedaChatId)
-                : chats.findIndex(chat => chat.uid === currentChat.uid && !chat.isGroup && !chat.isSeda);
-            const nextChat = {
-                ...(index >= 0 ? chats[index] : {}),
-                ...currentChat,
-                uid: currentChat.uid,
-                isGroup: false,
-                isSeda: isSeda,
-                sedaChatId: currentChat.sedaChatId || null,
+            const chats = ensureArray(authState.userData?.chats);,
                 lastMessage: previewText,
                 lastMessageTime: new Date(),
                 unread: false
@@ -2440,26 +2115,7 @@ export async function sendSticker(sticker) {
     uiState.stickerPickerOpen = false;
 
     try {
-        let text = sticker;
-        let encrypted = false;
-        if (chatContext.currentChat && !chatContext.currentChat.isSeda) {
-            let key = uiState.currentSedaKey;
-            if (!key?.startsWith('ICEBERGBASEKEY:')) key = await ensureIcebergBaseKey(chatContext.chatId, chatContext.currentChat.uid);
-            if (!key?.startsWith('ICEBERGBASEKEY:')) {
-                showToast('Защищённое соединение ещё устанавливается', 'info');
-                return;
-            }
-            text = await icebergBaseEncrypt(sticker, key);
-            encrypted = true;
-        } else if (chatContext.currentChat?.isSeda) {
-            if (!authState.sedaProActivated) return showToast('SEDA-чаты доступны только с активной подпиской', 'error');
-            if (!uiState.currentSedaKey?.startsWith('SEDAKEY:')) {
-                showToast('Ключ SEDA ещё не получен. Повторите отправку позже.', 'info');
-                return;
-            }
-            text = await sedaUltraEncryptWithKey(sticker, uiState.currentSedaKey);
-            encrypted = true;
-        }
+        let text=sticker,encrypted=false;if(chatContext.currentChat){let key=uiState.currentChatKey;if(!key?.startsWith('SEDAKEY:'))key=await ensureSedaKey(chatContext.chatId,chatContext.currentChat.uid);if(!key?.startsWith('SEDAKEY:')){showToast('SEDA Ultra устанавливает соединение','info');return;}text=await sedaUltraEncryptWithKey(sticker,key);encrypted=true;}
         const pendingSyncId = queueDirectChatSync(chatContext, sticker);
         const writePromise = addDoc(collection(db, 'messages', chatContext.chatId, 'msgs'), {
             text,
@@ -2488,6 +2144,8 @@ export async function sendSticker(sticker) {
     }
 }
 
+async function dataUrlToBlob(data){return await(await fetch(data)).blob();}
+async function uploadEncryptedDirectAttachment(ctx,blob,type,name,preview){let key=ctx.sedaKey;if(!key?.startsWith('SEDAKEY:'))key=await ensureSedaKey(ctx.chatId,ctx.currentChat.uid);if(!key?.startsWith('SEDAKEY:'))throw Error('SEDA Ultra ещё устанавливает защищённое соединение');const enc=await encryptSedaAttachment(blob,key,name),m=await addDoc(collection(db,'messages',ctx.chatId,'msgs'),{text:'',senderId:authState.user.uid,senderName:authState.userData.nickname,timestamp:serverTimestamp(),read:false,encrypted:false,mediaEncrypted:true,type,attachmentPending:true,replyTo:uiState.replyTo||null,reactions:{}}),path='seda-attachments/'+ctx.chatId+'/'+authState.user.uid+'/'+m.id;try{await uploadBytes(storageRef(storage,path),enc.ciphertext,{contentType:'application/octet-stream'});await updateDoc(m,{attachment:{path,version:enc.version,wrappedKey:enc.wrappedKey,encryptedMetadata:enc.encryptedMetadata},attachmentPending:false});}catch(error){await deleteDoc(m).catch(()=>{});throw error;}cancelReply();await updateChatLastMessage(preview,ctx);if(uiState.currentChatId===ctx.chatId)uiState.currentChatKey=key;}
 export async function sendMediaFile(input) {
     const file = input.files && input.files[0];
     input.value = '';
@@ -2497,23 +2155,15 @@ export async function sendMediaFile(input) {
         currentChat: uiState.currentChat,
         currentGroup: uiState.currentGroup,
         currentChannel: uiState.currentChannel,
-        sedaEnabled: uiState.sedaEnabledForCurrentChat,
-        sedaKey: uiState.currentSedaKey
+        sedaEnabled: uiState.sedaSessionReady,
+        sedaKey: uiState.currentChatKey
     };
     if (chatContext.currentChannel && !chatContext.currentChannel.isAdmin) {
         showToast('❌ Только администраторы', 'error');
         return;
     }
-    if (chatContext.currentChat?.isSeda && !authState.sedaProActivated) {
-        showToast('SEDA-чаты доступны только с активной подпиской', 'error');
-        return;
-    }
-    if (chatContext.currentChat?.isSeda && !chatContext.sedaKey?.startsWith('SEDAKEY:')) {
-        showToast('Ключ SEDA ещё не получен. Дождитесь установки защищённого соединения.', 'info', 4000);
-        return;
-    }
-    const isImageFile = file.type.startsWith('image/');
-    const maxOriginalImageSize = 15 * 1024 * 1024;
+            const isImageFile = file.type.startsWith('image/');
+    const maxOriginalImageSize = MAX_MEDIA_SIZE;
     if ((!isImageFile && file.size > MAX_MEDIA_SIZE) ||
         (isImageFile && file.size > maxOriginalImageSize)) {
         const maxSize = isImageFile ? maxOriginalImageSize : MAX_MEDIA_SIZE;
@@ -2543,32 +2193,7 @@ export async function sendMediaFile(input) {
             else mediaType = 'file';
         }
 
-        updateOperationIndicator(indicator, 'Файл подготовлен', 'Отправляем…');
-        let mediaToSend = dataUrl;
-        let mediaEncrypted = false;
-
-        if (chatContext.currentChat?.isSeda && !authState.sedaProActivated) {
-            throw new Error('SEDA-чаты доступны только с активной подпиской');
-        }
-        if (chatContext.currentChat && !chatContext.currentChat.isSeda) {
-            let keyStr = chatContext.sedaKey;
-            if (!keyStr?.startsWith('ICEBERGBASEKEY:')) keyStr = await ensureIcebergBaseKey(chatContext.chatId, chatContext.currentChat.uid);
-            if (!keyStr?.startsWith('ICEBERGBASEKEY:')) throw new Error('Защищённое соединение ещё устанавливается');
-            mediaToSend = await icebergBaseEncrypt(dataUrl, keyStr);
-            mediaEncrypted = true;
-            chatContext.sedaKey = keyStr;
-            if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = keyStr;
-        } else if (chatContext.currentChat?.isSeda && authState.sedaProActivated) {
-            const keyStr = chatContext.sedaKey;
-            if (!keyStr?.startsWith('SEDAKEY:')) throw new Error('Ключ SEDA ещё не получен');
-            mediaToSend = await sedaUltraEncryptWithKey(dataUrl, keyStr);
-            mediaEncrypted = true;
-        }
-
-        const preview = mediaType === 'photo' ? '📷 Фото'
-            : mediaType === 'video' ? '🎥 Видео'
-            : mediaType === 'audio' ? '🎵 Аудио'
-            : '📄 ' + file.name;
+        updateOperationIndicator(indicator,'Файл подготовлен','Отправляем…');const preview=mediaType==='photo'?'📷 Фото':mediaType==='video'?'🎥 Видео':mediaType==='audio'?'🎵 Аудио':'📄 '+file.name;if(chatContext.currentChat){await uploadEncryptedDirectAttachment(chatContext,await dataUrlToBlob(dataUrl),mediaType,file.name,preview);removeOperationIndicator(indicator);showToast('Вложение отправлено через SEDA Attachments','success');return;}const mediaToSend=dataUrl;
         const pendingSyncId = queueDirectChatSync(chatContext, preview);
         const writePromise = addDoc(collection(db, 'messages', chatContext.chatId, 'msgs'), {
             text: '',
@@ -2577,7 +2202,7 @@ export async function sendMediaFile(input) {
             timestamp: serverTimestamp(),
             read: false,
             encrypted: false,
-            mediaEncrypted,
+            mediaEncrypted: false,
             type: mediaType,
             media: mediaToSend,
             fileName: file.name,
@@ -2617,8 +2242,8 @@ export async function toggleVoiceRecording() {
         currentChat: uiState.currentChat,
         currentGroup: uiState.currentGroup,
         currentChannel: uiState.currentChannel,
-        sedaEnabled: uiState.sedaEnabledForCurrentChat,
-        sedaKey: uiState.currentSedaKey
+        sedaEnabled: uiState.sedaSessionReady,
+        sedaKey: uiState.currentChatKey
     };
     if (uiState.currentChannel && !uiState.currentChannel.isAdmin) {
         showToast('❌ Только администраторы', 'error');
@@ -2656,26 +2281,7 @@ export async function toggleVoiceRecording() {
             const reader = new FileReader();
             reader.onload = async () => {
                 try {
-                    let dataUrl = reader.result;
-                    let mediaEncrypted = false;
-                    if (chatContext.currentChat?.isSeda && !authState.sedaProActivated) {
-                        showToast('SEDA-чаты доступны только с активной подпиской', 'error');
-                        return;
-                    }
-                    if (chatContext.currentChat && !chatContext.currentChat.isSeda) {
-                        let keyStr = chatContext.sedaKey;
-                        if (!keyStr?.startsWith('ICEBERGBASEKEY:')) keyStr = await ensureIcebergBaseKey(chatContext.chatId, chatContext.currentChat.uid);
-                        if (!keyStr?.startsWith('ICEBERGBASEKEY:')) throw new Error('Защищённое соединение ещё устанавливается');
-                        dataUrl = await icebergBaseEncrypt(dataUrl, keyStr);
-                        mediaEncrypted = true;
-                        chatContext.sedaKey = keyStr;
-                        if (uiState.currentChatId === chatContext.chatId) uiState.currentSedaKey = keyStr;
-                    } else if (chatContext.currentChat?.isSeda && authState.sedaProActivated) {
-                        const keyStr = chatContext.sedaKey;
-                        if (!keyStr?.startsWith('SEDAKEY:')) throw new Error('Ключ SEDA ещё не получен. Запись не отправлена.');
-                        dataUrl = await sedaUltraEncryptWithKey(dataUrl, keyStr);
-                        mediaEncrypted = true;
-                    }
+                    const dataUrl=reader.result;let mediaEncrypted=false;if(chatContext.currentChat){await uploadEncryptedDirectAttachment(chatContext,await dataUrlToBlob(dataUrl),'audio','voice.webm','🎤 Голосовое');return;}
                     const preview = '🎤 Голосовое';
                     const pendingSyncId = queueDirectChatSync(chatContext, preview);
                     const writePromise = addDoc(collection(db, 'messages', chatContext.chatId, 'msgs'), {
@@ -2928,13 +2534,7 @@ export function startReply(id, msgData) {
 export async function startEdit(id, msgData) {
     uiState.editingMessage = id;
     let displayText = msgData.text;
-    if (msgData.encrypted && uiState.currentSedaKey && authState.sedaProActivated) {
-        displayText = isSedaUltraPayload(msgData.text)
-            ? (uiState.currentChat?.isSeda
-                ? await sedaUltraDecrypt(msgData.text, uiState.currentSedaKey) ?? '[Не удалось расшифровать SEDA Ultra]'
-                : '[SEDA Ultra доступен только в SEDA-чатах]')
-            : await icebergBaseDecrypt(msgData.text, uiState.currentSedaKey) ?? '[Не удалось расшифровать сообщение Iceberg]';
-    }
+    if(msgData.encrypted&&uiState.currentChatKey&&isSedaUltraPayload(msgData.text))displayText=await sedaUltraDecrypt(msgData.text,uiState.currentChatKey)??'[Не удалось расшифровать SEDA Ultra]';
     const input = document.getElementById('messageInput');
     input.value = displayText;
     input.focus();
@@ -3013,443 +2613,15 @@ export function scrollToMessage(id) {
     setTimeout(() => { el.style.boxShadow = ''; }, 1200);
 }
 
-const sedaInitiatorListeners = new Map();
-
-function watchSedaInitiatorHandshake(sedaChatId) {
-    if (!sedaChatId || sedaInitiatorListeners.has(sedaChatId)) return;
-    const ref = doc(db, 'seda_handshakes', sedaChatId);
-    let unsub = () => {};
-    let processing = false;
-    let resolved = false;
-
-    unsub = onSnapshot(ref, async snap => {
-        if (!snap.exists()) {
-            try { unsub(); } catch {}
-            sedaInitiatorListeners.delete(sedaChatId);
-            return;
-        }
-        const data = snap.data();
-        if (data.initiator !== authState.user?.uid
-            || !data.peerPublicKey
-            || !data.encryptedSedaKey
-            || processing
-            || resolved) return;
-
-        processing = true;
-        try {
-            // Restore the initiator's saved private key after a page reload instead
-            // of creating a new key that can no longer decrypt the peer's response.
-            const saved = await DB.getECDHKeys(sedaChatId);
-            if (!saved?.privateKey) throw new Error('Не найден локальный ключ SEDA');
-            const privateKey = await crypto.subtle.importKey(
-                'jwk', saved.privateKey,
-                { name: 'ECDH', namedCurve: 'P-256' },
-                true, ['deriveKey', 'deriveBits']
-            );
-            const peerPublic = await importPublicKey(data.peerPublicKey);
-            const sharedKey = await deriveSharedKey(privateKey, peerPublic);
-            const key = await aesDecrypt(data.encryptedSedaKey, sharedKey);
-            if (!key?.startsWith('SEDAKEY:')) throw new Error('Не удалось расшифровать ключ SEDA');
-
-            await DB.saveSedaKey(sedaChatId, key);
-            await DB.markSedaKeyShared(sedaChatId);
-            if (uiState.currentChatId === sedaChatId) {
-                uiState.currentSedaKey = key;
-                uiState.sedaEnabledForCurrentChat = !!authState.sedaProActivated;
-                updateSedaUI();
-                await loadMessages();
-            }
-            await updateDoc(ref, {
-                initiatorAck: true,
-                initiatorAckAt: Date.now(),
-                completed: true,
-                expiresAt: null
-            }).catch(err => console.warn('[SEDA] Не удалось подтвердить рукопожатие:', err));
-
-            resolved = true;
-            showToast('✅ SEDA-чат установлен!', 'success');
-            try { unsub(); } catch {}
-            sedaInitiatorListeners.delete(sedaChatId);
-        } catch (err) {
-            console.error('[SEDA initiator] Не удалось восстановить ключ:', err);
-            showToast('Не удалось завершить SEDA-шифрование. Откройте чат ещё раз и проверьте соединение.', 'error', 4500);
-        } finally {
-            processing = false;
-        }
-    }, err => {
-        console.error('[SEDA initiator listener]', { code: err?.code || 'unknown', message: err?.message || String(err) });
-        try { unsub(); } catch {}
-        sedaInitiatorListeners.delete(sedaChatId);
-    });
-
-    sedaInitiatorListeners.set(sedaChatId, unsub);
-}
-
-export async function startSedaChat() {
-    if (!authState.sedaProActivated) {
-        showToast('⚠️ SEDA Pro не активирован', 'error');
-        return;
-    }
-    if (!uiState.currentChat || !uiState.currentChat.uid || uiState.currentChat.isSeda) {
-        showToast('Откройте обычный чат с контактом', 'error');
-        return;
-    }
-
-    const peerUid = uiState.currentChat.uid;
-    const baseChatId = [authState.user.uid, peerUid].sort().join('_');
-    const sedaChatId = 'seda_' + baseChatId;
-
-    const localSedaKey = await DB.getSedaKey(sedaChatId);
-    const localSedaKeyShared = localSedaKey?.startsWith('SEDAKEY:')
-        && await DB.isSedaKeyShared(sedaChatId);
-    if (localSedaKeyShared) {
-        showToast('🔮 SEDA-чат уже существует', 'info');
-        await openSedaChat(peerUid, sedaChatId);
-        return;
-    }
-
-    showToast('🔮 Создание SEDA-чата...', 'info');
-
-    const handshakeRef = doc(db, 'seda_handshakes', sedaChatId);
-    const previousHandshake = await getDoc(handshakeRef);
-    if (previousHandshake.exists()) {
-        const previous = previousHandshake.data();
-        const expired = Number(previous.expiresAt) > 0 && Number(previous.expiresAt) <= Date.now();
-        if (!expired || previous.initiator !== authState.user.uid) {
-            showToast(expired
-                ? 'Предыдущий запрос SEDA истёк. Попросите инициатора создать новый.'
-                : 'Рукопожатие SEDA уже выполняется. Подождите несколько секунд.',
-                'info', 4500);
-            return;
-        }
-        await deleteDoc(handshakeRef);
-        await DB.deleteECDHKeys(sedaChatId);
-    }
-
-    // Generate/store a new private key only after we know no active handshake exists.
-    const keyPair = await generateECDHKeyPair();
-    const pubBase64 = await exportPublicKey(keyPair);
-    const privJwk = await exportPrivateKey(keyPair);
-    await DB.saveECDHKeys(sedaChatId, pubBase64, privJwk);
-
-    await setDoc(handshakeRef, {
-        initiator: authState.user.uid,
-        peer: peerUid,
-        initiatorPublicKey: pubBase64,
-        peerPublicKey: null,
-        encryptedSedaKey: null,
-        createdAt: Date.now(),
-        expiresAt: Date.now() + 5 * 60 * 1000
-    });
-
-    watchSedaInitiatorHandshake(sedaChatId);
-
-    setTimeout(async () => {
-        try {
-            const snapshot = await getDoc(handshakeRef);
-            if (!snapshot.exists()) return;
-            const data = snapshot.data();
-            if (data.initiator === authState.user?.uid
-                && Number(data.expiresAt) > 0
-                && Number(data.expiresAt) <= Date.now()) {
-                await deleteDoc(handshakeRef);
-                await DB.deleteECDHKeys(sedaChatId);
-                await DB.deleteSedaKey(sedaChatId);
-            }
-        } catch (err) {
-            console.warn('[SEDA] Не удалось очистить истёкшее рукопожатие:', err);
-        }
-    }, 5 * 60 * 1000);
-
-    await openSedaChat(peerUid, sedaChatId);
-}
-
-async function openSedaChat(peerUid, sedaChatId) {
-    const contact = ensureArray(authState.userData.contacts).find(c => c.uid === peerUid)
-        || ensureArray(authState.userData.chats).find(c => c.uid === peerUid && !c.isGroup);
-
-    if (!contact) { showToast('Контакт не найден', 'error'); return; }
-
-    let chats = ensureArray(authState.userData.chats);
-    let sedaChat = chats.find(c => c.sedaChatId === sedaChatId);
-
-    if (!sedaChat) {
-        sedaChat = {
-            uid: peerUid,
-            globalId: contact.globalId || '',
-            nickname: contact.nickname || '',
-            avatar: contact.avatar || null,
-            mood: contact.mood || null,
-            isGroup: false,
-            isSeda: true,
-            sedaChatId,
-            unread: false,
-            lastMessage: '🔮 SEDA-чат',
-            lastMessageTime: new Date()
-        };
-        chats = [...chats, sedaChat];
-        authState.userData.chats = chats;
-        await updateDoc(doc(db, 'users', authState.user.uid), { chats }).catch(() => {});
-        await DB.Lists.setChats(authState.user.uid, chats);
-    }
-
-    uiState.sedaEnabledForCurrentChat = true;
-    uiState.currentSedaKey = await DB.getSedaKey(sedaChatId);
-    await selectChat(sedaChat);
-    loadChats();
-}
-
-export function startSedaHandshakeListener() {
-    if (uiState.sedaHandshakeUnsub) uiState.sedaHandshakeUnsub();
-    if (!authState.user) return;
-
-    const q = query(collection(db, 'seda_handshakes'), where('peer', '==', authState.user.uid));
-    uiState.sedaHandshakeUnsub = onSnapshot(q, async (snap) => {
-        for (const d of snap.docs) {
-            const data = d.data();
-            if (data.mode === 'iceberg-base') {
-                const sharedLocalBaseKey = await DB.isSedaKeyShared(data.chatId);
-                if (data.initiatorAck === true && sharedLocalBaseKey) {
-                    await deleteDoc(d.ref).catch(() => {});
-                    continue;
-                }
-                if (Number(data.expiresAt) > 0 && Number(data.expiresAt) <= Date.now()
-                    && data.peerKeyStored !== true) {
-                    // Let the original initiator replace expired unfinished Base attempts.
-                    continue;
-                }
-                if (!data.initiatorPublicKey) continue;
-                if (data.peerPublicKey && data.encryptedBaseKey
-                    && (!data.peerKeyStored || !sharedLocalBaseKey)
-                    && !uiState.processedHandshakes.has(d.id)) {
-                    uiState.processedHandshakes.add(d.id);
-                    try {
-                        const savedPair = await DB.getECDHKeys(d.id);
-                        if (!savedPair) throw new Error('Нет локального приватного ключа');
-                        const privateKey = await crypto.subtle.importKey('jwk', savedPair.privateKey,
-                            { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
-                        const initiatorPublic = await importPublicKey(data.initiatorPublicKey);
-                        const shared = await deriveSharedKey(privateKey, initiatorPublic, 'iceberg-base-handshake-v1');
-                        const key = await aesDecrypt(data.encryptedBaseKey, shared);
-                        if (!key?.startsWith('ICEBERGBASEKEY:')) throw new Error('Неверный базовый ключ');
-                        await DB.saveSedaKey(data.chatId, key);
-                        await DB.markSedaKeyShared(data.chatId);
-                        await updateDoc(d.ref, { peerKeyStored: true, peerKeyStoredAt: Date.now() });
-                        if (uiState.currentChatId === data.chatId) {
-                            uiState.currentSedaKey = key;
-                            await loadMessages();
-                        }
-                    } catch (err) { console.error('[Iceberg Base responder]', err); uiState.processedHandshakes.delete(d.id); }
-                    continue;
-                }
-                if (!data.peerPublicKey && !uiState.processedHandshakes.has(d.id)) {
-                    uiState.processedHandshakes.add(d.id);
-                    try {
-                        const pair = await generateECDHKeyPair();
-                        const pub = await exportPublicKey(pair);
-                        const priv = await exportPrivateKey(pair);
-                        await DB.saveECDHKeys(d.id, pub, priv);
-                        await updateDoc(d.ref, { peerPublicKey: pub, peerRespondedAt: Date.now() });
-                        uiState.processedHandshakes.delete(d.id);
-                    } catch (err) { console.error('[Iceberg Base responder setup]', err); uiState.processedHandshakes.delete(d.id); }
-                }
-                continue;
-            }
-            // Recover older/incomplete SEDA handshakes where the peer public key was
-            // published but the local IndexedDB write did not finish before a reload.
-            const localSedaShared = await DB.isSedaKeyShared(d.id);
-            if (data.initiatorPublicKey && data.peerPublicKey && data.encryptedSedaKey
-                && (data.peerKeyStored !== true || !localSedaShared)
-                && !uiState.processedHandshakes.has(d.id)) {
-                uiState.processedHandshakes.add(d.id);
-                try {
-                    const saved = await DB.getECDHKeys(d.id);
-                    if (!saved?.privateKey) throw new Error('Нет сохранённого ключа для восстановления SEDA');
-                    const privateKey = await crypto.subtle.importKey(
-                        'jwk', saved.privateKey,
-                        { name: 'ECDH', namedCurve: 'P-256' },
-                        true, ['deriveKey', 'deriveBits']
-                    );
-                    const initiatorPublic = await importPublicKey(data.initiatorPublicKey);
-                    const shared = await deriveSharedKey(privateKey, initiatorPublic);
-                    const recoveredKey = await aesDecrypt(data.encryptedSedaKey, shared);
-                    if (!recoveredKey?.startsWith('SEDAKEY:')) throw new Error('Некорректный восстановленный ключ SEDA');
-                    await DB.saveSedaKey(d.id, recoveredKey);
-                    await DB.markSedaKeyShared(d.id);
-                    await updateDoc(d.ref, { peerKeyStored: true, peerKeyStoredAt: Date.now() });
-
-                    if (uiState.currentChatId === d.id) {
-                        uiState.currentSedaKey = recoveredKey;
-                        uiState.sedaEnabledForCurrentChat = !!authState.sedaProActivated;
-                        updateSedaUI();
-                        await loadMessages();
-                    }
-                    const initiatorContact = ensureArray(authState.userData?.contacts)
-                        .find(contact => contact.uid === data.initiator);
-                    if (initiatorContact) {
-                        const chats = ensureArray(authState.userData?.chats);
-                        if (!chats.some(chat => chat.sedaChatId === d.id)) {
-                            const nextChats = [...chats, {
-                                uid: data.initiator,
-                                globalId: initiatorContact.globalId || '',
-                                nickname: initiatorContact.nickname || '',
-                                avatar: initiatorContact.avatar || null,
-                                mood: initiatorContact.mood || null,
-                                isGroup: false,
-                                isSeda: true,
-                                sedaChatId: d.id,
-                                unread: true,
-                                lastMessage: '🔮 SEDA-чат восстановлен',
-                                lastMessageTime: new Date()
-                            }];
-                            authState.userData.chats = nextChats;
-                            await updateDoc(doc(db, 'users', authState.user.uid), { chats: nextChats });
-                            await DB.Lists.setChats(authState.user.uid, nextChats);
-                            loadChats();
-                        }
-                    }
-                    showToast('🔮 Ключ SEDA восстановлен', 'success');
-                } catch (err) {
-                    console.error('[SEDA recovery]', err);
-                    uiState.processedHandshakes.delete(d.id);
-                }
-                continue;
-            }
-
-            // The initiator may acknowledge immediately; only delete after recovery checks above.
-            if (data.initiatorAck === true && data.mode !== 'iceberg-base') {
-                await deleteDoc(d.ref).catch(err => console.warn('[SEDA] Не удалось удалить рукопожатие:', err));
-                continue;
-            }
-            if (data.completed === true || uiState.processedHandshakes.has(d.id)) continue;
-            if (!data.initiatorPublicKey || data.peerPublicKey) continue;
-
-            uiState.processedHandshakes.add(d.id);
-
-            try {
-                const keyPair = await generateECDHKeyPair();
-                const myPub = await exportPublicKey(keyPair);
-                const myPrivJwk = await exportPrivateKey(keyPair);
-                await DB.saveECDHKeys(d.id, myPub, myPrivJwk);
-
-                const peerPub = await importPublicKey(data.initiatorPublicKey);
-                const sharedKey = await deriveSharedKey(keyPair.privateKey, peerPub);
-
-                const mySedaKey = serializeKey(generateSedaKey());
-                const encryptedMyKey = await aesEncrypt(mySedaKey, sharedKey);
-
-                // Persist the exchanged key locally before telling the initiator it is stored.
-                // This keeps a fast acknowledgement/reload from deleting the only recovery copy.
-                await DB.saveSedaKey(d.id, mySedaKey);
-                await DB.markSedaKeyShared(d.id);
-                await updateDoc(d.ref, {
-                    peerPublicKey: myPub,
-                    encryptedSedaKey: encryptedMyKey,
-                    respondedAt: Date.now(),
-                    peerKeyStored: true,
-                    peerKeyStoredAt: Date.now()
-                });
-
-                const initiatorUid = data.initiator;
-                const contact = ensureArray(authState.userData.contacts).find(c => c.uid === initiatorUid);
-                if (contact) {
-                    let chats = ensureArray(authState.userData.chats);
-                    if (!chats.find(c => c.sedaChatId === d.id)) {
-                        chats = [...chats, {
-                            uid: initiatorUid,
-                            globalId: contact.globalId || '',
-                            nickname: contact.nickname || '',
-                            avatar: contact.avatar || null,
-                            isGroup: false,
-                            isSeda: true,
-                            sedaChatId: d.id,
-                            unread: true,
-                            lastMessage: '🔮 SEDA-чат создан',
-                            lastMessageTime: new Date()
-                        }];
-                        authState.userData.chats = chats;
-                        await updateDoc(doc(db, 'users', authState.user.uid), { chats }).catch(() => {});
-                        loadChats();
-                    }
-                }
-                showToast('🔮 Получен SEDA-чат', 'success');
-            } catch (e) {
-                console.error('[SEDA handshake]', e);
-                uiState.processedHandshakes.delete(d.id);
-            }
-        }
-    }, (err) => {
-        if (err.code === 'permission-denied') {
-            console.warn('[SEDA handshake] Ожидание прав доступа. Игнорируем...');
-        } else {
-            console.error('[SEDA handshake]', err);
-        }
-    });
-}
-
-export async function showCurrentSedaKey() {
-    if (!uiState.sedaEnabledForCurrentChat || !uiState.currentChatId) {
-        showToast('Откройте SEDA-чат', 'error');
-        return;
-    }
-    const k = await DB.getSedaKey(uiState.currentChatId);
-    if (!k) { showToast('Ключ не найден', 'error'); return; }
-    document.getElementById('sedaKeyDisplay').textContent = k;
-    document.getElementById('sedaKeyScreen').classList.add('active');
-}
-
-export async function pasteSedaKeyFromClipboard() {
-    try {
-        const txt = await navigator.clipboard.readText();
-        if (!txt || !txt.startsWith('SEDAKEY:')) {
-            showToast('❌ Нет ключа в буфере', 'error');
-            return;
-        }
-        if (!uiState.currentChatId) return;
-        await DB.saveSedaKey(uiState.currentChatId, txt, false, true);
-        uiState.currentSedaKey = txt;
-        uiState.sedaEnabledForCurrentChat = true;
-        showToast('✅ Ключ вставлен!', 'success');
-        loadMessages();
-    } catch (e) {
-        showToast('❌ Не удалось прочитать буфер', 'error');
-    }
-}
-
-export function copySedaKeyToClipboard() {
-    const k = document.getElementById('sedaKeyDisplay').textContent;
-    if (!k) return;
-    navigator.clipboard.writeText(k)
-        .then(() => showToast('✅ Скопировано', 'success'))
-        .catch(() => showToast('❌ Ошибка', 'error'));
-}
-
-export function updateSedaUI() {
-    const sm = document.getElementById('sedaModeBtn');
-    const sk = document.getElementById('sedaKeyBtn');
-
-    if (sm) {
-        const showSedaMode = authState.sedaProActivated
-            && uiState.currentChatId
-            && uiState.currentChat
-            && !uiState.currentChat.isSeda
-            && !uiState.currentChannel;
-        sm.style.display = showSedaMode ? 'inline-block' : 'none';
-    }
-    if (sk) {
-        const showSedaKey = authState.sedaProActivated
-            && uiState.sedaEnabledForCurrentChat
-            && uiState.currentChatId;
-        sk.style.display = showSedaKey ? 'inline-block' : 'none';
-    }
-}
-
+const sedaInitiatorListeners=new Map();
+function watchSedaInitiatorHandshake(chatId){if(!chatId||sedaInitiatorListeners.has(chatId))return;const ref=doc(db,'seda_handshakes',chatId);let unsub=()=>{},busy=false;unsub=onSnapshot(ref,async snap=>{if(!snap.exists()){try{unsub();}catch{}sedaInitiatorListeners.delete(chatId);return;}const d=snap.data();if(d.initiator!==authState.user?.uid||!d.peerPublicKey||!d.encryptedSedaKey||busy)return;busy=true;try{const saved=await DB.getECDHKeys(chatId);if(!saved?.privateKey)throw Error('Не найден локальный ключ сеанса');const priv=await crypto.subtle.importKey('jwk',saved.privateKey,{name:'ECDH',namedCurve:'P-256'},true,['deriveKey','deriveBits']);const shared=await deriveSharedKey(priv,await importPublicKey(d.peerPublicKey));const key=await aesDecrypt(d.encryptedSedaKey,shared);if(!key?.startsWith('SEDAKEY:'))throw Error('Не удалось расшифровать ключ сеанса');await DB.saveChatKey(chatId,key);await DB.markChatKeyShared(chatId);if(uiState.currentChatId===chatId){uiState.currentChatKey=key;uiState.sedaSessionReady=true;const st=document.getElementById('chatStatus');if(st)st.textContent='🔐 SEDA Ultra • защищено';await loadMessages();}await updateDoc(ref,{initiatorAck:true,initiatorAckAt:Date.now(),completed:true,expiresAt:null});showToast('SEDA Ultra соединение установлено','success');try{unsub();}catch{}sedaInitiatorListeners.delete(chatId);}catch(e){console.error('[SEDA initiator]',e);showToast('Не удалось завершить установку SEDA Ultra. Повторите открытие чата.','error',4500);}finally{busy=false;}},err=>{console.error('[SEDA session listener]',err);try{unsub();}catch{}sedaInitiatorListeners.delete(chatId);});sedaInitiatorListeners.set(chatId,unsub);}
+export function startSedaSessionListener(){if(uiState.sedaHandshakeUnsub)uiState.sedaHandshakeUnsub();if(!authState.user?.uid)return;const q=query(collection(db,'seda_handshakes'),where('peer','==',authState.user.uid));uiState.sedaHandshakeUnsub=onSnapshot(q,async snap=>{for(const d of snap.docs){const data=d.data();if(data.initiatorAck===true){await deleteDoc(d.ref).catch(()=>{});continue;}if(data.completed===true||data.peerPublicKey||!data.initiatorPublicKey||uiState.processedHandshakes.has(d.id))continue;if(Number(data.expiresAt)>0&&Number(data.expiresAt)<=Date.now())continue;uiState.processedHandshakes.add(d.id);try{const pair=await generateECDHKeyPair(),pub=await exportPublicKey(pair),priv=await exportPrivateKey(pair),shared=await deriveSharedKey(pair.privateKey,await importPublicKey(data.initiatorPublicKey)),key=serializeKey(generateSedaKey()),wrapped=await aesEncrypt(key,shared);await DB.saveECDHKeys(d.id,pub,priv);await DB.saveChatKey(d.id,key);await DB.markChatKeyShared(d.id);await updateDoc(d.ref,{peerPublicKey:pub,encryptedSedaKey:wrapped,peerKeyStored:true,peerKeyStoredAt:Date.now(),respondedAt:Date.now()});if(uiState.currentChatId===d.id){uiState.currentChatKey=key;uiState.sedaSessionReady=true;const st=document.getElementById('chatStatus');if(st)st.textContent='🔐 SEDA Ultra • защищено';await loadMessages();}uiState.processedHandshakes.delete(d.id);}catch(e){console.error('[SEDA responder]',e);uiState.processedHandshakes.delete(d.id);}}},e=>console.error('[SEDA session listener]',e));}
 function startChatMetaListener(chat) {
     if (uiState.chatMetaUnsub) {
         try { uiState.chatMetaUnsub(); } catch {}
         uiState.chatMetaUnsub = null;
     }
-    if (!chat || !chat.uid || chat.isSeda) return;
+    if (!chat || !chat.uid) return;
 
     // Presence is intentionally separate from the private /users document.
     uiState.chatMetaUnsub = onSnapshot(doc(db, 'presence', chat.uid), (snap) => {
@@ -3511,86 +2683,19 @@ export async function notifyTyping() {
     } catch {}
 }
 
-export async function clearChatById(uid, sedaChatId, explicitChatId = '', kind = 'chat') {
-    // History clearing is per-user: never try to delete messages sent by the other participant.
-    const chatId = explicitChatId || (sedaChatId ? sedaChatId : [authState.user.uid, uid].sort().join('_'));
-    if (!chatId || !authState.user?.uid) return;
-    if (!confirm('Очистить историю только у вас? У других участников она останется.')) return;
-    try {
-        await markHistoryCleared(chatId);
-        await DB.clearCachedMessages(chatId);
-        if (uiState.currentChatId === chatId) {
-            if (uiState.messagesUnsub) { try { uiState.messagesUnsub(); } catch {} uiState.messagesUnsub = null; }
-            ++messageLoadVersion;
-            const area = document.getElementById('messagesArea');
-            if (area) area.innerHTML = '<div class="empty-state">История очищена. Новые сообщения появятся здесь.</div>';
-            await loadMessages();
-        }
-        const contextKind = uiState.currentChannel && uiState.currentChatId === chatId
-            ? 'канала'
-            : uiState.currentGroup && uiState.currentChatId === chatId
-                ? 'группы'
-                : (kind === 'channel' ? 'канала' : kind === 'group' ? 'группы' : 'чата');
-        showToast(`История ${contextKind} очищена`, 'success');
-    } catch (e) {
-        console.error('[Chat clear] Не удалось очистить историю:', e);
-        showToast('Не удалось очистить историю. Проверьте доступ к Firestore и повторите попытку.', 'error');
-    }
-}
-
-export async function deleteChatById(uid, sedaChatId) {
-    if (!confirm('Удалить чат из списка и скрыть его старую историю только у вас?')) return false;
-    try {
-        const chatId = sedaChatId || [authState.user.uid, uid].sort().join('_');
-        await setDoc(doc(db, 'chat_clears', authState.user.uid, 'items', chatId), {
-            clearedAt: serverTimestamp(),
-            hidden: true,
-            hiddenAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-        }, { merge: true });
-        await DB.clearCachedMessages(chatId);
-        const chats = ensureArray(authState.userData.chats).filter(c => {
-            if (sedaChatId && c.sedaChatId === sedaChatId) return false;
-            if (!sedaChatId && c.uid === uid && !c.isGroup && !c.isSeda) return false;
-            return true;
-        });
-        await updateDoc(doc(db, 'users', authState.user.uid), { chats });
-        authState.userData.chats = chats;
-        await DB.Lists.setChats(authState.user.uid, chats);
-        if (uiState.currentChatId === chatId) closeChat();
-        loadChats();
-        showToast('Чат удалён из списка. Старая история скрыта у вас.', 'success');
-        return true;
-    } catch (e) {
-        console.error('[Chat delete] Не удалось удалить чат:', e);
-        showToast('Не удалось удалить чат. Проверьте права доступа и повторите попытку.', 'error');
-        return false;
-    }
-}
-
-export async function clearCurrentChat() {
-    if (!uiState.currentChatId || !authState.user?.uid) return;
-    // Clearing is a personal history marker. Channel admins do not get to erase
-    // history for everyone, and ordinary members can clear their own view too.
-    const kind = uiState.currentChannel ? 'channel' : uiState.currentGroup ? 'group' : 'chat';
-    await clearChatById(
-        uiState.currentChat?.uid || '',
-        uiState.currentChat?.sedaChatId || '',
-        uiState.currentChatId,
-        kind
-    );
-}
-
+export async function clearChatById(uid,_unused='',explicitChatId='',kind='chat'){const chatId=explicitChatId||'sedaultra_'+[authState.user.uid,uid].sort().join('_');if(!confirm('Очистить историю только у вас?'))return false;try{await setDoc(doc(db,'chat_clears',authState.user.uid,'items',chatId),{clearedAt:serverTimestamp(),updatedAt:serverTimestamp()},{merge:true});await DB.clearCachedMessages(chatId);if(uiState.currentChatId===chatId)await loadMessages();showToast('История очищена','success');return true;}catch(e){console.error('[Chat clear]',e);showToast('Не удалось очистить историю. Проверьте доступ к Firestore.','error');return false;}}
+export async function deleteChatById(uid){if(!confirm('Удалить чат из списка и скрыть историю только у вас?'))return false;try{const chatId='sedaultra_'+[authState.user.uid,uid].sort().join('_');await setDoc(doc(db,'chat_clears',authState.user.uid,'items',chatId),{clearedAt:serverTimestamp(),hidden:true,hiddenAt:serverTimestamp(),updatedAt:serverTimestamp()},{merge:true});await DB.clearCachedMessages(chatId);const chats=ensureArray(authState.userData.chats).filter(c=>!(c.uid===uid&&!c.isGroup));await updateDoc(doc(db,'users',authState.user.uid),{chats});authState.userData.chats=chats;await DB.Lists.setChats(authState.user.uid,chats);if(uiState.currentChatId===chatId)closeChat();loadChats();showToast('Чат удалён из списка','success');return true;}catch(e){console.error('[Chat delete]',e);showToast('Не удалось удалить чат','error');return false;}}
+export async function clearCurrentChat(){if(!uiState.currentChatId||!authState.user?.uid)return;const kind=uiState.currentChannel?'channel':uiState.currentGroup?'group':'chat';await clearChatById(uiState.currentChat?.uid||'','',uiState.currentChatId,kind);}
 export async function deleteCurrentChat() {
     if (!uiState.currentChat) return;
-    const deleted = await deleteChatById(uiState.currentChat.uid, uiState.currentChat.sedaChatId || '');
+    const deleted = await deleteChatById(uiState.currentChat.uid);
     if (deleted) closeChat();
 }
 
 export async function openChatWithContact(contact) {
     if (!contact || !contact.uid) return;
     let chats = ensureArray(authState.userData?.chats);
-    let chat = chats.find(c => c.uid === contact.uid && !c.isGroup && !c.isSeda);
+    let chat = chats.find(c => c.uid === contact.uid && !c.isGroup);
     if (!chat) {
         chat = {
             uid: contact.uid,
