@@ -60,7 +60,6 @@ export async function getMessagingInstance() {
 export const APP_VERSION = "2.0.0";
 export const APP_NAME = "Айсберг";
 export const APP_LOGO = "https://i.ibb.co/8JY0bXs/IMG-0335.jpg";
-export const SEDA_ACTIVATION_CODE = "2762263385798";
 
 export const STICKERS = [
     '🐱','🐶','🐼','🦊','🐻','🐨','🐸','🐷','🐵','🦁','🐯','🐮','🐰','🐹','🐭','🐿️','🦔','🦇','🐺','🦝',
@@ -73,7 +72,7 @@ export const STICKERS = [
 
 export const REACTION_EMOJIS = ['👍','❤️','😂','🔥','😮','😢','🙏','🎉'];
 
-export const MAX_MEDIA_SIZE = 700 * 1024; // 700 КиБ: запас на base64 и поля документа Firestore (лимит документа 1 МиБ)
+export const MAX_MEDIA_SIZE = 25 * 1024 * 1024; // 25 MiB; direct chat attachments are stored encrypted in Firebase Storage
 export const MAX_PHOTO_DIMENSION = 1600;
 export const MAX_STORIES = 5;
 export const STORY_LIFETIME = 24 * 60 * 60 * 1000; // 24 часа
