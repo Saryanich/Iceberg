@@ -1884,7 +1884,7 @@ async function renderMessage(msg) {
     } else {
         const t = document.createElement('div');
         t.className = 'message-text-content';
-        t.textContent = displayText || '';
+        t.textContent = msg.attachmentPending ? '⏳ Вложение загружается…' : (displayText || '');
         div.appendChild(t);
     }
 
