@@ -57,7 +57,7 @@ export async function getMessagingInstance() {
 // ===================================================================
 // КОНСТАНТЫ
 // ===================================================================
-export const APP_VERSION = "2.0.0";
+export const APP_VERSION = "2.1.0";
 export const APP_NAME = "Айсберг";
 export const APP_LOGO = "https://i.ibb.co/8JY0bXs/IMG-0335.jpg";
 
