@@ -818,13 +818,7 @@ export async function showContactCard(contact) {
     sedaButton.type = 'button';
     sedaButton.className = 'btn btn-secondary';
     sedaButton.textContent = '🔮 Создать SEDA-чат';
-    sedaButton.disabled = !authState.sedaProActivated;
-    sedaButton.title = sedaButton.disabled ? 'Сначала активируйте SEDA Pro в настройках' : '';
     sedaButton.onclick = async () => {
-        if (!authState.sedaProActivated) {
-            showToast('Сначала активируйте SEDA Pro в настройках', 'error');
-            return;
-        }
         modal.classList.remove('active');
         await openChatWithContact(profile);
         await startSedaChat();

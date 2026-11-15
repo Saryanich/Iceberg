@@ -1,4 +1,4 @@
-import { auth, db, SEDA_ACTIVATION_CODE } from './config.js';
+import { auth, db } from './config.js';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, serverTimestamp, arrayUnion, arrayRemove, limit, runTransaction, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { hash2FACode, sha256Hex } from './crypto.js';
@@ -21,7 +21,8 @@ export const authState = {
     legacyDeviceToken: null,
     currentIP: null,
     loggingIn: false,
-    sedaProActivated: false,
+    get sedaProActivated() { return true; },
+    set sedaProActivated(_value) {},
     restoredFromCache: false
 };
 
@@ -567,19 +568,6 @@ export async function ensureProfile(user, profileData = {}) {
         try { await setDoc(doc(db, 'global_ids', globalId), { uid: user.uid, email: user.email, createdAt: serverTimestamp() }); } catch {}
     }
     return initial;
-}
-
-export async function activateSedaPro(inputCode) {
-    if (!inputCode || typeof inputCode !== 'string' || inputCode.length > 50) return { success: false, error: 'Введите код' };
-    if (!checkRateLimit('sedaActivate', 5, 60 * 1000)) return { success: false, error: 'Слишком много попыток.' };
-    if (inputCode !== SEDA_ACTIVATION_CODE) return { success: false, error: 'Неверный код активации' };
-    if (!authState.user) return { success: false, error: 'Нужно войти в аккаунт' };
-    try {
-        await updateDoc(doc(db, 'users', authState.user.uid), { sedaProActivated: true, sedaProActivatedAt: serverTimestamp() });
-        authState.sedaProActivated = true;
-        if (authState.userData) { authState.userData.sedaProActivated = true; saveAuthCache(authState.user.uid, authState.userData); }
-        return { success: true };
-    } catch (e) { return { success: false, error: 'Ошибка сохранения' }; }
 }
 
 export async function logout() {

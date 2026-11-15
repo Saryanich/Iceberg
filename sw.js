@@ -4,8 +4,8 @@
 // ⚠️ ОБЯЗАТЕЛЬНО в корне репозитория (не в js/)
 // ==================================================================
 
-const CACHE_NAME = 'iceberg-v2.0.17';
-const RUNTIME_CACHE = 'iceberg-runtime-v2.0.17';
+const CACHE_NAME = 'iceberg-v2.0.18';
+const RUNTIME_CACHE = 'iceberg-runtime-v2.0.18';
 
 // Файлы, которые кэшируем при установке (app shell)
 const PRECACHE_URLS = [

@@ -6,7 +6,7 @@ import {
     verify2FA,
     cancel2FA,
     login,
-    activateSedaPro,
+
     logout,
     subscribeAuthState,
     startBlockCheck,
@@ -857,11 +857,7 @@ function bindUIEvents() {
                 : uiState.autoDeleteHours === 24 ? '24ч'
                 : uiState.autoDeleteHours === 168 ? '7д' : '30д';
         }
-        const sb = document.getElementById('sedaStatusBadge');
-        if (sb) {
-            sb.textContent = authState.sedaProActivated ? '✓ Активирован' : 'Не активирован';
-            sb.style.color = authState.sedaProActivated ? 'var(--success)' : 'var(--warning)';
-        }
+
     };
 
     document.querySelector('#settingsModal .close-modal').onclick = () => {
@@ -1030,28 +1026,6 @@ function bindUIEvents() {
     document.getElementById('voiceBtn').onclick = toggleVoiceRecording;
 
     document.querySelector('.reply-preview-close').onclick = cancelReply;
-
-    document.getElementById('openSedaActivation').onclick = () => {
-        document.getElementById('settingsModal').classList.remove('active');
-        document.getElementById('sedaActivationScreen').classList.add('active');
-    };
-    document.querySelector('#sedaActivationScreen .btn-seda').onclick = async () => {
-        const code = document.getElementById('sedaActivationCode').value.trim();
-        if (!code) { showToast('Введите код', 'error'); return; }
-        const res = await activateSedaPro(code);
-        if (res.success) {
-            showToast('✅ SEDA Pro активирован!', 'success');
-            document.getElementById('sedaActivationScreen').classList.remove('active');
-            document.getElementById('sedaActivationCode').value = '';
-            updateSedaUI();
-        } else {
-            showToast(res.error || 'Ошибка', 'error');
-        }
-    };
-    document.querySelector('#sedaActivationScreen .btn-secondary').onclick = () => {
-        document.getElementById('sedaActivationScreen').classList.remove('active');
-        document.getElementById('sedaActivationCode').value = '';
-    };
 
     document.querySelector('#sedaKeyScreen .btn-seda').onclick = copySedaKeyToClipboard;
     const keyBtns = document.querySelectorAll('#sedaKeyScreen .btn-secondary');
@@ -2071,5 +2045,5 @@ if (document.readyState === 'loading') {
 
 window.__iceberg = {
     authState, uiState, DB,
-    logout, login, activateSedaPro
+    logout, login
 };
