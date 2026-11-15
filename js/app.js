@@ -1892,6 +1892,8 @@ async function clearAllChats() {
                 : [uid, chat.uid].sort().join('_');
             await setDoc(doc(db, 'chat_clears', uid, 'items', chatId), {
                 clearedAt: serverTimestamp(),
+                hidden: true,
+                hiddenAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             }, { merge: true });
             await DB.clearCachedMessages(chatId);
