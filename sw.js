@@ -4,8 +4,8 @@
 // ⚠️ ОБЯЗАТЕЛЬНО в корне репозитория (не в js/)
 // ==================================================================
 
-const CACHE_NAME = 'iceberg-v2.0.16';
-const RUNTIME_CACHE = 'iceberg-runtime-v2.0.16';
+const CACHE_NAME = 'iceberg-v2.0.17';
+const RUNTIME_CACHE = 'iceberg-runtime-v2.0.17';
 
 // Файлы, которые кэшируем при установке (app shell)
 const PRECACHE_URLS = [
@@ -15,6 +15,7 @@ const PRECACHE_URLS = [
     './css/style.css',
     './js/config.js',
     './js/crypto.js',
+    './js/seda-ultra.js',
     './js/db.js',
     './js/auth.js',
     './js/ui.js',

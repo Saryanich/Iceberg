@@ -126,77 +126,9 @@ export async function aesDecrypt(payload, aesKey) {
     }
 }
 
-// ===================================================================
-// SEDA Ultra v1 — пять слоёв аутентифицированного шифрования.
-// ===================================================================
-const ULTRA_PREFIX = 'SEDAULTRA1:';
-const ULTRA_LAYERS = 5;
+// SEDA Ultra is maintained in its own module. Re-exports preserve existing callers.
+export { sedaUltraEncryptWithKey, sedaUltraDecrypt, isSedaUltraPayload, isSedaChatKey, createSedaMessageKeyCheck } from './seda-ultra.js';
 
-async function deriveUltraKeys(keyStr) {
-    if (typeof keyStr !== 'string' || !keyStr.startsWith('SEDAKEY:')) {
-        throw new Error('Некорректный ключ SEDA');
-    }
-    const raw = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(keyStr));
-    const material = await crypto.subtle.importKey('raw', raw, 'HKDF', false, ['deriveKey']);
-    const salt = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('Iceberg SEDA Ultra v1'));
-    const keys = [];
-    for (let i = 0; i < ULTRA_LAYERS; i++) {
-        keys.push(await crypto.subtle.deriveKey({
-            name: 'HKDF', hash: 'SHA-256', salt,
-            info: new TextEncoder().encode('Iceberg SEDA Ultra v1 / AES-256-GCM / layer ' + i)
-        }, material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']));
-    }
-    return keys;
-}
-
-async function ultraSealBytes(bytes, key) {
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, tagLength: 128 }, key, bytes);
-    return { iv: bufToBase64(iv), cipher: new Uint8Array(cipher) };
-}
-
-async function ultraOpenBytes(cipher, ivBase64, key) {
-    const iv = new Uint8Array(base64ToBuf(ivBase64));
-    if (iv.length !== 12) throw new Error('Некорректный AES-GCM IV');
-    return new Uint8Array(await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv, tagLength: 128 }, key, cipher
-    ));
-}
-
-export async function sedaUltraEncryptWithKey(text, keyStr) {
-    const keys = await deriveUltraKeys(keyStr);
-    let payload = new TextEncoder().encode(String(text));
-    const ivs = [];
-    for (const key of keys) {
-        const sealed = await ultraSealBytes(payload, key);
-        ivs.push(sealed.iv);
-        payload = sealed.cipher;
-    }
-    return ULTRA_PREFIX + JSON.stringify({ v: 1, ivs, c: bufToBase64(payload) });
-}
-
-export async function sedaUltraDecrypt(payload, keyStr) {
-    try {
-        if (typeof payload !== 'string' || !payload.startsWith(ULTRA_PREFIX)) return null;
-        const envelope = JSON.parse(payload.slice(ULTRA_PREFIX.length));
-        if (envelope?.v !== 1 || !Array.isArray(envelope.ivs) ||
-            envelope.ivs.length !== ULTRA_LAYERS || typeof envelope.c !== 'string') return null;
-        const keys = await deriveUltraKeys(keyStr);
-        let bytes = new Uint8Array(base64ToBuf(envelope.c));
-        for (let i = keys.length - 1; i >= 0; i--) {
-            bytes = await ultraOpenBytes(bytes, envelope.ivs[i], keys[i]);
-        }
-        return new TextDecoder().decode(bytes);
-    } catch (e) {
-        console.error('[SEDA Ultra] decrypt error:', e);
-        return null;
-    }
-}
-
-export function isSedaUltraPayload(payload) {
-    return typeof payload === 'string' && payload.startsWith(ULTRA_PREFIX);
-}
- 
 // Базовый режим Iceberg: один AES-256-GCM слой, отдельно от SEDA Ultra.
 const BASE_PREFIX = 'ICEBERGBASE1:';
 
