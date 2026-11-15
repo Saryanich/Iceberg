@@ -21,8 +21,6 @@ export const authState = {
     legacyDeviceToken: null,
     currentIP: null,
     loggingIn: false,
-    get sedaProActivated() { return true; },
-    set sedaProActivated(_value) {},
     restoredFromCache: false
 };
 
@@ -116,7 +114,7 @@ function startDeviceSessionWatcher(uid) {
             stopDeviceSessionWatcher();
             clearAuthCache();
             authState.user = null; authState.userData = null;
-            authState.sedaProActivated = false; authState.restoredFromCache = false;
+            authState.restoredFromCache = false;
             window.dispatchEvent(new CustomEvent('iceberg:force-logout', {
                 detail: { reason: revoked ? 'device-revoked' : 'locked' }
             }));
@@ -367,7 +365,6 @@ export async function handleAuthLogin(user, callbacks = {}) {
             );
 
             authState.user = user; authState.userData = data;
-            authState.sedaProActivated = data.sedaProActivated || false;
             startDeviceSessionWatcher(user.uid);
             saveAuthCache(user.uid, data);
             onSuccess?.(user, data);
@@ -384,7 +381,6 @@ export async function handleAuthLogin(user, callbacks = {}) {
         if (cached && cached.uid === user.uid && cached.data) {
             authState.user = user;
             authState.userData = cached.data;
-            authState.sedaProActivated = cached.data.sedaProActivated || false;
             authState.restoredFromCache = true;
             onSuccess?.(user, cached.data);
             return;
@@ -403,8 +399,7 @@ async function syncUserFromServer(uid) {
             window.dispatchEvent(new CustomEvent('iceberg:force-logout', { detail: { reason: 'locked' } }));
             return;
         }
-        authState.userData = data; authState.sedaProActivated = data.sedaProActivated || false;
-        saveAuthCache(uid, data);
+        authState.userData = data; saveAuthCache(uid, data);
         window.dispatchEvent(new CustomEvent('iceberg:user-data-updated', { detail: { data } }));
         updateDoc(doc(db, 'users', uid), {
             online: true, lastSeen: serverTimestamp(),
@@ -461,7 +456,6 @@ export async function verify2FA(code, trustDevice = false) {
     startDeviceSessionWatcher(user.uid);
     const ud = await getDoc(userRef);
     authState.userData = ud.data();
-    authState.sedaProActivated = authState.userData?.sedaProActivated || false;
     if (authState.userData) saveAuthCache(user.uid, authState.userData);
     updatePublicPresence(user.uid, true).catch(error =>
         console.warn('[Presence] Не удалось включить статус после 2FA:', error)
@@ -561,7 +555,7 @@ export async function ensureProfile(user, profileData = {}) {
         uid: user.uid, role: 'user', email: user.email, globalId, nickname: profileData.nickname || '@' + globalId,
         firstName: '', lastName: '', mood: '', avatar: null,
         chats: [], contacts: [], groups: [], channels: [], stories: [], trustedDevices: [],
-        accountLocked: false, icebergAccess: true, sedaProActivated: false, autoDeleteHours: 0, createdAt: serverTimestamp()
+        accountLocked: false, icebergAccess: true, autoDeleteHours: 0, createdAt: serverTimestamp()
     };
     await setDoc(ref, initial);
     if (globalId) {
@@ -585,7 +579,6 @@ export async function logout() {
     clearAuthCache();
     authState.user = null; 
     authState.userData = null; 
-    authState.sedaProActivated = false; 
     authState.restoredFromCache = false;
     authState.awaitingTwoFactor = false;
     authState.pendingUser = null;
@@ -604,7 +597,7 @@ export function tryInstantRestore() {
     if (!fbUser || fbUser.uid !== cached.uid) { if (fbUser && cached.uid !== fbUser.uid) clearAuthCache(); return null; }
     collectDeviceInfoSync();
     authState.user = fbUser; authState.userData = cached.data;
-    authState.sedaProActivated = cached.data.sedaProActivated || false; authState.restoredFromCache = true;
+    authState.restoredFromCache = true;
     startDeviceSessionWatcher(fbUser.uid);
     return cached.data;
 }
