@@ -45,12 +45,9 @@ import {
     cancelReply,
     deleteMessage,
     scrollToMessage,
-    startSedaChat,
-    startSedaHandshakeListener,
-    showCurrentSedaKey,
-    copySedaKeyToClipboard,
-    pasteSedaKeyFromClipboard,
-    updateSedaUI,
+
+    startSedaSessionListener,
+
     openChatWithContact,
     clearChatById,
     deleteChatById,
@@ -334,7 +331,6 @@ async function bootMessenger(user, userData) {
         loadTheme();
         initStickerPicker();
         renderUserProfile();
-        updateSedaUI();
 
         uiState.autoDeleteHours = authState.userData?.autoDeleteHours || 0;
 
@@ -345,7 +341,7 @@ async function bootMessenger(user, userData) {
         loadContacts();
         if (navigator.onLine) flushPendingChatSyncs().catch(e => console.warn('[Offline sync]', e));
 
-        startSedaHandshakeListener();
+        startSedaSessionListener();
 
         startBlockCheck(user.uid, () => {
             showToast('⚠️ Аккаунт заблокирован', 'error', 5000);
@@ -470,9 +466,8 @@ function setupAuthSyncEvents() {
         const data = e.detail?.data;
         if (!data) return;
         authState.userData = data;
-        authState.sedaProActivated = data.sedaProActivated || false;
         renderUserProfile();
-        updateSedaUI();
+
         loadChats();
         loadGroups();
         loadChannels();
@@ -850,7 +845,7 @@ function bindUIEvents() {
 
     const openSettings = () => {
         document.getElementById('settingsModal').classList.add('active');
-        updateSedaUI();
+
         const ad = document.getElementById('autoDeleteValue');
         if (ad) {
             ad.textContent = uiState.autoDeleteHours === 0 ? 'Выкл'
@@ -997,7 +992,6 @@ function bindUIEvents() {
     });
 
     document.querySelector('.back-btn').onclick = closeChat;
-    document.getElementById('sedaModeBtn').onclick = startSedaChat;
     document.getElementById('clearChatBtn').onclick = clearCurrentChat;
     document.getElementById('deleteChatBtn').onclick = deleteCurrentChat;
 
@@ -1027,13 +1021,6 @@ function bindUIEvents() {
 
     document.querySelector('.reply-preview-close').onclick = cancelReply;
 
-    document.querySelector('#sedaKeyScreen .btn-seda').onclick = copySedaKeyToClipboard;
-    const keyBtns = document.querySelectorAll('#sedaKeyScreen .btn-secondary');
-    keyBtns[0].onclick = pasteSedaKeyFromClipboard;
-    keyBtns[1].onclick = () => {
-        document.getElementById('sedaKeyScreen').classList.remove('active');
-    };
-
     document.querySelectorAll('#autoDeletePane .settings-row').forEach((row, i) => {
         const hours = [0, 24, 168, 720][i];
         row.onclick = () => setAutoDelete(hours);
@@ -1052,7 +1039,7 @@ function bindUIEvents() {
         const chatId = e.detail?.chatId;
         if (!chatId) return;
         const chat = (authState.userData?.chats || []).find(c =>
-            c.uid === e.detail.senderId || c.sedaChatId === chatId
+            c.uid === e.detail.senderId
         );
         if (chat) selectChat(chat);
     });
@@ -1861,9 +1848,7 @@ async function clearAllChats() {
 
         for (const chat of chats) {
             if (!chat?.uid) continue;
-            const chatId = chat.isSeda && chat.sedaChatId
-                ? chat.sedaChatId
-                : [uid, chat.uid].sort().join('_');
+            const chatId = 'sedaultra_'+[uid,chat.uid].sort().join('_');
             await setDoc(doc(db, 'chat_clears', uid, 'items', chatId), {
                 clearedAt: serverTimestamp(),
                 hidden: true,
@@ -1898,9 +1883,7 @@ async function clearAllMessages() {
 
         for (const chat of (authState.userData?.chats || [])) {
             if (!chat?.uid) continue;
-            chatIds.add(chat.isSeda && chat.sedaChatId
-                ? chat.sedaChatId
-                : [uid, chat.uid].sort().join('_'));
+            chatIds.add('sedaultra_'+[uid,chat.uid].sort().join('_'));
         }
         for (const group of (authState.userData?.groups || [])) {
             if (group?.id) chatIds.add('group_' + group.id);
