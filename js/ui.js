@@ -158,9 +158,112 @@ function removeOperationIndicator(indicator) {
     indicator?.row?.remove();
 }
 
+function revokeMessageObjectUrls(root) {
+    if (!root?.querySelectorAll) return;
+    for (const element of root.querySelectorAll('[src^="blob:"], [href^="blob:"]')) {
+        const url = element.getAttribute('src') || element.getAttribute('href');
+        if (url) URL.revokeObjectURL(url);
+    }
+}
+
+function messageContentChanged(previous, next) {
+    const fields = [
+        'senderId', 'senderName', 'text', 'encrypted', 'cryptoVersion',
+        'type', 'media', 'mediaEncrypted', 'fileName', 'fileSize',
+        'replyTo', 'attachmentPending', 'edited'
+    ];
+    if (fields.some(field => previous?.[field] !== next?.[field])) return true;
+    if (messageTimestampMillis(previous) !== messageTimestampMillis(next)) return true;
+
+    const oldAttachment = previous?.attachment || {};
+    const newAttachment = next?.attachment || {};
+    return ['path', 'version', 'wrappedKey', 'encryptedMetadata']
+        .some(field => oldAttachment[field] !== newAttachment[field]);
+}
+
+function reactionStateSignature(reactions) {
+    const value = reactions && typeof reactions === 'object' ? reactions : {};
+    return JSON.stringify(Object.keys(value).sort().map(emoji => [
+        emoji,
+        Array.isArray(value[emoji]) ? [...value[emoji]].sort() : value[emoji]
+    ]));
+}
+
+function createMessageReactions(msg) {
+    if (!msg.reactions || !Object.keys(msg.reactions).length) return null;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'chat-msg-reactions';
+    for (const [emoji, users] of Object.entries(msg.reactions)) {
+        if (!Array.isArray(users) || !users.length) continue;
+        const mine = users.includes(authState.user.uid);
+        const reaction = document.createElement('span');
+        reaction.className = `chat-reaction ${mine ? 'mine' : ''}`;
+        reaction.textContent = `${emoji} ${users.length}`;
+        reaction.onclick = event => toggleReaction(msg.id, emoji, event);
+        wrapper.appendChild(reaction);
+    }
+    return wrapper.childElementCount ? wrapper : null;
+}
+
+function syncMessageDecorations(node, msg) {
+    const status = node.querySelector('.message-status');
+    if (status) status.textContent = msg.read ? '✓✓' : '✓';
+
+    const previousReactions = node.querySelector('.chat-msg-reactions');
+    const nextReactions = createMessageReactions(msg);
+    if (previousReactions && nextReactions) {
+        previousReactions.replaceWith(nextReactions);
+    } else if (previousReactions) {
+        previousReactions.remove();
+    } else if (nextReactions) {
+        const anchor = node.querySelector('.seda-badge-msg, .message-time');
+        if (anchor) anchor.before(nextReactions);
+        else node.appendChild(nextReactions);
+    }
+}
+
+async function updateRenderedMessages(area, previousMessages, messages, loadVersion, chatId) {
+    const previousById = new Map(previousMessages.map(message => [message.id, message]));
+    const nodesById = new Map(
+        Array.from(area.querySelectorAll('.message-bubble')).map(node => [node.dataset.id, node])
+    );
+    const wasAtBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 80;
+
+    for (const message of messages) {
+        const previous = previousById.get(message.id);
+        const currentNode = nodesById.get(message.id);
+        if (!previous || !currentNode) {
+            return await renderMessagesSequentially(area, messages, loadVersion, chatId);
+        }
+
+        if (messageContentChanged(previous, message)) {
+            const replacement = await renderMessage(message);
+            if (loadVersion !== messageLoadVersion || uiState.currentChatId !== chatId) {
+                revokeMessageObjectUrls(replacement);
+                return false;
+            }
+            if (currentNode.isConnected) {
+                revokeMessageObjectUrls(currentNode);
+                currentNode.replaceWith(replacement);
+                nodesById.set(message.id, replacement);
+            }
+        } else if (
+            previous.read !== message.read ||
+            reactionStateSignature(previous.reactions) !== reactionStateSignature(message.reactions)
+        ) {
+            syncMessageDecorations(currentNode, message);
+        }
+    }
+
+    if (wasAtBottom) area.scrollTop = area.scrollHeight;
+    bindChatLongPress();
+    return true;
+}
+
 async function renderMessagesSequentially(area, messages, loadVersion, chatId) {
     const renderVersion = ++messageRenderSequence;
     const operationRows = Array.from(area.querySelectorAll('.chat-operation-indicator'));
+    revokeMessageObjectUrls(area);
     area.replaceChildren(...operationRows);
     const batchSize = 8;
     for (let i = 0; i < messages.length; i += batchSize) {
@@ -171,7 +274,10 @@ async function renderMessagesSequentially(area, messages, loadVersion, chatId) {
         const nodes = await Promise.all(batch.map(message => renderMessage(message)));
         if (loadVersion !== messageLoadVersion ||
             renderVersion !== messageRenderSequence ||
-            uiState.currentChatId !== chatId) return false;
+            uiState.currentChatId !== chatId) {
+            nodes.forEach(revokeMessageObjectUrls);
+            return false;
+        }
         const fragment = document.createDocumentFragment();
         for (const node of nodes) if (node) fragment.appendChild(node);
         area.appendChild(fragment);
@@ -1691,6 +1797,7 @@ export async function loadMessages() {
     const historyClearedAt = await getHistoryClearedAt(chatId);
     if (loadVersion !== messageLoadVersion || uiState.currentChatId !== chatId) return;
 
+    revokeMessageObjectUrls(area);
     area.innerHTML = '';
     const loading = showOperationIndicator(chatId, 'Подключаем чат…', 'loading');
     let cachedMessages = [];
@@ -1757,8 +1864,11 @@ export async function loadMessages() {
             const sameMessages = currentIds.length === nextIds.length &&
                 currentIds.every((id, i) => id === nextIds[i]);
 
-            if (!sameMessages) await renderMessagesSequentially(area, msgs, loadVersion, chatId);
-            else bindChatLongPress();
+            if (!sameMessages) {
+                await renderMessagesSequentially(area, msgs, loadVersion, chatId);
+            } else if (!(await updateRenderedMessages(area, cachedMessages, msgs, loadVersion, chatId))) {
+                return;
+            }
 
             cachedMessages = msgs;
             if (firstSnapshot) {
@@ -1903,20 +2013,8 @@ async function renderMessage(msg) {
         div.appendChild(lock);
     }
 
-    if (msg.reactions && Object.keys(msg.reactions).length) {
-        const rw = document.createElement('div');
-        rw.className = 'chat-msg-reactions';
-        for (const [emoji, users] of Object.entries(msg.reactions)) {
-            if (!users || !users.length) continue;
-            const mine = users.includes(authState.user.uid);
-            const r = document.createElement('span');
-            r.className = `chat-reaction ${mine ? 'mine' : ''}`;
-            r.textContent = `${emoji} ${users.length}`;
-            r.onclick = (e) => toggleReaction(msg.id, emoji, e);
-            rw.appendChild(r);
-        }
-        div.appendChild(rw);
-    }
+    const reactionNode = createMessageReactions(msg);
+    if (reactionNode) div.appendChild(reactionNode);
 
     if (isEncrypted) {
         const badge = document.createElement('div');
