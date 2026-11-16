@@ -228,6 +228,7 @@ async function updateRenderedMessages(area, previousMessages, messages, loadVers
         Array.from(area.querySelectorAll('.message-bubble')).map(node => [node.dataset.id, node])
     );
     const wasAtBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 80;
+    const renderVersion = messageRenderSequence;
 
     for (const message of messages) {
         const previous = previousById.get(message.id);
@@ -238,7 +239,9 @@ async function updateRenderedMessages(area, previousMessages, messages, loadVers
 
         if (messageContentChanged(previous, message)) {
             const replacement = await renderMessage(message);
-            if (loadVersion !== messageLoadVersion || uiState.currentChatId !== chatId) {
+            if (loadVersion !== messageLoadVersion ||
+                renderVersion !== messageRenderSequence ||
+                uiState.currentChatId !== chatId) {
                 revokeMessageObjectUrls(replacement);
                 return false;
             }
@@ -246,6 +249,8 @@ async function updateRenderedMessages(area, previousMessages, messages, loadVers
                 revokeMessageObjectUrls(currentNode);
                 currentNode.replaceWith(replacement);
                 nodesById.set(message.id, replacement);
+            } else {
+                revokeMessageObjectUrls(replacement);
             }
         } else if (
             previous.read !== message.read ||
@@ -1658,7 +1663,9 @@ export function closeChat() {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
-    document.getElementById('messagesArea').innerHTML = '<div class="empty-state">Выберите чат</div>';
+    const messagesArea = document.getElementById('messagesArea');
+    revokeMessageObjectUrls(messagesArea);
+    messagesArea.innerHTML = '<div class="empty-state">Выберите чат</div>';
 }
 
 function closeCurrentSubscriptions() {
