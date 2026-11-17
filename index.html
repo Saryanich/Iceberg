@@ -552,6 +552,7 @@
     // Независимый обработчик: работает даже если модуль app.js не загрузился.
     (() => {
         const showStartupError = () => {
+            window.__icebergAddDiagnostic?.('Тайм-аут запуска', 'Стартовый экран не получил сигнал об успешной инициализации за 12 секунд');
             const loading = document.getElementById('loadingScreen');
             const offline = document.getElementById('offlineScreen');
             if (window.__icebergStartupResolved || !loading || !offline || loading.classList.contains('hidden')) return;
