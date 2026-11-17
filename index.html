@@ -48,6 +48,15 @@
             <span class="retry-icon" aria-hidden="true">↻</span>
             <span id="retryConnectionLabel">Перезагрузить</span>
         </button>
+        <button id="showDiagnosticsBtn" class="offline-diagnostics-toggle" type="button" aria-expanded="false" aria-controls="offlineDiagnostics">Показать ошибки</button>
+        <section id="offlineDiagnostics" class="offline-diagnostics" hidden aria-label="Диагностика подключения">
+            <div class="offline-diagnostics-head">
+                <strong>Диагностика Iceberg</strong>
+                <button id="copyDiagnosticsBtn" class="offline-copy-diagnostics" type="button">Копировать</button>
+            </div>
+            <pre id="offlineDiagnosticsLog">Ошибки пока не зарегистрированы.</pre>
+            <p>Здесь отображаются ошибки JavaScript, Firebase и загрузки ресурсов с момента открытия страницы. Секретные данные авторизации не записываются.</p>
+        </section>
     </div>
 </div>
     <!-- ===============================================================
@@ -462,6 +471,84 @@
 
     <!-- СКРИПТЫ -->
     <script>
+    // Диагностика запуска: работает даже если модуль app.js или Firebase не загрузились.
+    (() => {
+        const diagnostics = [];
+        const maxEntries = 80;
+        const safeText = (value) => String(value ?? '').replace(/(?:Bearer\\s+)[^\\s]+/gi, 'Bearer [скрыто]').slice(0, 1800);
+        const addDiagnostic = (type, detail) => {
+            const entry = { time: new Date().toLocaleTimeString(), type, detail: safeText(detail) };
+            diagnostics.push(entry);
+            if (diagnostics.length > maxEntries) diagnostics.shift();
+            window.__icebergDiagnostics = diagnostics;
+            const output = document.getElementById('offlineDiagnosticsLog');
+            if (output && !document.getElementById('offlineDiagnostics')?.hidden) {
+                output.textContent = diagnostics.map(item => '[' + item.time + '] ' + item.type + ': ' + item.detail).join('\\n');
+            }
+        };
+        window.__icebergAddDiagnostic = addDiagnostic;
+        window.addEventListener('error', (event) => {
+            if (event.target && event.target !== window) {
+                const target = event.target;
+                addDiagnostic('Загрузка ресурса', (target.tagName || 'ресурс') + ': ' + (target.src || target.href || 'не удалось загрузить'));
+                return;
+            }
+            const error = event.error;
+            addDiagnostic('JavaScript', [event.message, event.filename, event.lineno ? 'строка ' + event.lineno : '', error?.stack].filter(Boolean).join(' | '));
+        }, true);
+        window.addEventListener('unhandledrejection', (event) => {
+            const reason = event.reason;
+            addDiagnostic('Необработанная ошибка Promise', [reason?.code, reason?.message || reason, reason?.stack].filter(Boolean).join(' | '));
+        });
+        window.addEventListener('offline', () => addDiagnostic('Сеть', 'Браузер сообщил об отсутствии подключения'));
+        window.addEventListener('online', () => addDiagnostic('Сеть', 'Подключение к сети восстановлено'));
+        for (const method of ['error', 'warn']) {
+            const original = console[method].bind(console);
+            console[method] = (...args) => {
+                const details = args.map(value => {
+                    if (value instanceof Error) return [value.name, value.code, value.message, value.stack].filter(Boolean).join(': ');
+                    if (value && typeof value === 'object') return [value.code, value.message, value.name].filter(Boolean).join(': ') || Object.prototype.toString.call(value);
+                    return String(value);
+                }).join(' ');
+                if (details) addDiagnostic(method === 'error' ? 'console.error' : 'console.warn', details);
+                original(...args);
+            };
+        }
+        document.addEventListener('click', async (event) => {
+            const toggle = event.target.closest('#showDiagnosticsBtn');
+            if (toggle) {
+                const panel = document.getElementById('offlineDiagnostics');
+                const opening = panel.hidden;
+                panel.hidden = !opening;
+                toggle.setAttribute('aria-expanded', String(opening));
+                toggle.textContent = opening ? 'Скрыть ошибки' : 'Показать ошибки';
+                if (opening) document.getElementById('offlineDiagnosticsLog').textContent = diagnostics.length
+                    ? diagnostics.map(item => '[' + item.time + '] ' + item.type + ': ' + item.detail).join('\\n')
+                    : 'Ошибки пока не зарегистрированы.';
+            }
+            if (event.target.closest('#copyDiagnosticsBtn')) {
+                const report = diagnostics.map(item => '[' + item.time + '] ' + item.type + ': ' + item.detail).join('\\n') || 'Ошибки не зарегистрированы.';
+                const button = document.getElementById('copyDiagnosticsBtn');
+                try {
+                    await navigator.clipboard.writeText(report);
+                    button.textContent = 'Скопировано';
+                } catch {
+                    const area = document.createElement('textarea');
+                    area.value = report;
+                    area.style.position = 'fixed';
+                    area.style.opacity = '0';
+                    document.body.appendChild(area);
+                    area.select();
+                    document.execCommand('copy');
+                    area.remove();
+                    button.textContent = 'Скопировано';
+                }
+                setTimeout(() => { if (button.isConnected) button.textContent = 'Копировать'; }, 1800);
+            }
+        });
+        addDiagnostic('Запуск', 'Диагностика включена');
+    })();
+
     // Независимый обработчик: работает даже если модуль app.js не загрузился.
     (() => {
         const showStartupError = () => {
