@@ -475,7 +475,7 @@
     (() => {
         const diagnostics = [];
         const maxEntries = 80;
-        const safeText = (value) => String(value ?? '').replace(/(?:Bearer\\s+)[^\\s]+/gi, 'Bearer [скрыто]').slice(0, 1800);
+        const safeText = (value) => String(value ?? '').replace(/(?:Bearer\s+)[^\s]+/gi, 'Bearer [скрыто]').slice(0, 1800);
         const addDiagnostic = (type, detail) => {
             const entry = { time: new Date().toLocaleTimeString(), type, detail: safeText(detail) };
             diagnostics.push(entry);
@@ -483,7 +483,7 @@
             window.__icebergDiagnostics = diagnostics;
             const output = document.getElementById('offlineDiagnosticsLog');
             if (output && !document.getElementById('offlineDiagnostics')?.hidden) {
-                output.textContent = diagnostics.map(item => '[' + item.time + '] ' + item.type + ': ' + item.detail).join('\\n');
+                output.textContent = diagnostics.map(item => '[' + item.time + '] ' + item.type + ': ' + item.detail).join('\n');
             }
         };
         window.__icebergAddDiagnostic = addDiagnostic;
@@ -523,11 +523,11 @@
                 toggle.setAttribute('aria-expanded', String(opening));
                 toggle.textContent = opening ? 'Скрыть ошибки' : 'Показать ошибки';
                 if (opening) document.getElementById('offlineDiagnosticsLog').textContent = diagnostics.length
-                    ? diagnostics.map(item => '[' + item.time + '] ' + item.type + ': ' + item.detail).join('\\n')
+                    ? diagnostics.map(item => '[' + item.time + '] ' + item.type + ': ' + item.detail).join('\n')
                     : 'Ошибки пока не зарегистрированы.';
             }
             if (event.target.closest('#copyDiagnosticsBtn')) {
-                const report = diagnostics.map(item => '[' + item.time + '] ' + item.type + ': ' + item.detail).join('\\n') || 'Ошибки не зарегистрированы.';
+                const report = diagnostics.map(item => '[' + item.time + '] ' + item.type + ': ' + item.detail).join('\n') || 'Ошибки не зарегистрированы.';
                 const button = document.getElementById('copyDiagnosticsBtn');
                 try {
                     await navigator.clipboard.writeText(report);
