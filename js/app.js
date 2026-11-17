@@ -205,6 +205,13 @@ async function handleLoginClick() {
     const msg = document.getElementById('authMessage');
     const btn = document.getElementById('btnLogin');
 
+    if (localStorage.getItem('iceberg_rules_ack_v1') !== 'true') {
+        msg.textContent = 'Откройте документы и подтвердите ознакомление с правилами.';
+        msg.className = 'message message-error';
+        msg.style.display = 'block';
+        return;
+    }
+
     if (!id || !pw) {
         msg.textContent = 'Заполните поля';
         msg.className = 'message message-error';
@@ -518,9 +525,27 @@ function bindUIEvents() {
         location.href = 'https://saryanich.github.io/Global-ID/';
     };
 
-    document.getElementById('disclaimerBlock').onclick = () => {
-        window.open('https://saryanich.github.io/TLC-services/', '_blank');
+    const rulesAckKey = 'iceberg_rules_ack_v1';
+    const rulesAckButton = document.getElementById('confirmRulesBtn');
+    const rulesAckStatus = document.getElementById('rulesAckStatus');
+    const renderRulesAck = () => {
+        const accepted = localStorage.getItem(rulesAckKey) === 'true';
+        if (rulesAckButton) {
+            rulesAckButton.textContent = accepted ? '✓ Ознакомление подтверждено' : 'Подтверждаю ознакомление';
+            rulesAckButton.classList.toggle('is-accepted', accepted);
+        }
+        if (rulesAckStatus) rulesAckStatus.textContent = accepted ? 'Подтверждение сохранено на этом устройстве.' : '';
     };
+    renderRulesAck();
+    rulesAckButton?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        localStorage.setItem(rulesAckKey, 'true');
+        renderRulesAck();
+    });
+    document.getElementById('disclaimerBlock')?.addEventListener('click', (event) => {
+        if (event.target.closest('#confirmRulesBtn, a')) return;
+        window.open('https://saryanich.github.io/TLC-services/', '_blank', 'noopener');
+    });
 
     document.querySelector('#twoFactorScreen .btn-primary').onclick = handle2FAVerify;
     document.querySelector('#twoFactorScreen .btn-secondary').onclick = handle2FACancel;
