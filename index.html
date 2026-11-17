@@ -188,11 +188,6 @@
                 </div>
             </div>
             <div class="settings-section">
-                <div class="settings-title">🔐 SEDA — сквозное шифрование</div>
-                <div class="settings-row"><span class="settings-row-label">Доступ</span><span class="settings-row-value" style="color:var(--success);">Включено для всех</span></div>
-                <p class="settings-row-label" style="font-size:12px;line-height:1.45;margin:8px 0 0;">Без активации и подписки. Каждый новый личный чат автоматически использует SEDA Ultra.</p>
-            </div>
-            <div class="settings-section">
                 <div class="settings-title">💬 Чаты</div>
                 <div class="settings-row" data-action="autodelete">
                     <span class="settings-row-label">⏱ Автоудаление</span>
@@ -367,8 +362,13 @@
                     </div>
                     <button class="btn btn-secondary" id="btnGlobalId">Создать в Global ID</button>
                     <div class="disclaimer-block" id="disclaimerBlock">
-                        <strong>📄 Политика конфиденциальности и условия использования</strong><br>
-                        Используя Айсберг, вы соглашаетесь с политикой конфиденциальности, условиями обработки данных и правилами сервиса. Нажмите, чтобы ознакомиться с документами.
+                        <div class="disclaimer-copy">
+                            <strong>Документы и правила</strong>
+                            <span>Политика конфиденциальности · Пользовательское соглашение</span>
+                            <a href="https://saryanich.github.io/TLC-services/" target="_blank" rel="noopener noreferrer">Открыть документы</a>
+                        </div>
+                        <button class="rules-ack-btn" id="confirmRulesBtn" type="button">Подтверждаю ознакомление</button>
+                        <span class="rules-ack-status" id="rulesAckStatus" aria-live="polite"></span>
                     </div>
                 </div>
 
