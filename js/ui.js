@@ -2167,7 +2167,11 @@ async function updateChatLastMessage(previewText, context, fromQueue = false) {
         }
 
         if (currentChat?.uid && !currentGroup && !currentChannel) {
-            const chats = ensureArray(authState.userData?.chats);,
+            const chats = ensureArray(authState.userData?.chats);
+            const index = chats.findIndex(chat => chat?.uid === currentChat.uid);
+            const nextChat = {
+                ...(index >= 0 ? chats[index] : {}),
+                ...currentChat,
                 lastMessage: previewText,
                 lastMessageTime: new Date(),
                 unread: false
