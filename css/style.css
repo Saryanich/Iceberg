@@ -4528,3 +4528,63 @@ html.iceberg-lite .bottom-navigation {
         min-width: 29px !important;
     }
 }
+
+
+/* Startup diagnostics panel */
+.offline-diagnostics-toggle {
+    display: block;
+    margin: 14px auto 0;
+    padding: 9px 14px;
+    color: #a9d9ff;
+    background: transparent;
+    border: 1px solid rgba(139, 213, 255, .28);
+    border-radius: 12px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 650;
+    cursor: pointer;
+}
+.offline-diagnostics-toggle:active { transform: scale(.98); }
+.offline-diagnostics[hidden] { display: none !important; }
+.offline-diagnostics {
+    margin-top: 14px;
+    padding: 13px;
+    text-align: left;
+    border: 1px solid rgba(139, 213, 255, .2);
+    border-radius: 14px;
+    background: rgba(3, 10, 22, .62);
+}
+.offline-diagnostics-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: #dceeff;
+    font-size: 12px;
+}
+.offline-copy-diagnostics {
+    padding: 6px 10px;
+    color: #bfe6ff;
+    background: rgba(91, 165, 220, .14);
+    border: 1px solid rgba(139, 213, 255, .24);
+    border-radius: 8px;
+    font: inherit;
+    font-size: 11px;
+}
+#offlineDiagnosticsLog {
+    max-height: 190px;
+    overflow: auto;
+    margin: 10px 0;
+    color: #ffd4a6;
+    font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    -webkit-user-select: text;
+    user-select: text;
+}
+.offline-diagnostics > p {
+    margin: 0;
+    color: #8199b4;
+    font-size: 10px;
+    line-height: 1.45;
+}
