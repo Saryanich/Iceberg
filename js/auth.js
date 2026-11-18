@@ -333,6 +333,17 @@ export async function handleAuthLogin(user, callbacks = {}) {
     const { onSuccess, onNeed2FA, onLocked, onError } = callbacks;
     try {
         await waitForAuthReady();
+        // Global ID email ownership must be confirmed before any Iceberg session is opened.
+        if (!user.emailVerified) {
+            clearAuthCache();
+            authState.user = null;
+            authState.userData = null;
+            authState.pendingUser = null;
+            authState.awaitingTwoFactor = false;
+            await signOut(auth);
+            onError?.('Подтвердите электронную почту через письмо от Global ID, затем войдите снова.');
+            return;
+        }
         const cached = loadAuthCache();
         
         if (cached && cached.uid !== user.uid) {
@@ -391,6 +402,17 @@ export async function handleAuthLogin(user, callbacks = {}) {
 
 async function syncUserFromServer(uid) {
     try {
+        if (auth.currentUser && !auth.currentUser.emailVerified) {
+            clearAuthCache();
+            authState.user = null;
+            authState.userData = null;
+            authState.restoredFromCache = false;
+            await signOut(auth);
+            window.dispatchEvent(new CustomEvent('iceberg:force-logout', {
+                detail: { reason: 'email-unverified' }
+            }));
+            return;
+        }
         const ud = await getDoc(doc(db, 'users', uid));
         if (!ud.exists()) return;
         const data = ud.data();
