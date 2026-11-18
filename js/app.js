@@ -168,6 +168,11 @@ async function retryConnection(event) {
 }
 
 function redirectToGlobalIdLogin() {
+    if (localStorage.getItem('iceberg_rules_ack_v1') !== 'true') {
+        showAuthScreen();
+        showToast('Сначала откройте документы и подтвердите ознакомление с правилами.', 'error');
+        return;
+    }
     const target = new URL('/Global-ID/', window.location.origin);
     target.searchParams.set('continue', window.location.href);
     window.location.replace(target.href);
@@ -473,11 +478,7 @@ function bindUIEvents() {
         document.getElementById('blockedMode').style.display = 'none';
     };
 
-    document.getElementById('btnGlobalId').onclick = () => {
-        localStorage.setItem('iceberg_referrer', location.href);
-        localStorage.setItem('iceberg_app', 'true');
-        location.href = 'https://saryanich.github.io/Global-ID/';
-    };
+    document.getElementById('btnGlobalId')?.addEventListener('click', redirectToGlobalIdLogin);
 
     const rulesAckKey = 'iceberg_rules_ack_v1';
     const rulesAckButton = document.getElementById('confirmRulesBtn');
