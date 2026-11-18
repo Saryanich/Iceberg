@@ -206,65 +206,8 @@ function hide2FAScreen() {
 }
 
 async function handleLoginClick() {
-    const id = document.getElementById('loginIdentifier').value.trim();
-    const pw = document.getElementById('loginPassword').value;
-    const msg = document.getElementById('authMessage');
-    const btn = document.getElementById('btnLogin');
-
-    if (localStorage.getItem('iceberg_rules_ack_v1') !== 'true') {
-        msg.textContent = 'Откройте документы и подтвердите ознакомление с правилами.';
-        msg.className = 'message message-error';
-        msg.style.display = 'block';
-        return;
-    }
-
-    if (!id || !pw) {
-        msg.textContent = 'Заполните поля';
-        msg.className = 'message message-error';
-        msg.style.display = 'block';
-        return;
-    }
-
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Проверка...';
-    }
-
-    msg.textContent = 'Вход...';
-    msg.className = 'message message-success';
-    msg.style.display = 'block';
-
-    const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('TIMEOUT')), 8000)
-    );
-
-    try {
-        const res = await Promise.race([
-            login(id, pw),
-            timeoutPromise
-        ]);
-        
-        if (!res.success) {
-            msg.textContent = res.error;
-            msg.className = 'message message-error';
-            msg.style.display = 'block';
-        }
-    } catch (e) {
-        if (e.message === 'TIMEOUT') {
-            msg.textContent = 'Сервер не отвечает. Проверьте интернет.';
-            msg.className = 'message message-error';
-            msg.style.display = 'block';
-        } else {
-            msg.textContent = 'Ошибка сети';
-            msg.className = 'message message-error';
-            msg.style.display = 'block';
-        }
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = 'Войти';
-        }
-    }
+    // Ввод пароля и подтверждение входа выполняются только на Global ID.
+    redirectToGlobalIdLogin();
 }
 
 function setup2FAInputs() {
@@ -381,6 +324,11 @@ function setupAuthState() {
         // Ignore this listener during startup to avoid duplicate device checks / 2FA prompts.
         if (initialAuthRouting) return;
         if (authState.awaitingTwoFactor) return;
+
+        if (!user) {
+            if (navigator.onLine) redirectToGlobalIdLogin();
+            return;
+        }
 
         if (user) {
             if (authState.restoredFromCache && authState.user?.uid === user.uid) {
