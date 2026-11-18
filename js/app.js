@@ -1953,10 +1953,13 @@ async function waitForFirebaseAuthAndRoute() {
                     resolve();
                 }
             } else {
+                // Нет активной Firebase-сессии — это обычное состояние нового/вышедшего пользователя,
+                // а не ошибка сети. Показываем экран входа и завершаем splash.
+                // Переход в Global ID выполняется только по нажатию кнопки после принятия документов.
+                hideLoading();
+                showAuthScreen();
                 if (!navigator.onLine) {
-                    showOfflineScreen('Ошибка подключения к серверу, попробуйте позже или проверьте подключение к интернету.');
-                } else {
-                    redirectToGlobalIdLogin();
+                    showToast('Нет подключения к интернету. Можно повторить вход после восстановления сети.', 'error');
                 }
                 resolve();
             }
