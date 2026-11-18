@@ -167,6 +167,12 @@ async function retryConnection(event) {
     window.location.replace(target.href);
 }
 
+function redirectToGlobalIdLogin() {
+    const target = new URL('/Global-ID/', window.location.origin);
+    target.searchParams.set('continue', window.location.href);
+    window.location.replace(target.href);
+}
+
 function showAuthScreen() {
     document.getElementById('authForm').style.display = 'flex';
     document.getElementById('messengerApp').style.display = 'none';
@@ -1975,7 +1981,9 @@ async function waitForFirebaseAuthAndRoute() {
                             resolve();
                         },
                         onError: (msg) => {
-                            if (isConnectionFailure(msg)) {
+                            if (String(msg || '').includes('Подтвердите электронную почту')) {
+                                redirectToGlobalIdLogin();
+                            } else if (isConnectionFailure(msg)) {
                                 showOfflineScreen(msg || 'Не удалось связаться с сервисами Айсберга. Проверьте интернет и попробуйте снова.');
                             } else {
                                 hideLoading();
@@ -1999,8 +2007,7 @@ async function waitForFirebaseAuthAndRoute() {
                 if (!navigator.onLine) {
                     showOfflineScreen('Ошибка подключения к серверу, попробуйте позже или проверьте подключение к интернету.');
                 } else {
-                    hideLoading();
-                    showAuthScreen();
+                    redirectToGlobalIdLogin();
                 }
                 resolve();
             }
