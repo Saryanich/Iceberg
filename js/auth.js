@@ -197,11 +197,11 @@ function waitForAuthReady(timeoutMs = 3000) {
     });
 }
 
-async function isDeviceKnown(uid) {
+async function isDeviceKnown(uid, profileData = null) {
     try {
         const ref = doc(db, 'users', uid);
-        const d = await getDoc(ref);
-        const profile = d.data() || {};
+        // Reuse the profile already fetched during this login instead of reading it twice.
+        const profile = profileData || (await getDoc(ref)).data() || {};
         const devices = profile.trustedDevices || [];
         const token = authState.deviceToken;
         if (token && (profile.revokedDeviceTokens || []).includes(token)) return false;
@@ -365,7 +365,7 @@ export async function handleAuthLogin(user, callbacks = {}) {
         }
         updateDoc(doc(db, 'users', user.uid), { icebergLastLogin: serverTimestamp() }).catch(() => {});
 
-        const known = await isDeviceKnown(user.uid);
+        const known = await isDeviceKnown(user.uid, data);
         if (known) {
             updateDoc(doc(db, 'users', user.uid), {
                 online: true, lastSeen: serverTimestamp(),
