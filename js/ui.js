@@ -384,19 +384,33 @@ export async function compressImage(file, maxBytes = 3 * 1024 * 1024) {
     });
 }
 
-export function setTheme(theme) {
+export function setTheme(theme, options = {}) {
     if (!THEMES.includes(theme)) theme = 'dark';
     uiState.currentTheme = theme;
     document.body.className = `theme-${theme}`;
-    localStorage.setItem('iceberg_theme', theme);
+    try { localStorage.setItem('iceberg_theme', theme); } catch {}
+
+    // Keep the preference with the Global ID profile so it follows the user
+    // to another browser/device; localStorage remains the instant fallback.
+    const user = authState.user || auth.currentUser;
+    if (options.persistRemote !== false && user?.uid) {
+        authState.userData = { ...(authState.userData || {}), theme };
+        updateDoc(doc(db, 'users', user.uid), { theme }).catch(error =>
+            console.warn('[Theme] Не удалось сохранить тему в профиле:', error?.code || error)
+        );
+    }
+
     document.querySelectorAll('.theme-cell').forEach(el => {
         el.classList.toggle('active', el.dataset.theme === theme);
     });
 }
 
 export function loadTheme() {
-    const saved = localStorage.getItem('iceberg_theme') || 'dark';
-    setTheme(saved);
+    const profileTheme = authState.userData?.theme;
+    let localTheme = 'dark';
+    try { localTheme = localStorage.getItem('iceberg_theme') || 'dark'; } catch {}
+    const saved = THEMES.includes(profileTheme) ? profileTheme : localTheme;
+    setTheme(saved, { persistRemote: false });
 }
 
 export function renderUserProfile() {
@@ -641,8 +655,7 @@ export async function renderStoriesBar() {
     }
 
     const ownName = profile.nickname || profile.globalId || 'Вы';
-    bar.replaceChildren();
-
+    // Keep the previous strip visible while remote stories are loading.
     let ownStories = [];
     try {
         ownStories = await fetchUserStories(uid);
@@ -710,6 +723,7 @@ export async function renderStoriesBar() {
         ownButton.onclick = openOwnStoryManager;
         ownWrap.appendChild(ownButton);
     }
+    bar.replaceChildren();
     bar.appendChild(ownWrap);
 
     const contacts = ensureArray(profile.contacts)
