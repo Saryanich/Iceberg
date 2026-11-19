@@ -21,6 +21,121 @@
     <!-- Внешние библиотеки -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
     <link rel="stylesheet" href="/Global-ID/it-global-design.css?v=1">
+
+<style id="iceberg-liquid-glass">
+/* IT Global — Liquid Glass visual layer */
+        :root {
+            color-scheme: dark;
+            --glass-bg: rgba(255,255,255,.075);
+            --glass-bg-strong: rgba(255,255,255,.11);
+            --glass-border: rgba(255,255,255,.19);
+            --glass-shadow: 0 18px 55px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.18);
+        }
+        body {
+            background:
+                radial-gradient(ellipse at 15% 10%, rgba(0,255,145,.18), transparent 38%),
+                radial-gradient(ellipse at 90% 80%, rgba(26,125,255,.16), transparent 42%),
+                linear-gradient(145deg, #050a12 0%, #071b18 48%, #07101d 100%);
+            animation: none;
+            color: #f4fff9;
+            overflow-x: hidden;
+            isolation: isolate;
+        }
+        body::before {
+            z-index: 0;
+            background:
+                radial-gradient(circle at 18% 20%, rgba(0,255,140,.12), transparent 28%),
+                radial-gradient(circle at 82% 72%, rgba(70,150,255,.11), transparent 30%),
+                radial-gradient(circle at 50% 50%, transparent 30%, rgba(0,0,0,.38) 100%);
+        }
+        .container { z-index: 1; }
+        .card, #authForm, #profilePanel, .registration-stage, .trusted-device-card,
+        .device-info, .global-id-box, .two-factor-code, .danger-box, .warning-box,
+        .info-box, .modal-content, .modal-box, .settings-card, .device-card,
+        .story-card, .service-card {
+            background: linear-gradient(145deg, rgba(255,255,255,.105), rgba(255,255,255,.035)) !important;
+            -webkit-backdrop-filter: blur(26px) saturate(165%);
+            backdrop-filter: blur(26px) saturate(165%);
+            border: 1px solid var(--glass-border) !important;
+            box-shadow: var(--glass-shadow);
+        }
+        .card {
+            border-radius: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+        .card::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            border-radius: inherit;
+            pointer-events: none;
+            background: linear-gradient(125deg, rgba(255,255,255,.12), transparent 30%, transparent 72%, rgba(255,255,255,.045));
+            opacity: .8;
+        }
+        .card > * { position: relative; z-index: 1; }
+        .logo-img {
+            border-color: rgba(180,255,220,.72);
+            box-shadow: 0 10px 34px rgba(0,255,145,.2), 0 0 0 5px rgba(255,255,255,.035);
+        }
+        input, textarea, select {
+            background: rgba(3,14,18,.55);
+            color: #effff7;
+            border: 1px solid rgba(255,255,255,.2);
+            -webkit-backdrop-filter: blur(18px);
+            backdrop-filter: blur(18px);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.07);
+        }
+        input:focus, textarea:focus, select:focus {
+            background: rgba(5,25,22,.72);
+            border-color: rgba(0,255,145,.72);
+            box-shadow: 0 0 0 3px rgba(0,255,145,.13), 0 8px 28px rgba(0,255,145,.1);
+        }
+        .btn {
+            border: 1px solid rgba(255,255,255,.17);
+            -webkit-backdrop-filter: blur(18px) saturate(155%);
+            backdrop-filter: blur(18px) saturate(155%);
+            box-shadow: 0 9px 28px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.2);
+        }
+        .btn-primary {
+            background: linear-gradient(125deg, rgba(0,210,112,.92), rgba(0,150,90,.72), rgba(0,220,145,.82));
+            color: #03130d;
+            border-color: rgba(210,255,232,.42);
+            box-shadow: 0 10px 30px rgba(0,220,130,.2), inset 0 1px 0 rgba(255,255,255,.42);
+        }
+        .btn-secondary {
+            background: rgba(255,255,255,.065);
+            color: #dffff0;
+            border-color: rgba(255,255,255,.2);
+        }
+        .btn-danger { border-color: rgba(255,190,190,.3); }
+        .btn-warning { border-color: rgba(255,230,170,.35); }
+        .section-title { border-bottom-color: rgba(255,255,255,.14); }
+        .form-label, .subtitle { color: rgba(220,255,238,.78); }
+        .global-id-value {
+            background: rgba(0,12,12,.56);
+            border-color: rgba(0,255,145,.32);
+            -webkit-backdrop-filter: blur(16px);
+            backdrop-filter: blur(16px);
+        }
+        .trusted-badge {
+            background: rgba(0,255,145,.88);
+            box-shadow: 0 4px 18px rgba(0,255,145,.22);
+        }
+        .modal, .modal-overlay {
+            -webkit-backdrop-filter: blur(22px) saturate(155%);
+            backdrop-filter: blur(22px) saturate(155%);
+        }
+        @media (max-width: 600px) {
+            body { padding: max(12px, env(safe-area-inset-top)) 12px max(16px, env(safe-area-inset-bottom)); }
+            .card { border-radius: 26px; padding: 24px 18px; }
+            .btn { min-height: 52px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .card, .btn, .logo-img { transition: none !important; }
+        }
+</style>
 </head> 
 <body class="theme-dark">
 
