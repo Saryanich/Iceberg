@@ -17,6 +17,7 @@ const DEVICE_STORAGE_PREFIX = 'iceberg_device_id_v1_';
 const TEXT_PREFIX = 'SEDAOFFLINE1:';
 const KEY_PREFIX = 'SEDAKEYENV1:';
 const MAX_DEVICES_PER_USER = 20;
+const deviceDirectoryRefreshes = new Map();
 
 function getDeviceId(uid) {
     const storageKey = DEVICE_STORAGE_PREFIX + uid;
@@ -84,34 +85,69 @@ export async function getLocalDeviceIdentity(uid, register = true) {
     };
 }
 
-async function listRegisteredDevices(uid) {
-    const cached = await DB.getCachedDeviceDirectory(uid).catch(() => null);
-    if (navigator.onLine) {
-        try {
-            const snapshot = await getDocs(query(collection(db, 'public_profiles', uid, 'devices'), limit(MAX_DEVICES_PER_USER)));
-            const records = [];
-            snapshot.forEach(item => {
-                const value = item.data();
-                if (value?.uid === uid && value.deviceId === item.id
-                    && value.algorithm === 'ECDH-P256-HKDF-SHA256'
-                    && value.version === 1 && typeof value.publicKey === 'string') {
-                    records.push({ uid, deviceId: item.id, publicKey: value.publicKey });
-                }
-            });
-            const trimmed = records.slice(0, MAX_DEVICES_PER_USER);
-            await DB.setCachedDeviceDirectory(uid, trimmed).catch(() => {});
-            return trimmed;
-        } catch (error) {
-            console.warn('[SEDA offline] Device directory fetch failed; using cache:', error?.code || error);
+async function refreshRegisteredDevices(uid) {
+    const active = deviceDirectoryRefreshes.get(uid);
+    if (active) return active;
+
+    const task = (async () => {
+        const snapshot = await getDocs(query(
+            collection(db, 'public_profiles', uid, 'devices'),
+            limit(MAX_DEVICES_PER_USER)
+        ));
+        const records = [];
+        snapshot.forEach(item => {
+            const value = item.data();
+            if (value?.uid === uid && value.deviceId === item.id
+                && value.algorithm === 'ECDH-P256-HKDF-SHA256'
+                && value.version === 1 && typeof value.publicKey === 'string') {
+                records.push({ uid, deviceId: item.id, publicKey: value.publicKey });
+            }
+        });
+        const trimmed = records.slice(0, MAX_DEVICES_PER_USER);
+        await DB.setCachedDeviceDirectory(uid, trimmed).catch(() => {});
+        return trimmed;
+    })();
+
+    deviceDirectoryRefreshes.set(uid, task);
+    try {
+        return await task;
+    } finally {
+        if (deviceDirectoryRefreshes.get(uid) === task) {
+            deviceDirectoryRefreshes.delete(uid);
         }
     }
-    return Array.isArray(cached) ? cached.slice(0, MAX_DEVICES_PER_USER) : [];
+}
+
+async function listRegisteredDevices(uid, forceRefresh = false) {
+    const cached = await DB.getCachedDeviceDirectory(uid).catch(() => null);
+
+    // Message sending uses the local directory first. Refresh it in the background
+    // so one Firestore round-trip per recipient does not delay every message.
+    if (!forceRefresh && Array.isArray(cached) && cached.length) {
+        if (navigator.onLine) {
+            refreshRegisteredDevices(uid).catch(error => {
+                console.warn('[SEDA offline] Background device-directory refresh failed:', error?.code || error);
+            });
+        }
+        return cached.slice(0, MAX_DEVICES_PER_USER);
+    }
+
+    if (!navigator.onLine) {
+        return Array.isArray(cached) ? cached.slice(0, MAX_DEVICES_PER_USER) : [];
+    }
+
+    try {
+        return await refreshRegisteredDevices(uid);
+    } catch (error) {
+        console.warn('[SEDA offline] Device directory fetch failed; using cache:', error?.code || error);
+        return Array.isArray(cached) ? cached.slice(0, MAX_DEVICES_PER_USER) : [];
+    }
 }
 
 export async function prefetchOfflineDeviceKeys(userIds = []) {
     const ids = [...new Set((Array.isArray(userIds) ? userIds : [])
         .filter(uid => typeof uid === 'string' && uid.length > 0))].slice(0, 200);
-    return await Promise.all(ids.map(uid => listRegisteredDevices(uid).catch(error => {
+    return await Promise.all(ids.map(uid => listRegisteredDevices(uid, true).catch(error => {
         console.warn('[SEDA offline] Could not cache public devices for', uid, error?.code || error);
         return [];
     })));
@@ -126,7 +162,7 @@ export async function createOfflineMessageKey(chatId, messageId, senderUid, reci
         throw new Error('Не удалось определить участников зашифрованной беседы');
     }
 
-    const local = await getLocalDeviceIdentity(senderUid, true);
+    const local = await getLocalDeviceIdentity(senderUid, false);
     const senderDevices = await listRegisteredDevices(senderUid);
     const recipientDirectories = await Promise.all(
         recipients.map(async uid => ({ uid, devices: await listRegisteredDevices(uid) }))
@@ -152,7 +188,7 @@ export async function createOfflineMessageKey(chatId, messageId, senderUid, reci
     const messageKey = serializeKey(generateSedaKey());
     const envelopes = [];
 
-    for (const target of targets.values()) {
+    await Promise.all([...targets.values()].map(async target => {
         const ephemeral = await generateECDHKeyPair();
         const ephemeralPublicKey = await exportPublicKey(ephemeral);
         const peerPublicKey = await importPublicKey(target.publicKey);
@@ -171,7 +207,7 @@ export async function createOfflineMessageKey(chatId, messageId, senderUid, reci
             ephemeralPublicKey,
             wrappedKey
         });
-    }
+    }));
 
     return { messageKey, envelopes };
 }
