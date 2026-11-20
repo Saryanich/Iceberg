@@ -326,7 +326,7 @@ async function bootMessenger(user, userData) {
                 addMembers(channel?.admins);
                 if (channel?.createdBy) addMembers([channel.createdBy]);
             }
-            await prefetchOfflineDeviceKeys([...peers]);
+            await prefetchOfflineDeviceKeys([user.uid, ...peers]);
         }).catch(error => {
             console.error('[SEDA offline] Device key registration failed:', error);
             showToast('Не удалось зарегистрировать ключ этого устройства для автономной доставки.', 'warning', 6000);
