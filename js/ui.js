@@ -932,6 +932,7 @@ export async function showContactCard(contact) {
         await openChatWithContact(profile);
     };
     actions.append(chatButton);
+    body.append(top, avatar, name, gid, mood, hint, actions);
     modal.classList.add('active');
 }
 
@@ -2063,13 +2064,14 @@ export async function sendMessage() {
     if (uiState.isSending) return;
     const input = document.getElementById('messageInput');
     if (!(input instanceof HTMLTextAreaElement)) return;
-    const text = input.value.trim();
-    if (!text || !uiState.currentChatId) return;
-    if (Array.from(text).length > MAX_MESSAGE_LENGTH) {
+
+    const originalText = input.value.trim();
+    const chatIdAtSend = uiState.currentChatId;
+    if (!originalText || !chatIdAtSend) return;
+    if (Array.from(originalText).length > MAX_MESSAGE_LENGTH) {
         showToast(`Сообщение слишком длинное. Максимум ${MAX_MESSAGE_LENGTH.toLocaleString('ru-RU')} символов`, 'error', 4000);
         return;
     }
-
     if (uiState.currentChannel && !uiState.currentChannel.isAdmin) {
         showToast('❌ Только администраторы', 'error');
         return;
@@ -2077,7 +2079,6 @@ export async function sendMessage() {
     if (!checkRateLimit(uiState.messageTimes, RATE_LIMIT.messages.count, RATE_LIMIT.messages.windowMs)) return;
 
     uiState.isSending = true;
-    const chatIdAtSend = uiState.currentChatId;
     const chatContext = {
         chatId: chatIdAtSend,
         currentChat: uiState.currentChat,
@@ -2086,20 +2087,52 @@ export async function sendMessage() {
         sedaEnabled: uiState.sedaSessionReady,
         sedaKey: uiState.currentChatKey
     };
-    const originalText = text;
     input.value = '';
     input.style.height = 'auto';
 
     try {
         if (uiState.editingMessage) {
             const editId = uiState.editingMessage;
+            let editText = originalText;
+            if (chatContext.currentChat) {
+                let key = chatContext.sedaKey;
+                if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(chatIdAtSend, chatContext.currentChat.uid);
+                if (!key?.startsWith('SEDAKEY:')) {
+                    uiState.editingMessage = editId;
+                    throw new Error('SEDA Ultra ещё устанавливает защищённое соединение. Откройте чат на обоих устройствах.');
+                }
+                editText = await sedaUltraEncryptWithKey(originalText, key);
+            }
+            await updateDoc(doc(db, 'messages', chatIdAtSend, 'msgs', editId), {
+                text: editText, edited: true, editedAt: serverTimestamp(),
+                cryptoVersion: chatContext.currentChat ? 'SEDA_ULTRA_1' : null
+            });
             uiState.editingMessage = null;
-            let editText=originalText;if(chatContext.currentChat){let key=chatContext.sedaKey;if(!key?.startsWith('SEDAKEY:'))key=await ensureSedaKey(chatIdAtSend,chatContext.currentChat.uid);if(!key?.startsWith('SEDAKEY:')){uiState.editingMessage=editId;throw Error('SEDA Ultra ещё устанавливает защищённое соединение');}editText=await sedaUltraEncryptWithKey(originalText,key);}await updateDoc(doc(db,'messages',chatIdAtSend,'msgs',editId),{text:editText,edited:true,editedAt:serverTimestamp(),cryptoVersion:chatContext.currentChat?'SEDA_ULTRA_1':null});document.getElementById('replyPreview')?.classList.add('hidden');return;}
-        let textToSend=originalText,encrypted=false;if(chatContext.currentChat){let key=chatContext.sedaKey;if(!key?.startsWith('SEDAKEY:'))key=await ensureSedaKey(chatIdAtSend,chatContext.currentChat.uid);if(!key?.startsWith('SEDAKEY:')){showToast('SEDA Ultra устанавливает соединение. Повторите отправку через несколько секунд.','info',4000);input.value=originalText;return;}textToSend=await sedaUltraEncryptWithKey(originalText,key);encrypted=true;chatContext.sedaKey=key;if(uiState.currentChatId===chatIdAtSend)uiState.currentChatKey=key;}
+            document.getElementById('replyPreview')?.classList.add('hidden');
+            return;
+        }
+
+        let textToSend = originalText;
+        let encrypted = false;
+        if (chatContext.currentChat) {
+            let key = chatContext.sedaKey;
+            if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(chatIdAtSend, chatContext.currentChat.uid);
+            if (!key?.startsWith('SEDAKEY:')) {
+                throw new Error('SEDA Ultra устанавливает защищённое соединение. Откройте этот чат на обоих устройствах и повторите отправку.');
+            }
+            textToSend = await sedaUltraEncryptWithKey(originalText, key);
+            encrypted = true;
+            chatContext.sedaKey = key;
+            if (uiState.currentChatId === chatIdAtSend) {
+                uiState.currentChatKey = key;
+                uiState.sedaSessionReady = true;
+            }
+        }
+
         const message = {
             text: textToSend,
             senderId: authState.user.uid,
-            senderName: authState.userData.nickname,
+            senderName: authState.userData?.nickname || authState.userData?.globalId || 'Пользователь',
             timestamp: serverTimestamp(),
             read: false,
             encrypted,
@@ -2109,40 +2142,28 @@ export async function sendMessage() {
             reactions: {}
         };
 
-        const pendingSyncId = queueDirectChatSync(chatContext, originalText);
-        const writePromise = addDoc(collection(db, 'messages', chatIdAtSend, 'msgs'), message);
+        // Wait for Firestore to acknowledge/queue the write before reporting success.
+        await addDoc(collection(db, 'messages', chatIdAtSend, 'msgs'), message);
         cancelReply();
-        if (!navigator.onLine) {
-            showToast('Нет сети — сообщение ожидает отправки', 'info', 3500);
+
+        try {
+            const metadataSynced = await updateChatLastMessage(originalText, chatContext);
+            if (!metadataSynced) {
+                showToast('Сообщение отправлено. Обновление списка чатов повторится позже.', 'info', 4000);
+            }
+        } catch (metadataError) {
+            console.warn('[Messages] Сообщение сохранено, метаданные чата будут обновлены позже:', metadataError);
+            showToast('Сообщение отправлено. Обновление списка чатов повторится позже.', 'info', 4000);
         }
-        writePromise.then(async () => {
-            // The message is persisted. Keep the existing queue entry if metadata
-            // synchronization fails so it can be retried without creating duplicates.
-            try {
-                const ok = await updateChatLastMessage(originalText, chatContext);
-                if (ok) removePendingChatSync(pendingSyncId);
-                else if (pendingSyncId) {
-                    showToast('Сообщение отправлено; обновление списка чатов повторится позже', 'info', 4000);
-                }
-            } catch (error) {
-                console.warn('[Messages] Сообщение сохранено, синхронизация списка чатов ожидает повтора:', error);
-                showToast('Сообщение отправлено; обновление списка чатов повторится позже', 'info', 4000);
-            }
-        }).catch((error) => {
-            // A rejected message write must not leave a metadata queue item behind.
-            removePendingChatSync(pendingSyncId);
-            console.error('[Messages] Не удалось сохранить сообщение:', error);
-            if (uiState.currentChatId === chatIdAtSend && input.value.trim() === '') {
-                input.value = originalText;
-                input.style.height = 'auto';
-                input.style.height = Math.min(input.scrollHeight, 90) + 'px';
-            }
-            showToast('Не удалось отправить сообщение. Проверьте соединение и попробуйте снова', 'error', 4000);
-        });
-    } catch (e) {
-        console.error('Ошибка отправки:', e);
-        showToast('❌ Ошибка отправки', 'error');
-        input.value = originalText;
+    } catch (error) {
+        console.error('[Messages] Не удалось отправить сообщение:', error?.code || '', error);
+        if (uiState.currentChatId === chatIdAtSend && input.value.trim() === '') {
+            input.value = originalText;
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 90) + 'px';
+        }
+        const code = error?.code ? ' (' + error.code + ')' : '';
+        showToast((error?.message || 'Не удалось отправить сообщение. Проверьте подключение и права Firestore.') + code, 'error', 5500);
     } finally {
         uiState.isSending = false;
     }
