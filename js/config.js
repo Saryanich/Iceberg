@@ -4,7 +4,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getAuth, browserLocalPersistence, setPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { getFirestore, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, enableMultiTabIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { getMessaging, isSupported as fcmIsSupported } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
@@ -27,11 +27,11 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 // Сохраняем очередь Firestore и локальный снимок сообщений между перезапусками.
 // На браузерах/вкладках, где persistence недоступен, мессенджер продолжит работать в памяти.
-enableIndexedDbPersistence(db).catch((err) => {
+enableMultiTabIndexedDbPersistence(db).catch((err) => {
     if (err?.code !== 'failed-precondition' && err?.code !== 'unimplemented') {
-        console.warn('[Firestore] Не удалось включить офлайн-кэш:', err);
+        console.warn('[Firestore] Не удалось включить многовкладочный офлайн-кэш:', err);
     } else {
-        console.info('[Firestore] Офлайн-кэш недоступен в этой вкладке/среде:', err.code);
+        console.info('[Firestore] Многовкладочный офлайн-кэш недоступен в этой среде:', err.code);
     }
 });
 export const storage = getStorage(app);
