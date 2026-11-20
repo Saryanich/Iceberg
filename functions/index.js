@@ -58,18 +58,18 @@ exports.notifyIcebergDirectMessage = onDocumentCreated(
         tokens,
         notification: {
           title: 'Айсберг',
-          body: message.attachment ? 'Новое зашифрованное вложение' : 'Новое зашифрованное сообщение'
+          body: (message.mediaEncrypted === true || message.attachment) ? 'Новое зашифрованное вложение' : 'Новое зашифрованное сообщение'
         },
         data: {
           type: 'ICEBERG_NEW_MESSAGE',
           chatId: String(chatId),
           messageId: String(messageId),
           senderId: String(senderUid),
-          url: '/'
+          url: '/Iceberg/'
         },
         webpush: {
           headers: { Urgency: 'high' },
-          fcmOptions: { link: '/' }
+          fcmOptions: { link: '/Iceberg/' }
         }
       });
 
