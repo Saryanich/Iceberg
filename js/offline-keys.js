@@ -10,7 +10,7 @@ import {
 } from './crypto.js';
 import { sedaUltraEncryptWithKey, sedaUltraDecrypt } from './seda-ultra.js';
 import {
-    collection, doc, getDocs, setDoc, serverTimestamp, limit
+    collection, doc, getDocs, setDoc, serverTimestamp, limit, query
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
 const DEVICE_STORAGE_PREFIX = 'iceberg_device_id_v1_';
@@ -80,7 +80,7 @@ async function listRegisteredDevices(uid) {
     const cached = await DB.getCachedDeviceDirectory(uid).catch(() => null);
     if (navigator.onLine) {
         try {
-            const snapshot = await getDocs(collection(db, 'public_profiles', uid, 'devices'));
+            const snapshot = await getDocs(query(collection(db, 'public_profiles', uid, 'devices'), limit(MAX_DEVICES_PER_USER)));
             const records = [];
             snapshot.forEach(item => {
                 const value = item.data();
