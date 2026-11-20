@@ -1397,7 +1397,81 @@ export async function loadChannels() {
     }
 }
 // Automatically negotiate one SEDA Ultra session for each direct conversation.
-async function ensureSedaKey(chatId,peerUid){const uid=authState.user?.uid;if(!uid||!chatId||!peerUid)return null;const cached=await DB.getChatKey(chatId);if(cached?.startsWith('SEDAKEY:')&&await DB.isChatKeyShared(chatId)){uiState.currentChatKey=cached;uiState.sedaSessionReady=true;return cached;}const ref=doc(db,'seda_handshakes',chatId);let snap=await getDoc(ref);if(snap.exists()){const d=snap.data(),expired=Number(d.expiresAt)>0&&Number(d.expiresAt)<=Date.now();if(d.initiator===uid&&d.peer===peerUid&&!expired){watchSedaInitiatorHandshake(chatId);return null;}if(d.peer===uid&&d.initiator===peerUid&&!expired)return null;if(!(expired&&d.initiator===uid&&d.peer===peerUid))return null;await deleteDoc(ref);await DB.deleteECDHKeys(chatId);await DB.deleteChatKey(chatId);}const pair=await generateECDHKeyPair(),pub=await exportPublicKey(pair),priv=await exportPrivateKey(pair);const made=await runTransaction(db,async tx=>{const cur=await tx.get(ref);if(cur.exists())return false;tx.set(ref,{chatId,initiator:uid,peer:peerUid,initiatorPublicKey:pub,peerPublicKey:null,encryptedSedaKey:null,peerKeyStored:false,createdAt:Date.now(),expiresAt:Date.now()+600000});return true;});if(!made)return null;await DB.saveECDHKeys(chatId,pub,priv);watchSedaInitiatorHandshake(chatId);return null;}
+async function ensureSedaKey(chatId, peerUid) {
+    const uid = authState.user?.uid;
+    if (!uid || !chatId || !peerUid) return null;
+
+    const cached = await DB.getChatKey(chatId).catch(() => null);
+    if (cached?.startsWith('SEDAKEY:') && await DB.isChatKeyShared(chatId).catch(() => false)) {
+        if (uiState.currentChatId === chatId) {
+            uiState.currentChatKey = cached;
+            uiState.sedaSessionReady = true;
+        }
+        resolveSedaKeyWaiters(chatId, cached);
+        return cached;
+    }
+
+    const ref = doc(db, 'seda_handshakes', chatId);
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+        const data = snap.data();
+        const expired = Number(data.expiresAt) > 0 && Number(data.expiresAt) <= Date.now();
+
+        if (!expired) {
+            if (data.initiator === uid && data.peer === peerUid) {
+                watchSedaInitiatorHandshake(chatId);
+            } else if (data.peer === uid && data.initiator === peerUid) {
+                watchSedaPeerHandshake(chatId);
+            }
+            return null;
+        }
+
+        // Either participant may remove an expired handshake and negotiate a fresh key.
+        if (data.initiator !== uid && data.peer !== uid) return null;
+        await deleteDoc(ref);
+        await DB.deleteECDHKeys(chatId);
+        await DB.deleteChatKey(chatId);
+    }
+
+    const pair = await generateECDHKeyPair();
+    const pub = await exportPublicKey(pair);
+    const priv = await exportPrivateKey(pair);
+    const made = await runTransaction(db, async tx => {
+        const current = await tx.get(ref);
+        if (current.exists()) return false;
+        tx.set(ref, {
+            chatId,
+            initiator: uid,
+            peer: peerUid,
+            initiatorPublicKey: pub,
+            peerPublicKey: null,
+            encryptedSedaKey: null,
+            peerKeyStored: false,
+            createdAt: Date.now(),
+            expiresAt: Date.now() + 600000
+        });
+        return true;
+    });
+
+    if (made) {
+        await DB.saveECDHKeys(chatId, pub, priv);
+        watchSedaInitiatorHandshake(chatId);
+        return null;
+    }
+
+    // Another device may have created the handshake between our initial read and transaction.
+    const latest = await getDoc(ref);
+    if (latest.exists()) {
+        const data = latest.data();
+        if (data.initiator === uid && data.peer === peerUid) {
+            await DB.saveECDHKeys(chatId, pub, priv);
+            watchSedaInitiatorHandshake(chatId);
+        } else if (data.peer === uid && data.initiator === peerUid) {
+            watchSedaPeerHandshake(chatId);
+        }
+    }
+    return null;
+}
 // Ensure the parent document exists: Firestore rules for message subcollections
 // must be able to verify membership against messages/{chatId}.
 async function ensureMessageThread(chatId, membership) {
@@ -1629,7 +1703,8 @@ function renderChatHeader() {
         } else {
             avEl.textContent = (c.nickname?.charAt(0) || '👤').toUpperCase();
         }
-        statusEl.textContent = '🔐 SEDA Ultra • сквозное шифрование';
+        statusEl.dataset.presence = '';
+        setDirectChatStatus('');
     } else if (g) {
         nameEl.textContent = g.name || 'Группа';
         if (g.avatar) {
@@ -1696,6 +1771,7 @@ export function closeAllSubscriptions() {
         uiState.sedaHandshakeUnsub = null;
     }
     uiState.processedHandshakes.clear();
+    stopSedaHandshakeWatchers();
 }
 
 async function markChatRead(chat) {
@@ -2097,9 +2173,10 @@ export async function sendMessage() {
             if (chatContext.currentChat) {
                 let key = chatContext.sedaKey;
                 if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(chatIdAtSend, chatContext.currentChat.uid);
+                if (!key?.startsWith('SEDAKEY:')) key = await waitForSedaKey(chatIdAtSend, 15000);
                 if (!key?.startsWith('SEDAKEY:')) {
                     uiState.editingMessage = editId;
-                    throw new Error('SEDA Ultra ещё устанавливает защищённое соединение. Откройте чат на обоих устройствах.');
+                    throw new Error('Не удалось установить SEDA Ultra за 15 секунд. Откройте чат на обоих устройствах и проверьте подключение.');
                 }
                 editText = await sedaUltraEncryptWithKey(originalText, key);
             }
@@ -2117,8 +2194,9 @@ export async function sendMessage() {
         if (chatContext.currentChat) {
             let key = chatContext.sedaKey;
             if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(chatIdAtSend, chatContext.currentChat.uid);
+                if (!key?.startsWith('SEDAKEY:')) key = await waitForSedaKey(chatIdAtSend, 15000);
             if (!key?.startsWith('SEDAKEY:')) {
-                throw new Error('SEDA Ultra устанавливает защищённое соединение. Откройте этот чат на обоих устройствах и повторите отправку.');
+                throw new Error('Не удалось установить SEDA Ultra за 15 секунд. Откройте этот чат на обоих устройствах и проверьте подключение.');
             }
             textToSend = await sedaUltraEncryptWithKey(originalText, key);
             encrypted = true;
@@ -2758,9 +2836,222 @@ export function scrollToMessage(id) {
     setTimeout(() => { el.style.boxShadow = ''; }, 1200);
 }
 
-const sedaInitiatorListeners=new Map();
-function watchSedaInitiatorHandshake(chatId){if(!chatId||sedaInitiatorListeners.has(chatId))return;const ref=doc(db,'seda_handshakes',chatId);let unsub=()=>{},busy=false;unsub=onSnapshot(ref,async snap=>{if(!snap.exists()){try{unsub();}catch{}sedaInitiatorListeners.delete(chatId);return;}const d=snap.data();if(d.initiator!==authState.user?.uid||!d.peerPublicKey||!d.encryptedSedaKey||busy)return;busy=true;try{const saved=await DB.getECDHKeys(chatId);if(!saved?.privateKey)throw Error('Не найден локальный ключ сеанса');const priv=await crypto.subtle.importKey('jwk',saved.privateKey,{name:'ECDH',namedCurve:'P-256'},true,['deriveKey','deriveBits']);const shared=await deriveSharedKey(priv,await importPublicKey(d.peerPublicKey));const key=await aesDecrypt(d.encryptedSedaKey,shared);if(!key?.startsWith('SEDAKEY:'))throw Error('Не удалось расшифровать ключ сеанса');await DB.saveChatKey(chatId,key);await DB.markChatKeyShared(chatId);if(uiState.currentChatId===chatId){uiState.currentChatKey=key;uiState.sedaSessionReady=true;const st=document.getElementById('chatStatus');if(st)st.textContent='🔐 SEDA Ultra • защищено';await loadMessages();}await updateDoc(ref,{initiatorAck:true,initiatorAckAt:Date.now(),completed:true,expiresAt:null});showToast('SEDA Ultra соединение установлено','success');try{unsub();}catch{}sedaInitiatorListeners.delete(chatId);}catch(e){console.error('[SEDA initiator]',e);showToast('Не удалось завершить установку SEDA Ultra. Повторите открытие чата.','error',4500);}finally{busy=false;}},err=>{console.error('[SEDA session listener]',err);try{unsub();}catch{}sedaInitiatorListeners.delete(chatId);});sedaInitiatorListeners.set(chatId,unsub);}
-export function startSedaSessionListener(){if(uiState.sedaHandshakeUnsub)uiState.sedaHandshakeUnsub();if(!authState.user?.uid)return;const q=query(collection(db,'seda_handshakes'),where('peer','==',authState.user.uid));uiState.sedaHandshakeUnsub=onSnapshot(q,async snap=>{for(const d of snap.docs){if(!d.id.startsWith('sedaultra_'))continue;const data=d.data();if(data.initiatorAck===true){await deleteDoc(d.ref).catch(()=>{});continue;}if(data.completed===true||data.peerPublicKey||!data.initiatorPublicKey||uiState.processedHandshakes.has(d.id))continue;if(Number(data.expiresAt)>0&&Number(data.expiresAt)<=Date.now())continue;uiState.processedHandshakes.add(d.id);try{const pair=await generateECDHKeyPair(),pub=await exportPublicKey(pair),priv=await exportPrivateKey(pair),shared=await deriveSharedKey(pair.privateKey,await importPublicKey(data.initiatorPublicKey)),key=serializeKey(generateSedaKey()),wrapped=await aesEncrypt(key,shared);await DB.saveECDHKeys(d.id,pub,priv);await DB.saveChatKey(d.id,key);await DB.markChatKeyShared(d.id);await updateDoc(d.ref,{peerPublicKey:pub,encryptedSedaKey:wrapped,peerKeyStored:true,peerKeyStoredAt:Date.now(),respondedAt:Date.now()});if(uiState.currentChatId===d.id){uiState.currentChatKey=key;uiState.sedaSessionReady=true;const st=document.getElementById('chatStatus');if(st)st.textContent='🔐 SEDA Ultra • защищено';await loadMessages();}uiState.processedHandshakes.delete(d.id);}catch(e){console.error('[SEDA responder]',e);uiState.processedHandshakes.delete(d.id);}}},e=>console.error('[SEDA session listener]',e));}
+const sedaInitiatorListeners = new Map();
+const sedaPeerListeners = new Map();
+const sedaKeyWaiters = new Map();
+
+function resolveSedaKeyWaiters(chatId, key) {
+    const waiters = sedaKeyWaiters.get(chatId);
+    if (!waiters) return;
+    for (const finish of [...waiters]) finish(key);
+}
+
+async function waitForSedaKey(chatId, timeoutMs = 15000) {
+    const readSharedKey = async () => {
+        const key = await DB.getChatKey(chatId).catch(() => null);
+        if (key?.startsWith('SEDAKEY:') && await DB.isChatKeyShared(chatId).catch(() => false)) return key;
+        return null;
+    };
+
+    const alreadyReady = await readSharedKey();
+    if (alreadyReady) return alreadyReady;
+
+    return await new Promise(resolve => {
+        let timer = null;
+        let settled = false;
+        const waiters = sedaKeyWaiters.get(chatId) || new Set();
+        const finish = key => {
+            if (settled) return;
+            settled = true;
+            if (timer) clearTimeout(timer);
+            waiters.delete(finish);
+            if (!waiters.size) sedaKeyWaiters.delete(chatId);
+            resolve(key?.startsWith('SEDAKEY:') ? key : null);
+        };
+        waiters.add(finish);
+        sedaKeyWaiters.set(chatId, waiters);
+        timer = setTimeout(() => finish(null), timeoutMs);
+
+        // Recheck after registering to avoid a race with a just-completed handshake.
+        readSharedKey().then(key => { if (key) finish(key); }).catch(() => {});
+    });
+}
+
+function stopSedaHandshakeWatchers() {
+    for (const listeners of [sedaInitiatorListeners, sedaPeerListeners]) {
+        for (const [chatId, unsubscribe] of listeners) {
+            try { unsubscribe(); } catch {}
+            listeners.delete(chatId);
+        }
+    }
+    for (const chatId of [...sedaKeyWaiters.keys()]) resolveSedaKeyWaiters(chatId, null);
+}
+
+function setDirectChatStatus(presenceText = '') {
+    const status = document.getElementById('chatStatus');
+    if (!status) return;
+    status.dataset.presence = presenceText || '';
+    const security = uiState.sedaSessionReady
+        ? '🔐 SEDA Ultra • защищено'
+        : '🔐 SEDA Ultra • подключение…';
+    status.textContent = [status.dataset.presence, security].filter(Boolean).join(' · ');
+}
+
+function watchSedaInitiatorHandshake(chatId) {
+    if (!chatId || sedaInitiatorListeners.has(chatId)) return;
+    const ref = doc(db, 'seda_handshakes', chatId);
+    let unsubscribe = () => {};
+    let busy = false;
+
+    unsubscribe = onSnapshot(ref, async snapshot => {
+        if (!snapshot.exists()) {
+            unsubscribe();
+            sedaInitiatorListeners.delete(chatId);
+            resolveSedaKeyWaiters(chatId, null);
+            return;
+        }
+        const data = snapshot.data();
+        if (data.initiator !== authState.user?.uid
+            || !data.peerPublicKey || !data.encryptedSedaKey || busy) return;
+
+        busy = true;
+        try {
+            const saved = await DB.getECDHKeys(chatId);
+            if (!saved?.privateKey) throw new Error('Не найден локальный ключ SEDA на этом устройстве');
+            const privateKey = await crypto.subtle.importKey(
+                'jwk',
+                saved.privateKey,
+                { name: 'ECDH', namedCurve: 'P-256' },
+                true,
+                ['deriveKey', 'deriveBits']
+            );
+            const shared = await deriveSharedKey(privateKey, await importPublicKey(data.peerPublicKey));
+            const key = await aesDecrypt(data.encryptedSedaKey, shared);
+            if (!key?.startsWith('SEDAKEY:')) throw new Error('Не удалось расшифровать ключ SEDA');
+
+            await DB.saveChatKey(chatId, key);
+            await DB.markChatKeyShared(chatId);
+            resolveSedaKeyWaiters(chatId, key);
+
+            if (uiState.currentChatId === chatId) {
+                uiState.currentChatKey = key;
+                uiState.sedaSessionReady = true;
+                setDirectChatStatus(document.getElementById('chatStatus')?.dataset.presence || '');
+                await loadMessages();
+            }
+
+            await updateDoc(ref, {
+                initiatorAck: true,
+                initiatorAckAt: Date.now(),
+                completed: true,
+                expiresAt: null
+            });
+            showToast('SEDA Ultra соединение установлено', 'success');
+            unsubscribe();
+            sedaInitiatorListeners.delete(chatId);
+        } catch (error) {
+            console.error('[SEDA initiator]', error);
+            const code = error?.code ? ' (' + error.code + ')' : '';
+            showToast('Ошибка установки SEDA Ultra: ' + (error?.message || 'неизвестная ошибка') + code, 'error', 6000);
+        } finally {
+            busy = false;
+        }
+    }, error => {
+        console.error('[SEDA initiator listener]', error);
+        const code = error?.code ? ' (' + error.code + ')' : '';
+        showToast('Ошибка чтения SEDA handshake: ' + (error?.message || 'проверьте доступ Firestore') + code, 'error', 6000);
+        unsubscribe();
+        sedaInitiatorListeners.delete(chatId);
+        resolveSedaKeyWaiters(chatId, null);
+    });
+
+    sedaInitiatorListeners.set(chatId, unsubscribe);
+}
+
+function watchSedaPeerHandshake(chatId) {
+    if (!chatId || sedaPeerListeners.has(chatId)) return;
+    const ref = doc(db, 'seda_handshakes', chatId);
+    let unsubscribe = () => {};
+    let busy = false;
+
+    unsubscribe = onSnapshot(ref, async snapshot => {
+        if (!snapshot.exists()) {
+            unsubscribe();
+            sedaPeerListeners.delete(chatId);
+            return;
+        }
+        const data = snapshot.data();
+        if (data.peer !== authState.user?.uid) return;
+
+        if (data.initiatorAck === true) {
+            await deleteDoc(ref).catch(error => console.warn('[SEDA] cleanup:', error?.code || error));
+            unsubscribe();
+            sedaPeerListeners.delete(chatId);
+            return;
+        }
+
+        const expired = Number(data.expiresAt) > 0 && Number(data.expiresAt) <= Date.now();
+        if (expired || data.completed === true || data.peerPublicKey
+            || !data.initiatorPublicKey || busy) return;
+
+        busy = true;
+        try {
+            const pair = await generateECDHKeyPair();
+            const publicKey = await exportPublicKey(pair);
+            const privateKey = await exportPrivateKey(pair);
+            const shared = await deriveSharedKey(
+                pair.privateKey,
+                await importPublicKey(data.initiatorPublicKey)
+            );
+            const key = serializeKey(generateSedaKey());
+            const wrapped = await aesEncrypt(key, shared);
+
+            await DB.saveECDHKeys(chatId, publicKey, privateKey);
+            await DB.saveChatKey(chatId, key);
+            await DB.markChatKeyShared(chatId);
+
+            await updateDoc(ref, {
+                peerPublicKey: publicKey,
+                encryptedSedaKey: wrapped,
+                peerKeyStored: true,
+                peerKeyStoredAt: Date.now(),
+                respondedAt: Date.now()
+            });
+
+            resolveSedaKeyWaiters(chatId, key);
+            if (uiState.currentChatId === chatId) {
+                uiState.currentChatKey = key;
+                uiState.sedaSessionReady = true;
+                setDirectChatStatus(document.getElementById('chatStatus')?.dataset.presence || '');
+                await loadMessages();
+            }
+        } catch (error) {
+            console.error('[SEDA responder]', error);
+            const code = error?.code ? ' (' + error.code + ')' : '';
+            showToast('Ошибка ответа SEDA Ultra: ' + (error?.message || 'неизвестная ошибка') + code, 'error', 6000);
+        } finally {
+            busy = false;
+        }
+    }, error => {
+        console.error('[SEDA peer listener]', error);
+        const code = error?.code ? ' (' + error.code + ')' : '';
+        showToast('Ошибка чтения SEDA handshake: ' + (error?.message || 'проверьте доступ Firestore') + code, 'error', 6000);
+        unsubscribe();
+        sedaPeerListeners.delete(chatId);
+        resolveSedaKeyWaiters(chatId, null);
+    });
+
+    sedaPeerListeners.set(chatId, unsubscribe);
+}
+
+export function startSedaSessionListener() {
+    // Handshakes are watched by document ID only when the corresponding chat is open.
+    // This uses the existing participant "get" permission and requires no collection "list".
+    if (uiState.sedaHandshakeUnsub) {
+        try { uiState.sedaHandshakeUnsub(); } catch {}
+        uiState.sedaHandshakeUnsub = null;
+    }
+}
 function startChatMetaListener(chat) {
     if (uiState.chatMetaUnsub) {
         try { uiState.chatMetaUnsub(); } catch {}
@@ -2768,28 +3059,26 @@ function startChatMetaListener(chat) {
     }
     if (!chat || !chat.uid) return;
 
-    // Presence is intentionally separate from the private /users document.
-    uiState.chatMetaUnsub = onSnapshot(doc(db, 'presence', chat.uid), (snap) => {
+    setDirectChatStatus('');
+    // Presence is separate from the private /users document. Keep it visible
+    // without hiding the SEDA connection state in the same line.
+    uiState.chatMetaUnsub = onSnapshot(doc(db, 'presence', chat.uid), snap => {
+        if (uiState.currentChat?.uid !== chat.uid) return;
         if (!snap.exists()) {
-            const statusEl = document.getElementById('chatStatus');
-            if (statusEl) statusEl.textContent = chat.mood || '🔒 Личный чат';
+            setDirectChatStatus(chat.mood || '🔒 Личный чат');
             return;
         }
-        const data = snap.data();
-        const statusEl = document.getElementById('chatStatus');
-        if (!statusEl || uiState.currentChat?.uid !== chat.uid) return;
 
+        const data = snap.data();
         if (data.typing && data.typingUntil > Date.now()) {
-            statusEl.textContent = 'печатает…';
-            return;
-        }
-        if (data.online) {
-            statusEl.textContent = 'в сети';
+            setDirectChatStatus('печатает…');
+        } else if (data.online) {
+            setDirectChatStatus('в сети');
         } else if (data.lastSeen) {
             const time = data.lastSeen.toDate?.();
-            statusEl.textContent = 'был(а) ' + (time ? formatTime(time) : '');
+            setDirectChatStatus('был(а) ' + (time ? formatTime(time) : 'недавно'));
         } else {
-            statusEl.textContent = chat.mood || 'не в сети';
+            setDirectChatStatus(chat.mood || 'не в сети');
         }
     }, error => {
         console.warn('[Presence] Не удалось загрузить статус собеседника:', error);
