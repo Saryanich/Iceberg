@@ -1,7 +1,7 @@
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onDocumentWritten } = require('firebase-functions/v2/firestore');
 const logger = require('firebase-functions/logger');
 
 initializeApp();
@@ -166,14 +166,23 @@ async function sendRecipientNotification(messageId, chatId, senderUid, recipient
   }
 }
 
-exports.notifyIcebergMessage = onDocumentCreated(
+exports.notifyIcebergMessage = onDocumentWritten(
   {
     document: 'messages/{chatId}/msgs/{messageId}',
     retry: true
   },
   async event => {
-    const message = event.data?.data();
+    const before = event.data?.before;
+    const after = event.data?.after;
+    if (!after?.exists) return;
+
+    const message = after.data();
     const { chatId, messageId } = event.params;
+    // Attachment messages are created as pending first, then updated after Storage
+    // upload. Notify only on creation of a complete message or pending -> complete.
+    if (message?.attachmentPending === true) return;
+    if (before?.exists && before.data()?.attachmentPending !== true) return;
+
     const senderUid = message?.senderId;
     if (!senderUid || message?.type === 'system') return;
 
