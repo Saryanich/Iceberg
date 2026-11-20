@@ -11,7 +11,7 @@ const STORES = {
     messages:   'messages',     // { chatId, list, updatedAt }
     ecdhKeys:   'ecdhKeys',     // { chatId, publicKey, privateKey, createdAt }
     identityKeys: 'identityKeys', // { deviceId, uid, publicKey, privateKey, createdAt }
-    deviceDirectory: 'deviceDirectory' // { uid, devices, updatedAt }
+    deviceDirectory: 'deviceDirectory', // { uid, devices, updatedAt }
     chatKeys:   'chatKeys',     // { chatId, key, shared }
     settings:   'settings'      // { uid, theme, autoDeleteHours, ... }
 };
