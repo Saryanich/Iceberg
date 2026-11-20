@@ -51,7 +51,10 @@ export async function getLocalDeviceIdentity(uid, register = true) {
     }
 
     if (register) {
-        await setDoc(
+        // Firestore queues this public-key registration locally when offline.
+        // Do not await its server acknowledgement: sending encrypted messages must
+        // not wait for the recipient/device to be online.
+        setDoc(
             doc(db, 'public_profiles', uid, 'devices', deviceId),
             {
                 uid,
@@ -62,7 +65,9 @@ export async function getLocalDeviceIdentity(uid, register = true) {
                 updatedAt: serverTimestamp()
             },
             { merge: true }
-        );
+        ).catch(error => {
+            console.warn('[SEDA offline] Public device-key registration is queued/retryable:', error?.code || error);
+        });
     }
 
     return {
