@@ -3102,9 +3102,7 @@ function setDirectChatStatus(presenceText = '') {
     const status = document.getElementById('chatStatus');
     if (!status) return;
     status.dataset.presence = presenceText || '';
-    const security = uiState.sedaSessionReady
-        ? '🔐 SEDA Ultra • защищено'
-        : '🔐 SEDA Ultra • подключение…';
+    const security = '🔐 SEDA Ultra • автономное шифрование';
     status.textContent = [status.dataset.presence, security].filter(Boolean).join(' · ');
 }
 
