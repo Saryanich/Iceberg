@@ -62,7 +62,7 @@ messaging.onBackgroundMessage((payload) => {
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
 
-    const targetUrl = event.notification.data?.url || '/';
+    const targetUrl = event.notification.data?.url || '/Iceberg/';
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })
