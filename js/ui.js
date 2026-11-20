@@ -1397,7 +1397,19 @@ export async function loadChannels() {
     }
 }
 // Automatically negotiate one SEDA Ultra session for each direct conversation.
-async function ensureSedaKey(chatId, peerUid) {
+const sedaEnsurePromises = new Map();
+
+function ensureSedaKey(chatId, peerUid) {
+    if (sedaEnsurePromises.has(chatId)) return sedaEnsurePromises.get(chatId);
+    const pending = ensureSedaKeyInternal(chatId, peerUid);
+    const tracked = pending.finally(() => {
+        if (sedaEnsurePromises.get(chatId) === tracked) sedaEnsurePromises.delete(chatId);
+    });
+    sedaEnsurePromises.set(chatId, tracked);
+    return tracked;
+}
+
+async function ensureSedaKeyInternal(chatId, peerUid) {
     const uid = authState.user?.uid;
     if (!uid || !chatId || !peerUid) return null;
 
