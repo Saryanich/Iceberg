@@ -72,21 +72,36 @@ export async function getLocalDeviceIdentity(uid, register = true) {
 }
 
 async function listRegisteredDevices(uid) {
-    const snapshot = await getDocs(collection(db, 'public_profiles', uid, 'devices'));
-    const records = [];
-    snapshot.forEach(item => {
-        const value = item.data();
-        if (value?.uid === uid && value.deviceId === item.id
-            && value.algorithm === 'ECDH-P256-HKDF-SHA256'
-            && value.version === 1 && typeof value.publicKey === 'string') {
-            records.push({
-                uid,
-                deviceId: item.id,
-                publicKey: value.publicKey
+    const cached = await DB.getCachedDeviceDirectory(uid).catch(() => null);
+    if (navigator.onLine) {
+        try {
+            const snapshot = await getDocs(collection(db, 'public_profiles', uid, 'devices'));
+            const records = [];
+            snapshot.forEach(item => {
+                const value = item.data();
+                if (value?.uid === uid && value.deviceId === item.id
+                    && value.algorithm === 'ECDH-P256-HKDF-SHA256'
+                    && value.version === 1 && typeof value.publicKey === 'string') {
+                    records.push({ uid, deviceId: item.id, publicKey: value.publicKey });
+                }
             });
+            const trimmed = records.slice(0, MAX_DEVICES_PER_USER);
+            await DB.setCachedDeviceDirectory(uid, trimmed).catch(() => {});
+            return trimmed;
+        } catch (error) {
+            console.warn('[SEDA offline] Device directory fetch failed; using cache:', error?.code || error);
         }
-    });
-    return records.slice(0, MAX_DEVICES_PER_USER);
+    }
+    return Array.isArray(cached) ? cached.slice(0, MAX_DEVICES_PER_USER) : [];
+}
+
+export async function prefetchOfflineDeviceKeys(userIds = []) {
+    const ids = [...new Set((Array.isArray(userIds) ? userIds : [])
+        .filter(uid => typeof uid === 'string' && uid.length > 0))].slice(0, 50);
+    return await Promise.all(ids.map(uid => listRegisteredDevices(uid).catch(error => {
+        console.warn('[SEDA offline] Could not cache public devices for', uid, error?.code || error);
+        return [];
+    })));
 }
 
 export async function createOfflineMessageKey(chatId, messageId, senderUid, recipientUid) {
