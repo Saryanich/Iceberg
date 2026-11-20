@@ -1824,8 +1824,10 @@ export function subscribeDirectChatUpdates() {
     directChatListUid = uid;
     const q = query(collection(db, 'messages'), where('kind', '==', 'direct'),
         where('participants', 'array-contains', uid), limit(100));
-    directChatListUnsubscribe = onSnapshot(q, () => {
+    directChatListUnsubscribe = onSnapshot(q, snapshot => {
         if (authState.user?.uid !== uid) return;
+        // Keep participant-only document listeners ready for delayed legacy SEDA handshakes.
+        snapshot.docs.forEach(thread => watchSedaPeerHandshake(thread.id));
         loadChats(true).catch(error => console.warn('[Chat list listener]', error?.code || error));
     }, error => console.warn('[Chat list listener] Subscription failed:', error?.code || error));
 }
@@ -1837,6 +1839,7 @@ export function cleanupChatSubscriptions() {
     }
     directChatListUnsubscribe = null;
     directChatListUid = null;
+    stopSedaHandshakeWatchers();
     for (const key of ['messagesUnsub', 'chatMetaUnsub', 'sedaHandshakeUnsub']) {
         const unsubscribe = uiState[key];
         if (typeof unsubscribe === 'function') {
@@ -3132,11 +3135,9 @@ function watchSedaPeerHandshake(chatId) {
     let busy = false;
 
     unsubscribe = onSnapshot(ref, async snapshot => {
-        if (!snapshot.exists()) {
-            unsubscribe();
-            sedaPeerListeners.delete(chatId);
-            return;
-        }
+        // Keep the listener on a missing deterministic document: the sender may create
+        // the handshake after the chat thread itself appears in the recipient's list.
+        if (!snapshot.exists()) return;
         const data = snapshot.data();
         if (data.peer !== authState.user?.uid) return;
 
@@ -3199,12 +3200,27 @@ function watchSedaPeerHandshake(chatId) {
     sedaPeerListeners.set(chatId, unsubscribe);
 }
 
-export function startSedaSessionListener() {
-    // Handshakes are watched by document ID only when the corresponding chat is open.
-    // This uses the existing participant "get" permission and requires no collection "list".
+export async function startSedaSessionListener() {
     if (uiState.sedaHandshakeUnsub) {
         try { uiState.sedaHandshakeUnsub(); } catch {}
         uiState.sedaHandshakeUnsub = null;
+    }
+    const uid = authState.user?.uid;
+    if (!uid) return;
+
+    try {
+        const threads = await getDocs(query(
+            collection(db, 'messages'),
+            where('kind', '==', 'direct'),
+            where('participants', 'array-contains', uid),
+            limit(100)
+        ));
+        if (authState.user?.uid !== uid) return;
+        for (const thread of threads.docs) {
+            if (thread.id.startsWith('sedaultra_')) watchSedaPeerHandshake(thread.id);
+        }
+    } catch (error) {
+        console.warn('[SEDA] Could not restore pending legacy handshakes:', error?.code || error);
     }
 }
 function startChatMetaListener(chat) {
