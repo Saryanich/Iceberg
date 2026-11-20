@@ -18,6 +18,7 @@ const TEXT_PREFIX = 'SEDAOFFLINE1:';
 const KEY_PREFIX = 'SEDAKEYENV1:';
 const MAX_DEVICES_PER_USER = 20;
 const deviceDirectoryRefreshes = new Map();
+const deviceDirectoryRefreshAt = new Map();
 
 function getDeviceId(uid) {
     const storageKey = DEVICE_STORAGE_PREFIX + uid;
@@ -105,6 +106,7 @@ async function refreshRegisteredDevices(uid) {
         });
         const trimmed = records.slice(0, MAX_DEVICES_PER_USER);
         await DB.setCachedDeviceDirectory(uid, trimmed).catch(() => {});
+        deviceDirectoryRefreshAt.set(uid, Date.now());
         return trimmed;
     })();
 
@@ -124,7 +126,7 @@ async function listRegisteredDevices(uid, forceRefresh = false) {
     // Message sending uses the local directory first. Refresh it in the background
     // so one Firestore round-trip per recipient does not delay every message.
     if (!forceRefresh && Array.isArray(cached) && cached.length) {
-        if (navigator.onLine) {
+        if (navigator.onLine && Date.now() - (deviceDirectoryRefreshAt.get(uid) || 0) > 5 * 60 * 1000) {
             refreshRegisteredDevices(uid).catch(error => {
                 console.warn('[SEDA offline] Background device-directory refresh failed:', error?.code || error);
             });
