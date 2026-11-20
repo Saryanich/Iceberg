@@ -15,6 +15,7 @@ import {
 } from './auth.js';
 
 import * as DB from './db.js';
+import { registerOfflineDevice, prefetchOfflineDeviceKeys } from './offline-keys.js';
 
 import {
     uiState,
@@ -300,6 +301,21 @@ async function bootMessenger(user, userData) {
         loadGroups();
         loadChannels();
         loadContacts();
+
+        // Register only this device's public ECDH key. Its private key stays in IndexedDB.
+        // Cache contact keys so new messages can be sealed even before the sender regains a connection.
+        registerOfflineDevice(user.uid).then(async () => {
+            const peers = [
+                ...(Array.isArray(authState.userData?.chats) ? authState.userData.chats : []),
+                ...(Array.isArray(authState.userData?.contacts) ? authState.userData.contacts : [])
+            ].map(item => typeof item === 'string' ? item : item?.uid)
+             .filter(uid => typeof uid === 'string' && uid && uid !== user.uid);
+            await prefetchOfflineDeviceKeys(peers);
+        }).catch(error => {
+            console.error('[SEDA offline] Device key registration failed:', error);
+            showToast('Не удалось зарегистрировать ключ этого устройства для автономной доставки.', 'warning', 6000);
+        });
+
         if (navigator.onLine) flushPendingChatSyncs().catch(e => console.warn('[Offline sync]', e));
 
         startSedaSessionListener();
