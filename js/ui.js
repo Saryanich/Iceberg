@@ -2555,7 +2555,9 @@ async function uploadEncryptedDirectAttachment(ctx, blob, type, name, preview) {
         keyEnvelope = await encodeOfflineKeyEnvelope(offline.envelopes);
         cryptoVersion = 'SEDA_OFFLINE_1';
     } catch (offlineError) {
-        console.warn('[SEDA offline attachment] Falling back to a legacy chat key:', offlineError);
+        // Only legacy one-to-one chats have the older shared SEDA handshake.
+        if (!ctx.currentChat) throw offlineError;
+        console.warn('[SEDA offline attachment] Falling back to a legacy direct-chat key:', offlineError);
         key = ctx.sedaKey;
         if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(ctx.chatId, ctx.currentChat.uid);
         if (!key?.startsWith('SEDAKEY:')) key = await waitForSedaKey(ctx.chatId, 15000);
