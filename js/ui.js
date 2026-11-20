@@ -2478,37 +2478,64 @@ export async function sendSticker(sticker) {
         currentGroup: uiState.currentGroup,
         currentChannel: uiState.currentChannel
     };
-    const sp = document.getElementById('stickerPicker');
-    if (sp) sp.classList.remove('show');
+    const picker = document.getElementById('stickerPicker');
+    if (picker) picker.classList.remove('show');
     uiState.stickerPickerOpen = false;
 
     try {
-        let text=sticker,encrypted=false;if(chatContext.currentChat){let key=uiState.currentChatKey;if(!key?.startsWith('SEDAKEY:'))key=await ensureSedaKey(chatContext.chatId,chatContext.currentChat.uid);if(!key?.startsWith('SEDAKEY:')){showToast('SEDA Ultra устанавливает соединение','info');return;}text=await sedaUltraEncryptWithKey(sticker,key);encrypted=true;}
-        const pendingSyncId = queueDirectChatSync(chatContext, sticker);
-        const writePromise = addDoc(collection(db, 'messages', chatContext.chatId, 'msgs'), {
+        const messageRef = doc(collection(db, 'messages', chatContext.chatId, 'msgs'));
+        let text = sticker;
+        let encrypted = false;
+        let cryptoVersion = null;
+
+        if (isEncryptedConversation(chatContext)) {
+            try {
+                const sealed = await encryptOfflineText(
+                    chatContext.chatId,
+                    messageRef.id,
+                    authState.user.uid,
+                    getConversationRecipientUids(chatContext),
+                    sticker
+                );
+                text = sealed.payload;
+                encrypted = true;
+                cryptoVersion = 'SEDA_OFFLINE_1';
+            } catch (offlineError) {
+                if (!chatContext.currentChat) throw offlineError;
+                // Existing 1:1 chats without a published recipient prekey may still use
+                // the legacy SEDA handshake until the recipient registers this device.
+                let key = uiState.currentChatKey;
+                if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(chatContext.chatId, chatContext.currentChat.uid);
+                if (!key?.startsWith('SEDAKEY:')) key = await waitForSedaKey(chatContext.chatId, 15000);
+                if (!key?.startsWith('SEDAKEY:')) throw offlineError;
+                text = await sedaUltraEncryptWithKey(sticker, key);
+                encrypted = true;
+                cryptoVersion = 'SEDA_ULTRA_1';
+            }
+        }
+
+        await setDoc(messageRef, {
             text,
             senderId: authState.user.uid,
-            senderName: authState.userData.nickname,
+            senderName: authState.userData?.nickname || authState.userData?.globalId || 'Пользователь',
             timestamp: serverTimestamp(),
             read: false,
             encrypted,
+            cryptoVersion,
             type: 'sticker',
             replyTo: uiState.replyTo || null,
             reactions: {}
         });
         cancelReply();
-        if (!navigator.onLine) showToast('Нет сети — стикер ожидает отправки', 'info', 3500);
-        writePromise.then(async () => {
-            const ok = await updateChatLastMessage(sticker, chatContext);
-            if (ok) removePendingChatSync(pendingSyncId);
-        }).catch((e) => {
-            removePendingChatSync(pendingSyncId);
-            console.error('[Sticker] Не удалось сохранить сообщение:', e);
-            showToast('Не удалось отправить стикер. Проверьте подключение и права Firestore.', 'error', 4000);
-        });
-    } catch (e) {
-        console.error('[Sticker] Ошибка:', e);
-        showToast('Ошибка', 'error');
+
+        const preview = isEncryptedConversation(chatContext) ? '🔒 Зашифрованное сообщение' : sticker;
+        await updateChatLastMessage(preview, chatContext);
+        if (!navigator.onLine) {
+            showToast('Нет сети — зашифрованный стикер сохранён в локальную очередь', 'info', 4000);
+        }
+    } catch (error) {
+        console.error('[Sticker] Не удалось сохранить стикер:', error);
+        showToast(error?.message || 'Не удалось отправить стикер. Проверьте ключи устройств и Firestore Rules.', 'error', 6000);
     }
 }
 
