@@ -2207,6 +2207,46 @@ async function renderMessage(msg) {
     return div;
 }
 
+function getConversationRecipientUids(context) {
+    const uid = authState.user?.uid;
+    if (!uid || !context) return [];
+
+    if (context.currentChat?.uid) return [context.currentChat.uid];
+
+    const result = new Set();
+    const collect = value => {
+        const candidates = Array.isArray(value) ? value : [];
+        for (const item of candidates) {
+            const memberUid = typeof item === 'string' ? item : item?.uid;
+            if (typeof memberUid === 'string' && memberUid && memberUid !== uid) {
+                result.add(memberUid);
+            }
+        }
+    };
+
+    const group = context.currentGroup;
+    if (group) {
+        collect(group.memberIds);
+        collect(group.members);
+        collect(group.adminIds);
+        if (group.createdBy && group.createdBy !== uid) result.add(group.createdBy);
+    }
+
+    const channel = context.currentChannel;
+    if (channel) {
+        collect(channel.memberIds);
+        collect(channel.members);
+        collect(channel.admins);
+        if (channel.createdBy && channel.createdBy !== uid) result.add(channel.createdBy);
+    }
+
+    return [...result];
+}
+
+function isEncryptedConversation(context) {
+    return !!(context?.currentChat || context?.currentGroup || context?.currentChannel);
+}
+
 export async function sendMessage() {
     if (uiState.isSending) return;
     const input = document.getElementById('messageInput');
@@ -2242,14 +2282,20 @@ export async function sendMessage() {
             const editId = uiState.editingMessage;
             let editText = originalText;
             let editCryptoVersion = null;
-            if (chatContext.currentChat) {
+            if (isEncryptedConversation(chatContext)) {
                 try {
                     const sealed = await encryptOfflineText(
-                        chatIdAtSend, editId, authState.user.uid, chatContext.currentChat.uid, originalText
+                        chatIdAtSend, editId, authState.user.uid,
+                        getConversationRecipientUids(chatContext), originalText
                     );
                     editText = sealed.payload;
                     editCryptoVersion = 'SEDA_OFFLINE_1';
                 } catch (offlineError) {
+                    // Only direct chats have the legacy shared-key handshake.
+                    if (!chatContext.currentChat) {
+                        uiState.editingMessage = editId;
+                        throw offlineError;
+                    }
                     console.warn('[SEDA offline edit] Falling back to an existing legacy chat key:', offlineError);
                     let key = chatContext.sedaKey;
                     if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(chatIdAtSend, chatContext.currentChat.uid);
@@ -2264,7 +2310,7 @@ export async function sendMessage() {
             }
             await updateDoc(doc(db, 'messages', chatIdAtSend, 'msgs', editId), {
                 text: editText, edited: true, editedAt: serverTimestamp(),
-                encrypted: !!chatContext.currentChat,
+                encrypted: isEncryptedConversation(chatContext),
                 cryptoVersion: editCryptoVersion
             });
             uiState.editingMessage = null;
@@ -2277,16 +2323,18 @@ export async function sendMessage() {
         let encrypted = false;
         let cryptoVersion = null;
 
-        if (chatContext.currentChat) {
+        if (isEncryptedConversation(chatContext)) {
             try {
                 const sealed = await encryptOfflineText(
-                    chatIdAtSend, messageRef.id, authState.user.uid, chatContext.currentChat.uid, originalText
+                    chatIdAtSend, messageRef.id, authState.user.uid,
+                    getConversationRecipientUids(chatContext), originalText
                 );
                 textToSend = sealed.payload;
                 encrypted = true;
                 cryptoVersion = 'SEDA_OFFLINE_1';
             } catch (offlineError) {
-                // Backward compatibility for peers that have not registered a public device key yet.
+                // Backward compatibility is only available for legacy 1:1 chats.
+                if (!chatContext.currentChat) throw offlineError;
                 console.warn('[SEDA offline send] Device envelope unavailable; trying a legacy session:', offlineError);
                 let key = chatContext.sedaKey;
                 if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(chatIdAtSend, chatContext.currentChat.uid);
@@ -2321,7 +2369,7 @@ export async function sendMessage() {
         cancelReply();
 
         try {
-            const safePreview = chatContext.currentChat ? '🔒 Зашифрованное сообщение' : originalText;
+            const safePreview = isEncryptedConversation(chatContext) ? '🔒 Зашифрованное сообщение' : originalText;
             const metadataSynced = await updateChatLastMessage(safePreview, chatContext);
             if (!metadataSynced) {
                 showToast('Сообщение отправлено. Обновление списка чатов повторится позже.', 'info', 4000);
@@ -2474,7 +2522,7 @@ async function uploadEncryptedDirectAttachment(ctx, blob, type, name, preview) {
 
     try {
         const offline = await createOfflineMessageKey(
-            ctx.chatId, messageId, authState.user.uid, ctx.currentChat.uid
+            ctx.chatId, messageId, authState.user.uid, getConversationRecipientUids(ctx)
         );
         key = offline.messageKey;
         keyEnvelope = await encodeOfflineKeyEnvelope(offline.envelopes);
@@ -2576,7 +2624,7 @@ export async function sendMediaFile(input) {
             else mediaType = 'file';
         }
 
-        updateOperationIndicator(indicator,'Файл подготовлен','Отправляем…');const preview=mediaType==='photo'?'📷 Фото':mediaType==='video'?'🎥 Видео':mediaType==='audio'?'🎵 Аудио':'📄 '+file.name;if(chatContext.currentChat){await uploadEncryptedDirectAttachment(chatContext,await dataUrlToBlob(dataUrl),mediaType,file.name,preview);removeOperationIndicator(indicator);showToast('Вложение отправлено через SEDA Attachments','success');return;}const mediaToSend=dataUrl;
+        updateOperationIndicator(indicator,'Файл подготовлен','Отправляем…');const preview=mediaType==='photo'?'📷 Фото':mediaType==='video'?'🎥 Видео':mediaType==='audio'?'🎵 Аудио':'📄 '+file.name;if(isEncryptedConversation(chatContext)){await uploadEncryptedDirectAttachment(chatContext,await dataUrlToBlob(dataUrl),mediaType,file.name,preview);removeOperationIndicator(indicator);showToast('Вложение отправлено через SEDA Attachments','success');return;}const mediaToSend=dataUrl;
         const pendingSyncId = queueDirectChatSync(chatContext, preview);
         const writePromise = addDoc(collection(db, 'messages', chatContext.chatId, 'msgs'), {
             text: '',
@@ -2664,7 +2712,7 @@ export async function toggleVoiceRecording() {
             const reader = new FileReader();
             reader.onload = async () => {
                 try {
-                    const dataUrl=reader.result;let mediaEncrypted=false;if(chatContext.currentChat){await uploadEncryptedDirectAttachment(chatContext,await dataUrlToBlob(dataUrl),'audio','voice.webm','🎤 Голосовое');return;}
+                    const dataUrl=reader.result;let mediaEncrypted=false;if(isEncryptedConversation(chatContext)){await uploadEncryptedDirectAttachment(chatContext,await dataUrlToBlob(dataUrl),'audio','voice.webm','🎤 Голосовое');return;}
                     const preview = '🎤 Голосовое';
                     const pendingSyncId = queueDirectChatSync(chatContext, preview);
                     const writePromise = addDoc(collection(db, 'messages', chatContext.chatId, 'msgs'), {
