@@ -117,12 +117,12 @@ async function sendRecipientNotification(messageId, chatId, senderUid, recipient
         chatId: String(chatId),
         messageId: String(messageId),
         senderId: String(senderUid),
-        url: '/Iceberg/'
+        url: 'https://saryanich.github.io/Iceberg/'
       },
       webpush: {
         headers: { Urgency: 'high' },
         notification: { tag: 'iceberg-' + messageId },
-        fcmOptions: { link: '/Iceberg/' }
+        fcmOptions: { link: 'https://saryanich.github.io/Iceberg/' }
       }
     });
 
