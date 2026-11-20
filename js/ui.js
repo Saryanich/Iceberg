@@ -1531,7 +1531,7 @@ export async function selectChat(chat) {
     uiState.currentGroup = null;
     uiState.currentChannel = null;
 
-    uiState.currentChatId='sedaultra_'+[authState.user.uid,chat.uid].sort().join('_');const cachedKey=await DB.getChatKey(uiState.currentChatId);const keyReady=cachedKey?.startsWith('SEDAKEY:')&&await DB.isChatKeyShared(uiState.currentChatId);uiState.currentChatKey=keyReady?cachedKey:null;uiState.sedaSessionReady=!!keyReady;renderChatHeader();try{await ensureMessageThread(uiState.currentChatId,{kind:'direct',participants:[chat.uid]});}catch(err){console.error('[Messages] Thread setup:',err);showToast('Не удалось подготовить историю чата. Проверьте права Firestore.','error',4000);}const openingId=uiState.currentChatId;ensureSedaKey(openingId,chat.uid).then(async key=>{if(uiState.currentChatId!==openingId)return;if(key){uiState.currentChatKey=key;uiState.sedaSessionReady=true;const st=document.getElementById('chatStatus');if(st)st.textContent='🔐 SEDA Ultra • защищено';await loadMessages();}else if(!uiState.sedaSessionReady){const st=document.getElementById('chatStatus');if(st)st.textContent='🔐 SEDA Ultra • устанавливаем соединение…';}}).catch(err=>{console.error('[SEDA session]',err);const st=document.getElementById('chatStatus');if(st&&uiState.currentChatId===openingId)st.textContent='SEDA Ultra: ошибка соединения';});
+    uiState.currentChatId='sedaultra_'+[authState.user.uid,chat.uid].sort().join('_');const cachedKey=await DB.getChatKey(uiState.currentChatId);const keyReady=cachedKey?.startsWith('SEDAKEY:')&&await DB.isChatKeyShared(uiState.currentChatId);uiState.currentChatKey=keyReady?cachedKey:null;uiState.sedaSessionReady=!!keyReady;renderChatHeader();try{await ensureMessageThread(uiState.currentChatId,{kind:'direct',participants:[chat.uid]});}catch(err){console.error('[Messages] Thread setup:',err);showToast('Не удалось подготовить историю чата. Проверьте права Firestore.','error',4000);}// Offline device-key envelopes do not require a live chat handshake.
     document.getElementById('chatInputArea').style.display = 'flex';
     document.getElementById('clearChatBtn').style.display = 'inline-block';
     document.getElementById('deleteChatBtn').style.display = 'inline-block';
@@ -2277,10 +2277,8 @@ export async function sendMessage() {
                         throw offlineError;
                     }
                     console.warn('[SEDA offline edit] Falling back to an existing legacy chat key:', offlineError);
-                    let key = chatContext.sedaKey;
-                    if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(chatIdAtSend, chatContext.currentChat.uid);
-                    if (!key?.startsWith('SEDAKEY:')) key = await waitForSedaKey(chatIdAtSend, 15000);
-                    if (!key?.startsWith('SEDAKEY:')) {
+                    let key = chatContext.sedaKey || await DB.getChatKey(chatIdAtSend).catch(() => null);
+                    if (!key?.startsWith('SEDAKEY:') || !await DB.isChatKeyShared(chatIdAtSend).catch(() => false)) {
                         uiState.editingMessage = editId;
                         throw offlineError;
                     }
@@ -2316,10 +2314,8 @@ export async function sendMessage() {
                 // Backward compatibility is only available for legacy 1:1 chats.
                 if (!chatContext.currentChat) throw offlineError;
                 console.warn('[SEDA offline send] Device envelope unavailable; trying a legacy session:', offlineError);
-                let key = chatContext.sedaKey;
-                if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(chatIdAtSend, chatContext.currentChat.uid);
-                if (!key?.startsWith('SEDAKEY:')) key = await waitForSedaKey(chatIdAtSend, 15000);
-                if (!key?.startsWith('SEDAKEY:')) throw offlineError;
+                let key = chatContext.sedaKey || await DB.getChatKey(chatIdAtSend).catch(() => null);
+                if (!key?.startsWith('SEDAKEY:') || !await DB.isChatKeyShared(chatIdAtSend).catch(() => false)) throw offlineError;
                 textToSend = await sedaUltraEncryptWithKey(originalText, key);
                 encrypted = true;
                 cryptoVersion = 'SEDA_ULTRA_1';
@@ -2484,10 +2480,8 @@ export async function sendSticker(sticker) {
                 if (!chatContext.currentChat) throw offlineError;
                 // Existing 1:1 chats without a published recipient prekey may still use
                 // the legacy SEDA handshake until the recipient registers this device.
-                let key = uiState.currentChatKey;
-                if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(chatContext.chatId, chatContext.currentChat.uid);
-                if (!key?.startsWith('SEDAKEY:')) key = await waitForSedaKey(chatContext.chatId, 15000);
-                if (!key?.startsWith('SEDAKEY:')) throw offlineError;
+                let key = uiState.currentChatKey || await DB.getChatKey(chatContext.chatId).catch(() => null);
+                if (!key?.startsWith('SEDAKEY:') || !await DB.isChatKeyShared(chatContext.chatId).catch(() => false)) throw offlineError;
                 text = await sedaUltraEncryptWithKey(sticker, key);
                 encrypted = true;
                 cryptoVersion = 'SEDA_ULTRA_1';
@@ -2538,10 +2532,8 @@ async function uploadEncryptedDirectAttachment(ctx, blob, type, name, preview) {
         // Only legacy one-to-one chats have the older shared SEDA handshake.
         if (!ctx.currentChat) throw offlineError;
         console.warn('[SEDA offline attachment] Falling back to a legacy direct-chat key:', offlineError);
-        key = ctx.sedaKey;
-        if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(ctx.chatId, ctx.currentChat.uid);
-        if (!key?.startsWith('SEDAKEY:')) key = await waitForSedaKey(ctx.chatId, 15000);
-        if (!key?.startsWith('SEDAKEY:')) throw offlineError;
+        key = ctx.sedaKey || await DB.getChatKey(ctx.chatId).catch(() => null);
+        if (!key?.startsWith('SEDAKEY:') || !await DB.isChatKeyShared(ctx.chatId).catch(() => false)) throw offlineError;
     }
 
     const encryptedFile = await encryptSedaAttachment(blob, key, name);
