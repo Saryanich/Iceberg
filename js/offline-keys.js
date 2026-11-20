@@ -104,30 +104,37 @@ export async function prefetchOfflineDeviceKeys(userIds = []) {
     })));
 }
 
-export async function createOfflineMessageKey(chatId, messageId, senderUid, recipientUid) {
-    if (!chatId || !messageId || !senderUid || !recipientUid || senderUid === recipientUid) {
-        throw new Error('Некорректные участники личного чата');
+export async function createOfflineMessageKey(chatId, messageId, senderUid, recipientUids) {
+    const recipients = [...new Set(
+        (Array.isArray(recipientUids) ? recipientUids : [recipientUids])
+            .filter(uid => typeof uid === 'string' && uid && uid !== senderUid)
+    )];
+    if (!chatId || !messageId || !senderUid || !recipients.length) {
+        throw new Error('Не удалось определить участников зашифрованной беседы');
     }
 
     const local = await getLocalDeviceIdentity(senderUid, true);
-    const [senderDevices, recipientDevices] = await Promise.all([
-        listRegisteredDevices(senderUid),
-        listRegisteredDevices(recipientUid)
-    ]);
+    const senderDevices = await listRegisteredDevices(senderUid);
+    const recipientDirectories = await Promise.all(
+        recipients.map(async uid => ({ uid, devices: await listRegisteredDevices(uid) }))
+    );
 
-    // Include the current device even when its just-created public-key write has not
-    // reached the server yet. Other devices are included for multi-device delivery.
+    const missing = recipientDirectories.filter(entry => !entry.devices.length).map(entry => entry.uid);
+    if (missing.length) {
+        throw new Error('Не зарегистрированы ключи устройств у участников: ' + missing.join(', ')
+            + '. Каждому участнику нужно один раз открыть обновлённый Iceberg онлайн.');
+    }
+
+    // The sender's and every recipient's registered devices receive an encrypted
+    // envelope. This is the same path for direct, group and channel messages.
     const targets = new Map();
-    for (const item of [...senderDevices, ...recipientDevices]) {
-        targets.set(item.uid + ':' + item.deviceId, item);
+    for (const item of senderDevices) targets.set(item.uid + ':' + item.deviceId, item);
+    for (const directory of recipientDirectories) {
+        for (const item of directory.devices) targets.set(item.uid + ':' + item.deviceId, item);
     }
     targets.set(senderUid + ':' + local.deviceId, {
         uid: senderUid, deviceId: local.deviceId, publicKey: local.publicKey
     });
-
-    if (!recipientDevices.length) {
-        throw new Error('У собеседника ещё нет зарегистрированного ключа устройства. Ему нужно хотя бы один раз открыть обновлённый Iceberg с интернетом.');
-    }
 
     const messageKey = serializeKey(generateSedaKey());
     const envelopes = [];
@@ -156,8 +163,8 @@ export async function createOfflineMessageKey(chatId, messageId, senderUid, reci
     return { messageKey, envelopes };
 }
 
-export async function encryptOfflineText(chatId, messageId, senderUid, recipientUid, plaintext) {
-    const context = await createOfflineMessageKey(chatId, messageId, senderUid, recipientUid);
+export async function encryptOfflineText(chatId, messageId, senderUid, recipientUids, plaintext) {
+    const context = await createOfflineMessageKey(chatId, messageId, senderUid, recipientUids);
     const ciphertext = await sedaUltraEncryptWithKey(String(plaintext), context.messageKey);
     const payload = TEXT_PREFIX + JSON.stringify({
         v: 1,
