@@ -1449,43 +1449,8 @@ async function ensureSedaKeyInternal(chatId, peerUid) {
         await DB.deleteChatKey(chatId);
     }
 
-    const pair = await generateECDHKeyPair();
-    const pub = await exportPublicKey(pair);
-    const priv = await exportPrivateKey(pair);
-    const made = await runTransaction(db, async tx => {
-        const current = await tx.get(ref);
-        if (current.exists()) return false;
-        tx.set(ref, {
-            chatId,
-            initiator: uid,
-            peer: peerUid,
-            initiatorPublicKey: pub,
-            peerPublicKey: null,
-            encryptedSedaKey: null,
-            peerKeyStored: false,
-            createdAt: Date.now(),
-            expiresAt: Date.now() + 600000
-        });
-        return true;
-    });
-
-    if (made) {
-        await DB.saveECDHKeys(chatId, pub, priv);
-        watchSedaInitiatorHandshake(chatId);
-        return null;
-    }
-
-    // Another device may have created the handshake between our initial read and transaction.
-    const latest = await getDoc(ref);
-    if (latest.exists()) {
-        const data = latest.data();
-        if (data.initiator === uid && data.peer === peerUid) {
-            await DB.saveECDHKeys(chatId, pub, priv);
-            watchSedaInitiatorHandshake(chatId);
-        } else if (data.peer === uid && data.initiator === peerUid) {
-            watchSedaPeerHandshake(chatId);
-        }
-    }
+    // New conversations use pre-published device keys and per-message envelopes.
+    // Do not create a live two-party handshake here: it would require both users online.
     return null;
 }
 // Ensure the parent document exists: Firestore rules for message subcollections
