@@ -1,6 +1,6 @@
 
 const DB_NAME = 'iceberg_cache';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
  
 const STORES = {
     profile:    'profile',      // { uid, data, updatedAt }
@@ -10,6 +10,7 @@ const STORES = {
     channels:   'channels',     // { uid, list, updatedAt }
     messages:   'messages',     // { chatId, list, updatedAt }
     ecdhKeys:   'ecdhKeys',     // { chatId, publicKey, privateKey, createdAt }
+    identityKeys: 'identityKeys', // { deviceId, uid, publicKey, privateKey, createdAt }
     chatKeys:   'chatKeys',     // { chatId, key, shared }
     settings:   'settings'      // { uid, theme, autoDeleteHours, ... }
 };
@@ -35,10 +36,9 @@ function openDB() {
         req.onupgradeneeded = (e) => {
             const db = e.target.result;
             if (db.objectStoreNames.contains('sedaKeys')) db.deleteObjectStore('sedaKeys');
-            if (db.objectStoreNames.contains('ecdhKeys')) db.deleteObjectStore('ecdhKeys');
             for (const name of Object.values(STORES)) {
                 if (!db.objectStoreNames.contains(name)) {
-                    db.createObjectStore(name, { keyPath: name === 'messages' ? 'chatId' : (name === 'profile' || name === 'settings' ? 'uid' : name === 'ecdhKeys' || name === 'chatKeys' ? 'chatId' : 'uid') });
+                    db.createObjectStore(name, { keyPath: name === 'messages' ? 'chatId' : (name === 'profile' || name === 'settings' ? 'uid' : name === 'ecdhKeys' || name === 'chatKeys' ? 'chatId' : (name === 'identityKeys' ? 'deviceId' : 'uid')) });
                 }
             }
         };
@@ -196,6 +196,21 @@ export async function getECDHKeys(chatId) {
 
 export async function deleteECDHKeys(chatId) {
     return await cacheDelete(STORES.ecdhKeys, chatId);
+}
+
+
+export async function saveDeviceIdentity(deviceId, uid, publicKey, privateKeyJwk) {
+    return await cachePut(STORES.identityKeys, {
+        deviceId, uid, publicKey, privateKey: privateKeyJwk, createdAt: Date.now()
+    });
+}
+
+export async function getDeviceIdentity(deviceId) {
+    return await cacheGet(STORES.identityKeys, deviceId);
+}
+
+export async function deleteDeviceIdentity(deviceId) {
+    return await cacheDelete(STORES.identityKeys, deviceId);
 }
 
 // ===================================================================
