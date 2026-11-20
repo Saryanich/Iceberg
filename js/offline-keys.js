@@ -102,7 +102,7 @@ async function listRegisteredDevices(uid) {
 
 export async function prefetchOfflineDeviceKeys(userIds = []) {
     const ids = [...new Set((Array.isArray(userIds) ? userIds : [])
-        .filter(uid => typeof uid === 'string' && uid.length > 0))].slice(0, 50);
+        .filter(uid => typeof uid === 'string' && uid.length > 0))].slice(0, 200);
     return await Promise.all(ids.map(uid => listRegisteredDevices(uid).catch(error => {
         console.warn('[SEDA offline] Could not cache public devices for', uid, error?.code || error);
         return [];
