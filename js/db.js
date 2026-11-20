@@ -1,6 +1,6 @@
 
 const DB_NAME = 'iceberg_cache';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
  
 const STORES = {
     profile:    'profile',      // { uid, data, updatedAt }
@@ -11,6 +11,7 @@ const STORES = {
     messages:   'messages',     // { chatId, list, updatedAt }
     ecdhKeys:   'ecdhKeys',     // { chatId, publicKey, privateKey, createdAt }
     identityKeys: 'identityKeys', // { deviceId, uid, publicKey, privateKey, createdAt }
+    deviceDirectory: 'deviceDirectory' // { uid, devices, updatedAt }
     chatKeys:   'chatKeys',     // { chatId, key, shared }
     settings:   'settings'      // { uid, theme, autoDeleteHours, ... }
 };
@@ -211,6 +212,17 @@ export async function getDeviceIdentity(deviceId) {
 
 export async function deleteDeviceIdentity(deviceId) {
     return await cacheDelete(STORES.identityKeys, deviceId);
+}
+
+export async function getCachedDeviceDirectory(uid) {
+    const entry = await cacheGet(STORES.deviceDirectory, uid);
+    return entry ? entry.devices : null;
+}
+
+export async function setCachedDeviceDirectory(uid, devices) {
+    return await cachePut(STORES.deviceDirectory, {
+        uid, devices: Array.isArray(devices) ? devices : [], updatedAt: Date.now()
+    });
 }
 
 // ===================================================================
