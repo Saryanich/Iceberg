@@ -165,10 +165,13 @@ export async function createOfflineMessageKey(chatId, messageId, senderUid, reci
     }
 
     const local = await getLocalDeviceIdentity(senderUid, false);
-    const senderDevices = await listRegisteredDevices(senderUid);
-    const recipientDirectories = await Promise.all(
-        recipients.map(async uid => ({ uid, devices: await listRegisteredDevices(uid) }))
-    );
+    const [senderDevices, recipientDirectories] = await Promise.all([
+        listRegisteredDevices(senderUid),
+        Promise.all(recipients.map(async uid => ({
+            uid,
+            devices: await listRegisteredDevices(uid)
+        })))
+    ]);
 
     const missing = recipientDirectories.filter(entry => !entry.devices.length).map(entry => entry.uid);
     if (missing.length) {
