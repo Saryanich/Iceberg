@@ -13,7 +13,7 @@ import {
 import * as DB from './db.js';
 import {
     encryptOfflineText, createOfflineMessageKey, encodeOfflineKeyEnvelope,
-    decryptOfflineMessage, isOfflineTextPayload
+    decryptOfflineMessage, isOfflineTextPayload, prefetchOfflineDeviceKeys
 } from './offline-keys.js';
 import { storage } from './config.js';
 import { ref as storageRef, uploadBytes, getBytes } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js';
@@ -1558,6 +1558,9 @@ async function ensureMessageThread(chatId, membership) {
 export async function selectChat(chat) {
     if (!chat) return;
     closeCurrentSubscriptions();
+    prefetchOfflineDeviceKeys([chat.uid]).catch(error =>
+        console.warn('[SEDA offline] Could not cache peer device keys:', error?.code || error)
+    );
 
     uiState.currentChat = chat;
     uiState.currentGroup = null;
@@ -1619,6 +1622,9 @@ export async function selectGroup(group) {
     renderChatHeader();
     try {
         const ids = freshGroup.memberIds || (Array.isArray(freshGroup.members) ? freshGroup.members.map(m => typeof m === 'string' ? m : m?.uid).filter(Boolean) : []);
+        prefetchOfflineDeviceKeys(ids.filter(memberUid => memberUid !== authState.user.uid)).catch(error =>
+            console.warn('[SEDA offline] Group device-key prefetch failed:', error?.code || error)
+        );
         await ensureMessageThread(uiState.currentChatId, {
             kind: 'group',
             resourceId: freshGroup.id,
@@ -1670,6 +1676,15 @@ export async function selectChannel(channel) {
 
     try {
         const channelMembers = Array.isArray(freshChannel.members) ? freshChannel.members : [authState.user.uid];
+        const channelRecipientUids = [
+            ...channelMembers,
+            ...(Array.isArray(freshChannel.memberIds) ? freshChannel.memberIds : []),
+            ...(Array.isArray(freshChannel.admins) ? freshChannel.admins : [])
+        ].map(member => typeof member === 'string' ? member : member?.uid)
+         .filter(memberUid => memberUid && memberUid !== authState.user.uid);
+        prefetchOfflineDeviceKeys(channelRecipientUids).catch(error =>
+            console.warn('[SEDA offline] Channel device-key prefetch failed:', error?.code || error)
+        );
         await ensureMessageThread(uiState.currentChatId, {
             kind: 'channel',
             resourceId: freshChannel.id,
