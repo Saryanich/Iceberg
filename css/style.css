@@ -4676,3 +4676,121 @@ body {
     min-height: 100%;
     background-color: #050914;
 }
+
+
+/* Final chat alignment and compact stories controls. */
+.stories-bar {
+    box-sizing: border-box !important;
+    min-height: 82px !important;
+    max-height: 82px !important;
+    padding: 6px 10px !important;
+    gap: 8px !important;
+    align-items: center !important;
+}
+.story-add-item {
+    flex: 0 0 58px !important;
+    min-width: 58px !important;
+    gap: 3px !important;
+    font-size: 9px !important;
+}
+.story-add-circle,
+.story-ring,
+.story-contact-circle {
+    width: 42px !important;
+    height: 42px !important;
+    flex: 0 0 42px !important;
+}
+.story-contact-circle { font-size: 18px !important; }
+.story-contact-item .story-name { font-size: 9px !important; }
+.story-own-wrap,
+.story-own-wrap .story-own-item {
+    width: 56px !important;
+    min-width: 56px !important;
+    flex: 0 0 56px !important;
+}
+.story-own-item .story-contact-circle {
+    width: 42px !important;
+    height: 42px !important;
+    flex: 0 0 42px !important;
+}
+.story-own-add {
+    top: 28px !important;
+    right: 0 !important;
+    width: 20px !important;
+    height: 20px !important;
+    font-size: 15px !important;
+}
+
+#chatScreen .chat-input-bar .chat-input {
+    background: rgba(20, 38, 56, .98) !important;
+    color: #f6fbff !important;
+    caret-color: #69bdff !important;
+    border-color: rgba(105, 184, 239, .34) !important;
+}
+#chatScreen .chat-input-bar .chat-input::placeholder {
+    color: #a9c3d8 !important;
+    opacity: 1 !important;
+}
+#chatScreen .chat-input-bar .chat-send {
+    opacity: 1 !important;
+    color: #fff !important;
+    background: linear-gradient(145deg, #5bbcff, #2588dc) !important;
+    box-shadow: 0 3px 10px rgba(45, 151, 224, .26) !important;
+}
+
+@media (max-width: 600px) {
+    /* Keep the iPhone brand strip above the entire conversation header. */
+    #chatScreen.show-on-mobile::before {
+        top: env(safe-area-inset-top, 0px) !important;
+        height: 38px !important;
+        background: linear-gradient(180deg, rgba(23, 42, 60, .99), rgba(16, 29, 43, .99)) !important;
+        color: #f1f7fc !important;
+        border-bottom: 1px solid rgba(112, 164, 202, .18) !important;
+    }
+    #chatScreen.show-on-mobile .chat-header {
+        margin-top: 38px !important;
+        padding-top: 8px !important;
+    }
+    #chatScreen .chat-input-area {
+        padding: 7px 8px max(8px, env(safe-area-inset-bottom, 0px)) !important;
+    }
+    #chatScreen .chat-input-bar {
+        align-items: flex-end !important;
+        gap: 5px !important;
+    }
+    #chatScreen .chat-input-bar .chat-icon-btn {
+        flex: 0 0 36px !important;
+        width: 36px !important;
+        min-width: 36px !important;
+        height: 40px !important;
+        min-height: 40px !important;
+        border-radius: 12px !important;
+        font-size: 18px !important;
+    }
+    #chatScreen .chat-input-bar .chat-input {
+        min-height: 44px !important;
+        padding: 10px 12px !important;
+        border-radius: 15px !important;
+        font-size: 16px !important;
+    }
+    #chatScreen .chat-input-bar .chat-send {
+        flex: 0 0 40px !important;
+        width: 40px !important;
+        min-width: 40px !important;
+        height: 40px !important;
+        min-height: 40px !important;
+        border-radius: 13px !important;
+    }
+}
+@media (max-width: 370px) {
+    #chatScreen .chat-input-bar .chat-icon-btn {
+        flex-basis: 33px !important;
+        width: 33px !important;
+        min-width: 33px !important;
+    }
+    #chatScreen .chat-input-bar .chat-send {
+        flex-basis: 37px !important;
+        width: 37px !important;
+        min-width: 37px !important;
+    }
+}
