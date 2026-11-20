@@ -2185,7 +2185,7 @@ export async function sendMessage() {
             if (chatContext.currentChat) {
                 let key = chatContext.sedaKey;
                 if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(chatIdAtSend, chatContext.currentChat.uid);
-                if (!key?.startsWith('SEDAKEY:')) key = await waitForSedaKey(chatIdAtSend, 15000);
+            if (!key?.startsWith('SEDAKEY:')) key = await waitForSedaKey(chatIdAtSend, 15000);
                 if (!key?.startsWith('SEDAKEY:')) {
                     uiState.editingMessage = editId;
                     throw new Error('Не удалось установить SEDA Ultra за 15 секунд. Откройте чат на обоих устройствах и проверьте подключение.');
@@ -3025,9 +3025,7 @@ function watchSedaPeerHandshake(chatId) {
             await updateDoc(ref, {
                 peerPublicKey: publicKey,
                 encryptedSedaKey: wrapped,
-                peerKeyStored: true,
-                peerKeyStoredAt: Date.now(),
-                respondedAt: Date.now()
+                peerKeyStored: true
             });
 
             resolveSedaKeyWaiters(chatId, key);
