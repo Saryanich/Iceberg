@@ -169,7 +169,6 @@ async function sendRecipientNotification(messageId, chatId, senderUid, recipient
 exports.notifyIcebergMessage = onDocumentCreated(
   {
     document: 'messages/{chatId}/msgs/{messageId}',
-    region: 'europe-west1',
     retry: true
   },
   async event => {
