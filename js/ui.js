@@ -16,7 +16,7 @@ import {
     decryptOfflineMessage, isOfflineTextPayload, prefetchOfflineDeviceKeys
 } from './offline-keys.js';
 import { storage } from './config.js';
-import { ref as storageRef, uploadBytes, getBytes, deleteObject } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js';
+import { ref as storageRef, uploadBytes, getBytes } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js';
 import { encryptSedaAttachment, decryptSedaAttachment } from './seda-attachments.js';
 import { authState } from './auth.js';
 
@@ -2581,37 +2581,38 @@ async function uploadEncryptedDirectAttachment(ctx, blob, type, name, preview) {
 
     const encryptedFile = await encryptSedaAttachment(blob, key, name);
     const path = 'seda-attachments/' + ctx.chatId + '/' + authState.user.uid + '/' + messageId;
-    const fileRef = storageRef(storage, path);
+    await setDoc(messageRef, {
+        text: '',
+        ...(keyEnvelope ? { keyEnvelope } : {}),
+        senderId: authState.user.uid,
+        senderName: authState.userData?.nickname || authState.userData?.globalId || 'Пользователь',
+        timestamp: serverTimestamp(),
+        read: false,
+        encrypted: !!keyEnvelope,
+        cryptoVersion,
+        mediaEncrypted: true,
+        type,
+        attachmentPending: true,
+        replyTo: uiState.replyTo || null,
+        reactions: {}
+    });
+
     try {
-        // Upload the encrypted binary first. Firestore creates the message only
-        // after the attachment is ready, so push/listeners never expose a blank stub.
-        await uploadBytes(fileRef, encryptedFile.ciphertext, {
+        // Keep the existing Storage contract: the parent Firestore message exists
+        // before its encrypted object is uploaded. Push waits for attachmentPending=false.
+        await uploadBytes(storageRef(storage, path), encryptedFile.ciphertext, {
             contentType: 'application/octet-stream'
         });
-
-        await setDoc(messageRef, {
-            text: '',
-            ...(keyEnvelope ? { keyEnvelope } : {}),
-            senderId: authState.user.uid,
-            senderName: authState.userData?.nickname || authState.userData?.globalId || 'Пользователь',
-            timestamp: serverTimestamp(),
-            read: false,
-            encrypted: !!keyEnvelope,
-            cryptoVersion,
-            mediaEncrypted: true,
-            type,
-            attachmentPending: false,
+        await updateDoc(messageRef, {
             attachment: {
                 path,
                 version: encryptedFile.version,
                 wrappedKey: encryptedFile.wrappedKey,
                 encryptedMetadata: encryptedFile.encryptedMetadata
             },
-            replyTo: uiState.replyTo || null,
-            reactions: {}
+            attachmentPending: false
         });
     } catch (error) {
-        await deleteObject(fileRef).catch(() => {});
         await deleteDoc(messageRef).catch(() => {});
         throw error;
     }
