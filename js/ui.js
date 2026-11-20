@@ -11,6 +11,10 @@ import {
 } from './crypto.js';
 
 import * as DB from './db.js';
+import {
+    encryptOfflineText, createOfflineMessageKey, encodeOfflineKeyEnvelope,
+    decryptOfflineMessage, isOfflineTextPayload
+} from './offline-keys.js';
 import { storage } from './config.js';
 import { ref as storageRef, uploadBytes, getBytes } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js';
 import { encryptSedaAttachment, decryptSedaAttachment } from './seda-attachments.js';
@@ -2037,11 +2041,63 @@ async function renderMessage(msg) {
     div.id = `msg-${msg.id}`;
     div.dataset.id = msg.id;
 
-    let displayText = msg.text;
-    let isEncrypted = msg.encrypted === true;
+    let displayText = msg.text || '';
+    const isEncrypted = msg.encrypted === true || msg.cryptoVersion === 'SEDA_OFFLINE_1';
     let isDecrypted = false;
+    let messageKey = null;
 
-    if(isEncrypted&&msg.text){if(uiState.currentChatKey&&isSedaUltraPayload(msg.text)){const dec=await sedaUltraDecrypt(msg.text,uiState.currentChatKey);if(dec!==null){displayText=dec;isDecrypted=true;div.classList.add('message-seda');}else displayText='[Не удалось расшифровать SEDA Ultra]';}else{displayText='[Зашифровано — ожидается ключ SEDA Ultra]';div.classList.add('message-seda');}}let mediaSrc=null,decryptedAttachment=null;if(msg.attachment?.path&&uiState.currentChatKey){try{const bytes=await getBytes(storageRef(storage,msg.attachment.path));decryptedAttachment=await decryptSedaAttachment(bytes,msg.attachment,uiState.currentChatKey);mediaSrc=URL.createObjectURL(decryptedAttachment.blob);}catch(e){console.error('[SEDA attachment]',e);}}else if(msg.media&&!msg.mediaEncrypted)mediaSrc=msg.media;
+    if (msg.cryptoVersion === 'SEDA_OFFLINE_1') {
+        try {
+            const payload = isOfflineTextPayload(msg.text) ? msg.text : msg.keyEnvelope;
+            const opened = await decryptOfflineMessage(
+                uiState.currentChatId, msg.id, payload, authState.user.uid
+            );
+            if (opened) {
+                messageKey = opened.messageKey;
+                if (opened.text !== null) {
+                    displayText = opened.text;
+                    isDecrypted = true;
+                }
+            } else if (msg.type === 'text') {
+                displayText = '[Это сообщение зашифровано для другого устройства или ключ недоступен]';
+            }
+            div.classList.add('message-seda');
+        } catch (error) {
+            console.error('[SEDA offline decrypt]', error);
+            displayText = msg.type === 'text' ? '[Не удалось расшифровать сообщение SEDA]' : '';
+        }
+    } else if (isEncrypted && msg.text) {
+        if (uiState.currentChatKey && isSedaUltraPayload(msg.text)) {
+            const decrypted = await sedaUltraDecrypt(msg.text, uiState.currentChatKey);
+            if (decrypted !== null) {
+                displayText = decrypted;
+                isDecrypted = true;
+                messageKey = uiState.currentChatKey;
+                div.classList.add('message-seda');
+            } else {
+                displayText = '[Не удалось расшифровать SEDA Ultra]';
+            }
+        } else {
+            displayText = '[Зашифровано — ожидается ключ SEDA Ultra]';
+            div.classList.add('message-seda');
+        }
+    }
+
+    let mediaSrc = null;
+    let decryptedAttachment = null;
+    const attachmentKey = messageKey || uiState.currentChatKey;
+    if (msg.attachment?.path && attachmentKey) {
+        try {
+            const bytes = await getBytes(storageRef(storage, msg.attachment.path));
+            decryptedAttachment = await decryptSedaAttachment(bytes, msg.attachment, attachmentKey);
+            mediaSrc = URL.createObjectURL(decryptedAttachment.blob);
+        } catch (error) {
+            console.error('[SEDA attachment]', error);
+        }
+    } else if (msg.media && !msg.mediaEncrypted) {
+        mediaSrc = msg.media;
+    }
+
     if (msg.replyTo) {
         const r = document.createElement('div');
         r.className = 'chat-msg-reply';
@@ -2182,40 +2238,65 @@ export async function sendMessage() {
         if (uiState.editingMessage) {
             const editId = uiState.editingMessage;
             let editText = originalText;
+            let editCryptoVersion = null;
             if (chatContext.currentChat) {
-                let key = chatContext.sedaKey;
-                if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(chatIdAtSend, chatContext.currentChat.uid);
-            if (!key?.startsWith('SEDAKEY:')) key = await waitForSedaKey(chatIdAtSend, 15000);
-                if (!key?.startsWith('SEDAKEY:')) {
-                    uiState.editingMessage = editId;
-                    throw new Error('Не удалось установить SEDA Ultra за 15 секунд. Откройте чат на обоих устройствах и проверьте подключение.');
+                try {
+                    const sealed = await encryptOfflineText(
+                        chatIdAtSend, editId, authState.user.uid, chatContext.currentChat.uid, originalText
+                    );
+                    editText = sealed.payload;
+                    editCryptoVersion = 'SEDA_OFFLINE_1';
+                } catch (offlineError) {
+                    console.warn('[SEDA offline edit] Falling back to an existing legacy chat key:', offlineError);
+                    let key = chatContext.sedaKey;
+                    if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(chatIdAtSend, chatContext.currentChat.uid);
+                    if (!key?.startsWith('SEDAKEY:')) key = await waitForSedaKey(chatIdAtSend, 15000);
+                    if (!key?.startsWith('SEDAKEY:')) {
+                        uiState.editingMessage = editId;
+                        throw offlineError;
+                    }
+                    editText = await sedaUltraEncryptWithKey(originalText, key);
+                    editCryptoVersion = 'SEDA_ULTRA_1';
                 }
-                editText = await sedaUltraEncryptWithKey(originalText, key);
             }
             await updateDoc(doc(db, 'messages', chatIdAtSend, 'msgs', editId), {
                 text: editText, edited: true, editedAt: serverTimestamp(),
-                cryptoVersion: chatContext.currentChat ? 'SEDA_ULTRA_1' : null
+                encrypted: !!chatContext.currentChat,
+                cryptoVersion: editCryptoVersion
             });
             uiState.editingMessage = null;
             document.getElementById('replyPreview')?.classList.add('hidden');
             return;
         }
 
+        const messageRef = doc(collection(db, 'messages', chatIdAtSend, 'msgs'));
         let textToSend = originalText;
         let encrypted = false;
+        let cryptoVersion = null;
+
         if (chatContext.currentChat) {
-            let key = chatContext.sedaKey;
-            if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(chatIdAtSend, chatContext.currentChat.uid);
+            try {
+                const sealed = await encryptOfflineText(
+                    chatIdAtSend, messageRef.id, authState.user.uid, chatContext.currentChat.uid, originalText
+                );
+                textToSend = sealed.payload;
+                encrypted = true;
+                cryptoVersion = 'SEDA_OFFLINE_1';
+            } catch (offlineError) {
+                // Backward compatibility for peers that have not registered a public device key yet.
+                console.warn('[SEDA offline send] Device envelope unavailable; trying a legacy session:', offlineError);
+                let key = chatContext.sedaKey;
+                if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(chatIdAtSend, chatContext.currentChat.uid);
                 if (!key?.startsWith('SEDAKEY:')) key = await waitForSedaKey(chatIdAtSend, 15000);
-            if (!key?.startsWith('SEDAKEY:')) {
-                throw new Error('Не удалось установить SEDA Ultra за 15 секунд. Откройте этот чат на обоих устройствах и проверьте подключение.');
-            }
-            textToSend = await sedaUltraEncryptWithKey(originalText, key);
-            encrypted = true;
-            chatContext.sedaKey = key;
-            if (uiState.currentChatId === chatIdAtSend) {
-                uiState.currentChatKey = key;
-                uiState.sedaSessionReady = true;
+                if (!key?.startsWith('SEDAKEY:')) throw offlineError;
+                textToSend = await sedaUltraEncryptWithKey(originalText, key);
+                encrypted = true;
+                cryptoVersion = 'SEDA_ULTRA_1';
+                chatContext.sedaKey = key;
+                if (uiState.currentChatId === chatIdAtSend) {
+                    uiState.currentChatKey = key;
+                    uiState.sedaSessionReady = true;
+                }
             }
         }
 
@@ -2226,18 +2307,19 @@ export async function sendMessage() {
             timestamp: serverTimestamp(),
             read: false,
             encrypted,
-            cryptoVersion: encrypted ? 'SEDA_ULTRA_1' : null,
+            cryptoVersion,
             type: 'text',
             replyTo: uiState.replyTo || null,
             reactions: {}
         };
 
-        // Wait for Firestore to acknowledge/queue the write before reporting success.
-        await addDoc(collection(db, 'messages', chatIdAtSend, 'msgs'), message);
+        // The ciphertext is stored in Firestore; offline persistence syncs it on reconnect.
+        await setDoc(messageRef, message);
         cancelReply();
 
         try {
-            const metadataSynced = await updateChatLastMessage(originalText, chatContext);
+            const safePreview = chatContext.currentChat ? '🔒 Зашифрованное сообщение' : originalText;
+            const metadataSynced = await updateChatLastMessage(safePreview, chatContext);
             if (!metadataSynced) {
                 showToast('Сообщение отправлено. Обновление списка чатов повторится позже.', 'info', 4000);
             }
@@ -2380,7 +2462,70 @@ export async function sendSticker(sticker) {
 }
 
 async function dataUrlToBlob(data){return await(await fetch(data)).blob();}
-async function uploadEncryptedDirectAttachment(ctx,blob,type,name,preview){let key=ctx.sedaKey;if(!key?.startsWith('SEDAKEY:'))key=await ensureSedaKey(ctx.chatId,ctx.currentChat.uid);if(!key?.startsWith('SEDAKEY:'))throw Error('SEDA Ultra ещё устанавливает защищённое соединение');const enc=await encryptSedaAttachment(blob,key,name),m=await addDoc(collection(db,'messages',ctx.chatId,'msgs'),{text:'',senderId:authState.user.uid,senderName:authState.userData.nickname,timestamp:serverTimestamp(),read:false,encrypted:false,mediaEncrypted:true,type,attachmentPending:true,replyTo:uiState.replyTo||null,reactions:{}}),path='seda-attachments/'+ctx.chatId+'/'+authState.user.uid+'/'+m.id;try{await uploadBytes(storageRef(storage,path),enc.ciphertext,{contentType:'application/octet-stream'});await updateDoc(m,{attachment:{path,version:enc.version,wrappedKey:enc.wrappedKey,encryptedMetadata:enc.encryptedMetadata},attachmentPending:false});}catch(error){await deleteDoc(m).catch(()=>{});throw error;}cancelReply();await updateChatLastMessage(preview,ctx);if(uiState.currentChatId===ctx.chatId)uiState.currentChatKey=key;}
+async function uploadEncryptedDirectAttachment(ctx, blob, type, name, preview) {
+    const messageRef = doc(collection(db, 'messages', ctx.chatId, 'msgs'));
+    const messageId = messageRef.id;
+    let key = null;
+    let keyEnvelope = null;
+    let cryptoVersion = 'SEDA_ULTRA_1';
+
+    try {
+        const offline = await createOfflineMessageKey(
+            ctx.chatId, messageId, authState.user.uid, ctx.currentChat.uid
+        );
+        key = offline.messageKey;
+        keyEnvelope = await encodeOfflineKeyEnvelope(offline.envelopes);
+        cryptoVersion = 'SEDA_OFFLINE_1';
+    } catch (offlineError) {
+        console.warn('[SEDA offline attachment] Falling back to a legacy chat key:', offlineError);
+        key = ctx.sedaKey;
+        if (!key?.startsWith('SEDAKEY:')) key = await ensureSedaKey(ctx.chatId, ctx.currentChat.uid);
+        if (!key?.startsWith('SEDAKEY:')) key = await waitForSedaKey(ctx.chatId, 15000);
+        if (!key?.startsWith('SEDAKEY:')) throw offlineError;
+    }
+
+    const encryptedFile = await encryptSedaAttachment(blob, key, name);
+    const path = 'seda-attachments/' + ctx.chatId + '/' + authState.user.uid + '/' + messageId;
+    await setDoc(messageRef, {
+        text: '',
+        ...(keyEnvelope ? { keyEnvelope } : {}),
+        senderId: authState.user.uid,
+        senderName: authState.userData?.nickname || authState.userData?.globalId || 'Пользователь',
+        timestamp: serverTimestamp(),
+        read: false,
+        encrypted: !!keyEnvelope,
+        cryptoVersion,
+        mediaEncrypted: true,
+        type,
+        attachmentPending: true,
+        replyTo: uiState.replyTo || null,
+        reactions: {}
+    });
+
+    try {
+        await uploadBytes(storageRef(storage, path), encryptedFile.ciphertext, {
+            contentType: 'application/octet-stream'
+        });
+        await updateDoc(messageRef, {
+            attachment: {
+                path,
+                version: encryptedFile.version,
+                wrappedKey: encryptedFile.wrappedKey,
+                encryptedMetadata: encryptedFile.encryptedMetadata
+            },
+            attachmentPending: false
+        });
+    } catch (error) {
+        await deleteDoc(messageRef).catch(() => {});
+        throw error;
+    }
+
+    cancelReply();
+    await updateChatLastMessage('🔒 Зашифрованное вложение', ctx);
+    if (uiState.currentChatId === ctx.chatId && cryptoVersion === 'SEDA_ULTRA_1') {
+        uiState.currentChatKey = key;
+    }
+}
 export async function sendMediaFile(input) {
     const file = input.files && input.files[0];
     input.value = '';
