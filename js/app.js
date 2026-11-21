@@ -1047,13 +1047,46 @@ function bindUIEvents() {
         else if (action === 'clear-messages') row.onclick = clearAllMessages;
     });
 
-    window.addEventListener('iceberg:notification-click', (e) => {
+    window.addEventListener('iceberg:notification-click', async (e) => {
         const chatId = e.detail?.chatId;
         if (!chatId) return;
-        const chat = (authState.userData?.chats || []).find(c =>
-            c.uid === e.detail.senderId
-        );
-        if (chat) selectChat(chat);
+
+        try {
+            if (chatId.startsWith('group_')) {
+                const groupId = chatId.slice('group_'.length);
+                let group = (authState.userData?.groups || []).find(item => item.id === groupId);
+                if (!group) {
+                    await loadGroups();
+                    group = (authState.userData?.groups || []).find(item => item.id === groupId);
+                }
+                if (group) await selectGroup(group);
+                return;
+            }
+
+            if (chatId.startsWith('channel_')) {
+                const channelId = chatId.slice('channel_'.length);
+                let channel = (authState.userData?.channels || []).find(item => item.id === channelId);
+                if (!channel) {
+                    await loadChannels();
+                    channel = (authState.userData?.channels || []).find(item => item.id === channelId);
+                }
+                if (channel) await selectChannel(channel);
+                return;
+            }
+
+            let chat = (authState.userData?.chats || []).find(item =>
+                item.uid === e.detail.senderId
+            );
+            if (!chat) {
+                await loadChats(true);
+                chat = (authState.userData?.chats || []).find(item =>
+                    item.uid === e.detail.senderId
+                );
+            }
+            if (chat) await selectChat(chat);
+        } catch (error) {
+            console.warn('[Push] Не удалось открыть чат из уведомления:', error?.code || error);
+        }
     });
 
     window.addEventListener('resize', () => {
