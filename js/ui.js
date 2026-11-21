@@ -3371,7 +3371,7 @@ export async function openChatWithContact(contact) {
     }
     // Explicitly opening a contact re-opens a locally hidden direct chat.
     try {
-        const chatId = [authState.user.uid, contact.uid].sort().join('_');
+        const chatId = 'sedaultra_' + [authState.user.uid, contact.uid].sort().join('_');
         const hideRef = doc(db, 'chat_clears', authState.user.uid, 'items', chatId);
         const hideSnap = await getDoc(hideRef);
         if (hideSnap.exists() && hideSnap.data().hidden === true) {
