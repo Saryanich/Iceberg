@@ -61,19 +61,32 @@ messaging.onBackgroundMessage((payload) => {
 // ===================================================================
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
-
-    const targetUrl = event.notification.data?.url || '/Iceberg/';
+    const data = event.notification.data || {};
+    const appScope = new URL('../', self.registration.scope).href;
+    let targetUrl = appScope;
+    try {
+        const candidate = new URL(data.url || appScope, appScope);
+        if (candidate.origin === self.location.origin && candidate.href.startsWith(appScope)) {
+            targetUrl = candidate.href;
+        }
+    } catch {}
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })
-            .then((clientList) => {
-                // Ищем уже открытую вкладку с Айсбергом
+            .then(async (clientList) => {
+                // Ищем уже открытую вкладку Айсберга в области приложения.
                 for (const client of clientList) {
-                    if (client.url.includes(self.location.origin) && 'focus' in client) {
-                        return client.focus();
+                    if (client.url.startsWith(appScope) && 'focus' in client) {
+                        await client.focus();
+                        client.postMessage({
+                            type: 'NOTIFICATION_CLICK',
+                            chatId: data.chatId || null,
+                            senderId: data.senderId || null,
+                            url: targetUrl
+                        });
+                        return;
                     }
                 }
-                // Если не нашли — открываем новую
                 if (clients.openWindow) {
                     return clients.openWindow(targetUrl);
                 }
