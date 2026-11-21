@@ -39,6 +39,7 @@ export const uiState = {
     currentChatKey: null,
     typingTimeout: null,
     isSending: false,
+    sendingCount: 0,
     messageTimes: [],
     mediaTimes: [],
     reactionTimes: [],
@@ -174,7 +175,7 @@ function messageContentChanged(previous, next) {
     const fields = [
         'senderId', 'senderName', 'text', 'encrypted', 'cryptoVersion',
         'type', 'media', 'mediaEncrypted', 'fileName', 'fileSize',
-        'replyTo', 'attachmentPending', 'edited'
+        'replyTo', 'attachmentPending', 'edited', 'deleted', 'keyEnvelope', 'pending'
     ];
     if (fields.some(field => previous?.[field] !== next?.[field])) return true;
     if (messageTimestampMillis(previous) !== messageTimestampMillis(next)) return true;
@@ -224,6 +225,7 @@ function syncMessageDecorations(node, msg) {
         if (anchor) anchor.before(nextReactions);
         else node.appendChild(nextReactions);
     }
+    node.__icebergMessage = msg;
 }
 
 async function updateRenderedMessages(area, previousMessages, messages, loadVersion, chatId) {
@@ -262,6 +264,8 @@ async function updateRenderedMessages(area, previousMessages, messages, loadVers
         ) {
             syncMessageDecorations(currentNode, message);
         }
+        const activeNode = nodesById.get(message.id);
+        if (activeNode) activeNode.__icebergMessage = message;
     }
 
     if (wasAtBottom) area.scrollTop = area.scrollHeight;
@@ -271,36 +275,84 @@ async function updateRenderedMessages(area, previousMessages, messages, loadVers
 
 async function renderMessagesSequentially(area, messages, loadVersion, chatId) {
     const renderVersion = ++messageRenderSequence;
+    const wasAtBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 80;
     const operationRows = Array.from(area.querySelectorAll('.chat-operation-indicator'));
-    revokeMessageObjectUrls(area);
-    area.replaceChildren(...operationRows);
-    const batchSize = 8;
-    for (let i = 0; i < messages.length; i += batchSize) {
+    operationRows.forEach(row => area.appendChild(row));
+    area.querySelectorAll('.empty-state').forEach(node => node.remove());
+
+    const nodesById = new Map(
+        Array.from(area.querySelectorAll('.message-bubble')).map(node => [node.dataset.id, node])
+    );
+    const nextMessages = Array.isArray(messages) ? [...messages] : [];
+    const nextIds = new Set(nextMessages.map(message => message.id));
+
+    // Keep optimistic messages visible until Firestore acknowledges their writes.
+    for (const [id, node] of nodesById) {
+        if (!nextIds.has(id) && node.__icebergMessage?.pending) {
+            nextMessages.push(node.__icebergMessage);
+            nextIds.add(id);
+        } else if (!nextIds.has(id)) {
+            revokeMessageObjectUrls(node);
+            node.remove();
+            nodesById.delete(id);
+        }
+    }
+    nextMessages.sort((a, b) => messageTimestampMillis(a) - messageTimestampMillis(b));
+
+    let cursor = area.firstChild;
+    for (const message of nextMessages) {
         if (loadVersion !== messageLoadVersion ||
             renderVersion !== messageRenderSequence ||
             uiState.currentChatId !== chatId) return false;
-        const batch = messages.slice(i, i + batchSize);
-        const nodes = await Promise.all(batch.map(message => renderMessage(message)));
-        if (loadVersion !== messageLoadVersion ||
-            renderVersion !== messageRenderSequence ||
-            uiState.currentChatId !== chatId) {
-            nodes.forEach(revokeMessageObjectUrls);
-            return false;
+
+        let node = nodesById.get(message.id);
+        const previous = node?.__icebergMessage;
+        if (!node || !previous) {
+            node = await renderMessage(message);
+            if (loadVersion !== messageLoadVersion ||
+                renderVersion !== messageRenderSequence ||
+                uiState.currentChatId !== chatId) {
+                revokeMessageObjectUrls(node);
+                return false;
+            }
+        } else if (messageContentChanged(previous, message)) {
+            const replacement = await renderMessage(message);
+            if (loadVersion !== messageLoadVersion ||
+                renderVersion !== messageRenderSequence ||
+                uiState.currentChatId !== chatId) {
+                revokeMessageObjectUrls(replacement);
+                return false;
+            }
+            replacement.classList.add('message-updating');
+            const wasCursor = cursor === node;
+            revokeMessageObjectUrls(node);
+            node.replaceWith(replacement);
+            if (wasCursor) cursor = replacement;
+            node = replacement;
+        } else if (
+            previous.read !== message.read ||
+            reactionStateSignature(previous.reactions) !== reactionStateSignature(message.reactions)
+        ) {
+            syncMessageDecorations(node, message);
         }
-        const fragment = document.createDocumentFragment();
-        for (const node of nodes) if (node) fragment.appendChild(node);
-        area.appendChild(fragment);
-        if (i + batchSize < messages.length) {
-            await new Promise(resolve => requestAnimationFrame(resolve));
-        }
+
+        node.__icebergMessage = message;
+        if (node !== cursor) area.insertBefore(node, cursor);
+        cursor = node.nextSibling;
+        nodesById.set(message.id, node);
     }
-    if (loadVersion === messageLoadVersion && renderVersion === messageRenderSequence &&
-        uiState.currentChatId === chatId) {
-        bindChatLongPress();
-        area.scrollTop = area.scrollHeight;
-        return true;
+
+    operationRows.forEach(row => area.appendChild(row));
+    if (!nextMessages.length && !area.querySelector('.message-bubble')) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.textContent = 'Нет сообщений. Напишите первое!';
+        area.insertBefore(empty, operationRows[0] || null);
     }
-    return false;
+
+    if (wasAtBottom) area.scrollTop = area.scrollHeight;
+    bindChatLongPress();
+    return true;
 }
 
 export function showToast(text, type = 'info', duration = 2500) {
@@ -1927,34 +1979,20 @@ export async function loadMessages() {
     }
 
     const mRef = collection(db, 'messages', chatId, 'msgs');
-    const lastCached = hasCache ? cachedMessages[cachedMessages.length - 1] : null;
-    const cursor = cachedTimestampToFirestore(lastCached?.timestamp);
-    const incrementalQuery = !!(hasCache && cursor);
-    const messagesQuery = incrementalQuery
-        ? query(mRef, where('timestamp', '>=', cursor), orderBy('timestamp', 'desc'), limit(300))
-        : query(mRef, orderBy('timestamp', 'desc'), limit(200));
+    const messagesQuery = query(mRef, orderBy('timestamp', 'desc'), limit(200));
     let firstSnapshot = true;
 
     uiState.messagesUnsub = onSnapshot(
         messagesQuery,
+        { includeMetadataChanges: true },
         async (snap) => {
             if (loadVersion !== messageLoadVersion || uiState.currentChatId !== chatId) return;
             let incoming = [];
-            snap.forEach(d => incoming.push({ id: d.id, ...d.data() }));
+            snap.forEach(d => incoming.push({ id: d.id, ...d.data(), pending: d.metadata.hasPendingWrites }));
             incoming.reverse();
             incoming = incoming.filter(message => messageTimestampMillis(message) > historyClearedAt);
 
-            let msgs;
-            if (incrementalQuery) {
-                const byId = new Map(cachedMessages.map(m => [m.id, m]));
-                for (const message of incoming) {
-                    byId.set(message.id, { ...(byId.get(message.id) || {}), ...message });
-                }
-                msgs = Array.from(byId.values()).sort((a, b) => messageTimestampMillis(a) - messageTimestampMillis(b));
-                msgs = msgs.slice(-200);
-            } else {
-                msgs = incoming;
-            }
+            const msgs = incoming;
 
             const currentIds = Array.from(area.querySelectorAll('.message-bubble')).map(el => el.dataset.id);
             const nextIds = msgs.map(m => m.id);
@@ -2023,13 +2061,14 @@ async function renderMessage(msg) {
     div.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
     div.id = `msg-${msg.id}`;
     div.dataset.id = msg.id;
+    if (msg.pending) div.classList.add('sending');
 
-    let displayText = msg.text || '';
-    const isEncrypted = msg.encrypted === true || msg.cryptoVersion === 'SEDA_OFFLINE_1';
+    let displayText = msg.deleted ? '🗑 Удалено' : (msg.text || '');
+    const isEncrypted = !msg.deleted && (msg.encrypted === true || msg.cryptoVersion === 'SEDA_OFFLINE_1');
     let isDecrypted = false;
     let messageKey = null;
 
-    if (msg.cryptoVersion === 'SEDA_OFFLINE_1') {
+    if (!msg.deleted && msg.cryptoVersion === 'SEDA_OFFLINE_1') {
         try {
             const payload = isOfflineTextPayload(msg.text) ? msg.text : msg.keyEnvelope;
             const opened = await decryptOfflineMessage(
@@ -2049,7 +2088,7 @@ async function renderMessage(msg) {
             console.error('[SEDA offline decrypt]', error);
             displayText = msg.type === 'text' ? '[Не удалось расшифровать сообщение SEDA]' : '';
         }
-    } else if (isEncrypted && msg.text) {
+    } else if (!msg.deleted && isEncrypted && msg.text) {
         if (uiState.currentChatKey && isSedaUltraPayload(msg.text)) {
             const decrypted = await sedaUltraDecrypt(msg.text, uiState.currentChatKey);
             if (decrypted !== null) {
@@ -2069,7 +2108,7 @@ async function renderMessage(msg) {
     let mediaSrc = null;
     let decryptedAttachment = null;
     const attachmentKey = messageKey || uiState.currentChatKey;
-    if (msg.attachment?.path && attachmentKey) {
+    if (!msg.deleted && msg.attachment?.path && attachmentKey) {
         try {
             const bytes = await getBytes(storageRef(storage, msg.attachment.path));
             decryptedAttachment = await decryptSedaAttachment(bytes, msg.attachment, attachmentKey);
@@ -2077,7 +2116,7 @@ async function renderMessage(msg) {
         } catch (error) {
             console.error('[SEDA attachment]', error);
         }
-    } else if (msg.media && !msg.mediaEncrypted) {
+    } else if (!msg.deleted && msg.media && !msg.mediaEncrypted) {
         mediaSrc = msg.media;
     }
 
@@ -2143,7 +2182,8 @@ async function renderMessage(msg) {
     } else {
         const t = document.createElement('div');
         t.className = 'message-text-content';
-        t.textContent = msg.attachmentPending ? '⏳ Вложение загружается…' : (displayText || '');
+        t.textContent = msg.deleted ? '🗑 Удалено' :
+            (msg.attachmentPending ? '⏳ Вложение загружается…' : (displayText || ''));
         div.appendChild(t);
     }
 
@@ -2174,18 +2214,24 @@ async function renderMessage(msg) {
 
     const time = document.createElement('div');
     time.className = 'message-time';
-    time.textContent = formatTime(msg.timestamp?.toDate?.());
+    const stamp = msg.timestamp;
+    const messageDate = typeof stamp?.toDate === 'function'
+        ? stamp.toDate()
+        : (typeof stamp?.seconds === 'number'
+            ? new Date(stamp.seconds * 1000 + Number(stamp.nanoseconds || 0) / 1e6)
+            : (stamp ? new Date(stamp) : null));
+    time.textContent = formatTime(messageDate);
     if (isSent) {
         const s = document.createElement('span');
         s.className = 'message-status';
-        s.textContent = msg.read ? '✓✓' : '✓';
+        s.textContent = msg.pending ? '◷' : (msg.read ? '✓✓' : '✓');
         time.appendChild(document.createTextNode(' '));
         time.appendChild(s);
     }
     div.appendChild(time);
+    div.__icebergMessage = msg;
 
-    return div;
-}
+    return div;}
 
 function getConversationRecipientUids(context) {
     const uid = authState.user?.uid;
@@ -2228,13 +2274,15 @@ function isEncryptedConversation(context) {
 }
 
 export async function sendMessage() {
-    if (uiState.isSending) return;
     const input = document.getElementById('messageInput');
     if (!(input instanceof HTMLTextAreaElement)) return;
 
     const originalText = input.value.trim();
     const chatIdAtSend = uiState.currentChatId;
+    const editingMessageId = uiState.editingMessage;
+    const replyToAtSend = uiState.replyTo;
     if (!originalText || !chatIdAtSend) return;
+    if (editingMessageId && uiState.isSending) return;
     if (Array.from(originalText).length > MAX_MESSAGE_LENGTH) {
         showToast(`Сообщение слишком длинное. Максимум ${MAX_MESSAGE_LENGTH.toLocaleString('ru-RU')} символов`, 'error', 4000);
         return;
@@ -2245,6 +2293,7 @@ export async function sendMessage() {
     }
     if (!checkRateLimit(uiState.messageTimes, RATE_LIMIT.messages.count, RATE_LIMIT.messages.windowMs)) return;
 
+    uiState.sendingCount = (uiState.sendingCount || 0) + 1;
     uiState.isSending = true;
     const chatContext = {
         chatId: chatIdAtSend,
@@ -2256,47 +2305,75 @@ export async function sendMessage() {
     };
     input.value = '';
     input.style.height = 'auto';
+    let optimisticNode = null;
+    let messageRef = null;
 
     try {
-        if (uiState.editingMessage) {
-            const editId = uiState.editingMessage;
+        if (editingMessageId) {
             let editText = originalText;
             let editCryptoVersion = null;
             if (isEncryptedConversation(chatContext)) {
                 try {
                     const sealed = await encryptOfflineText(
-                        chatIdAtSend, editId, authState.user.uid,
+                        chatIdAtSend, editingMessageId, authState.user.uid,
                         getConversationRecipientUids(chatContext), originalText
                     );
                     editText = sealed.payload;
                     editCryptoVersion = 'SEDA_OFFLINE_1';
                 } catch (offlineError) {
-                    // Only direct chats have the legacy shared-key handshake.
-                    if (!chatContext.currentChat) {
-                        uiState.editingMessage = editId;
-                        throw offlineError;
-                    }
+                    if (!chatContext.currentChat) throw offlineError;
                     console.warn('[SEDA offline edit] Falling back to an existing legacy chat key:', offlineError);
-                    let key = chatContext.sedaKey || await DB.getChatKey(chatIdAtSend).catch(() => null);
-                    if (!key?.startsWith('SEDAKEY:') || !await DB.isChatKeyShared(chatIdAtSend).catch(() => false)) {
-                        uiState.editingMessage = editId;
-                        throw offlineError;
-                    }
+                    const key = chatContext.sedaKey || await DB.getChatKey(chatIdAtSend).catch(() => null);
+                    if (!key?.startsWith('SEDAKEY:') || !await DB.isChatKeyShared(chatIdAtSend).catch(() => false)) throw offlineError;
                     editText = await sedaUltraEncryptWithKey(originalText, key);
                     editCryptoVersion = 'SEDA_ULTRA_1';
                 }
             }
-            await updateDoc(doc(db, 'messages', chatIdAtSend, 'msgs', editId), {
+            await updateDoc(doc(db, 'messages', chatIdAtSend, 'msgs', editingMessageId), {
                 text: editText, edited: true, editedAt: serverTimestamp(),
                 encrypted: isEncryptedConversation(chatContext),
                 cryptoVersion: editCryptoVersion
             });
-            uiState.editingMessage = null;
+            if (uiState.editingMessage === editingMessageId) uiState.editingMessage = null;
             document.getElementById('replyPreview')?.classList.add('hidden');
             return;
         }
 
-        const messageRef = doc(collection(db, 'messages', chatIdAtSend, 'msgs'));
+        messageRef = doc(collection(db, 'messages', chatIdAtSend, 'msgs'));
+        const optimisticMessage = {
+            id: messageRef.id,
+            text: originalText,
+            senderId: authState.user.uid,
+            senderName: authState.userData?.nickname || authState.userData?.globalId || 'Пользователь',
+            timestamp: new Date(),
+            read: false,
+            encrypted: false,
+            cryptoVersion: null,
+            type: 'text',
+            replyTo: replyToAtSend || null,
+            reactions: {},
+            pending: true
+        };
+
+        const area = document.getElementById('messagesArea');
+        if (area && uiState.currentChatId === chatIdAtSend) {
+            const wasAtBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 80;
+            optimisticNode = await renderMessage(optimisticMessage);
+            if (uiState.currentChatId === chatIdAtSend && area.isConnected) {
+                area.querySelector('.empty-state')?.remove();
+                area.appendChild(optimisticNode);
+                if (wasAtBottom) area.scrollTop = area.scrollHeight;
+                bindChatLongPress();
+            } else {
+                optimisticNode = null;
+            }
+        }
+
+        if (uiState.currentChatId === chatIdAtSend && uiState.replyTo === replyToAtSend) {
+            uiState.replyTo = null;
+            document.getElementById('replyPreview')?.classList.add('hidden');
+        }
+
         let textToSend = originalText;
         let encrypted = false;
         let cryptoVersion = null;
@@ -2311,10 +2388,9 @@ export async function sendMessage() {
                 encrypted = true;
                 cryptoVersion = 'SEDA_OFFLINE_1';
             } catch (offlineError) {
-                // Backward compatibility is only available for legacy 1:1 chats.
                 if (!chatContext.currentChat) throw offlineError;
                 console.warn('[SEDA offline send] Device envelope unavailable; trying a legacy session:', offlineError);
-                let key = chatContext.sedaKey || await DB.getChatKey(chatIdAtSend).catch(() => null);
+                const key = chatContext.sedaKey || await DB.getChatKey(chatIdAtSend).catch(() => null);
                 if (!key?.startsWith('SEDAKEY:') || !await DB.isChatKeyShared(chatIdAtSend).catch(() => false)) throw offlineError;
                 textToSend = await sedaUltraEncryptWithKey(originalText, key);
                 encrypted = true;
@@ -2327,7 +2403,7 @@ export async function sendMessage() {
             }
         }
 
-        const message = {
+        await setDoc(messageRef, {
             text: textToSend,
             senderId: authState.user.uid,
             senderName: authState.userData?.nickname || authState.userData?.globalId || 'Пользователь',
@@ -2336,35 +2412,44 @@ export async function sendMessage() {
             encrypted,
             cryptoVersion,
             type: 'text',
-            replyTo: uiState.replyTo || null,
+            replyTo: replyToAtSend || null,
             reactions: {}
-        };
+        });
 
-        // The ciphertext is stored in Firestore; offline persistence syncs it on reconnect.
-        await setDoc(messageRef, message);
-        cancelReply();
-
-        try {
-            const safePreview = isEncryptedConversation(chatContext) ? '🔒 Зашифрованное сообщение' : originalText;
-            const metadataSynced = await updateChatLastMessage(safePreview, chatContext);
-            if (!metadataSynced) {
-                showToast('Сообщение отправлено. Обновление списка чатов повторится позже.', 'info', 4000);
-            }
-        } catch (metadataError) {
-            console.warn('[Messages] Сообщение сохранено, метаданные чата будут обновлены позже:', metadataError);
+        const safePreview = isEncryptedConversation(chatContext) ? '🔒 Зашифрованное сообщение' : originalText;
+        const metadataSynced = await updateChatLastMessage(safePreview, chatContext);
+        if (!metadataSynced) {
             showToast('Сообщение отправлено. Обновление списка чатов повторится позже.', 'info', 4000);
         }
     } catch (error) {
+        if (optimisticNode?.isConnected) {
+            revokeMessageObjectUrls(optimisticNode);
+            optimisticNode.remove();
+        }
+        if (messageRef && uiState.currentChatId === chatIdAtSend) {
+            const pendingNode = document.getElementById('msg-' + messageRef.id);
+            if (pendingNode?.__icebergMessage?.pending) {
+                revokeMessageObjectUrls(pendingNode);
+                pendingNode.remove();
+            }
+        }
         console.error('[Messages] Не удалось отправить сообщение:', error?.code || '', error);
-        if (uiState.currentChatId === chatIdAtSend && input.value.trim() === '') {
-            input.value = originalText;
-            input.style.height = 'auto';
-            input.style.height = Math.min(input.scrollHeight, 90) + 'px';
+        if (uiState.currentChatId === chatIdAtSend) {
+            if (input.value.trim() === '') {
+                input.value = originalText;
+                input.style.height = 'auto';
+                input.style.height = Math.min(input.scrollHeight, 90) + 'px';
+            }
+            if (replyToAtSend) {
+                uiState.replyTo = replyToAtSend;
+                document.getElementById('replyPreview')?.classList.remove('hidden');
+            }
         }
         const code = error?.code ? ' (' + error.code + ')' : '';
         showToast((error?.message || 'Не удалось отправить сообщение. Проверьте подключение и права Firestore.') + code, 'error', 5500);
     } finally {
-        uiState.isSending = false;
+        uiState.sendingCount = Math.max(0, (uiState.sendingCount || 1) - 1);
+        uiState.isSending = uiState.sendingCount > 0;
     }
 }
 
@@ -2762,28 +2847,27 @@ export async function toggleVoiceRecording() {
 }
 
 export async function toggleReaction(msgId, emoji, evt) {
-    if (!uiState.currentChatId) return;
+    const chatId = uiState.currentChatId;
+    const uid = authState.user?.uid;
+    if (!chatId || !uid || !emoji) return;
     if (!checkRateLimit(uiState.reactionTimes, RATE_LIMIT.reactions.count, RATE_LIMIT.reactions.windowMs)) return;
 
     try {
-        const ref = doc(db, 'messages', uiState.currentChatId, 'msgs', msgId);
-        const d = await getDoc(ref);
-        if (!d.exists()) return;
-        const msg = d.data();
-        const reactions = { ...(msg.reactions || {}) };
-        const users = reactions[emoji] || [];
-        const wasAdding = !users.includes(authState.user.uid);
-
-        if (wasAdding) {
-            reactions[emoji] = [...users, authState.user.uid];
+        const ref = doc(db, 'messages', chatId, 'msgs', msgId);
+        const snapshot = await getDoc(ref);
+        if (!snapshot.exists() || chatId !== uiState.currentChatId) return;
+        const value = snapshot.data().reactions || {};
+        const users = Array.isArray(value[emoji]) ? value[emoji] : [];
+        const wasAdding = !users.includes(uid);
+        await updateDoc(ref, {
+            ['reactions.' + emoji]: wasAdding ? arrayUnion(uid) : arrayRemove(uid)
+        });
+        if (wasAdding && uiState.currentChatId === chatId) {
             spawnReactionBurst(evt?.currentTarget || document.getElementById('msg-' + msgId), emoji);
-        } else {
-            reactions[emoji] = users.filter(u => u !== authState.user.uid);
-            if (!reactions[emoji].length) delete reactions[emoji];
         }
-        await updateDoc(ref, { reactions });
-    } catch (e) {
-        console.error(e);
+    } catch (error) {
+        console.error('[Reactions] Не удалось изменить реакцию:', error);
+        showToast('Не удалось поставить реакцию' + (error?.code ? ' (' + error.code + ')' : ''), 'error', 4000);
     }
 }
 
@@ -2859,18 +2943,38 @@ export function bindChatLongPress() {
     });
 }
 
+let actionBarOutsideHandler = null;
+let actionBarAttachTimer = null;
+
 function closeActionBar() {
-    if (uiState.activeActionBar) { uiState.activeActionBar.remove(); uiState.activeActionBar = null; }
+    if (actionBarAttachTimer) {
+        clearTimeout(actionBarAttachTimer);
+        actionBarAttachTimer = null;
+    }
+    if (actionBarOutsideHandler) {
+        document.removeEventListener('mousedown', actionBarOutsideHandler, true);
+        document.removeEventListener('touchstart', actionBarOutsideHandler, true);
+        window.removeEventListener('scroll', actionBarOutsideHandler, true);
+        window.removeEventListener('resize', actionBarOutsideHandler);
+        actionBarOutsideHandler = null;
+    }
+    if (uiState.activeActionBar) {
+        uiState.activeActionBar.remove();
+        uiState.activeActionBar = null;
+    }
 }
 
 async function openMessageActionBar(id, msgEl) {
     closeActionBar();
+    const chatId = uiState.currentChatId;
+    const uid = authState.user?.uid;
+    if (!chatId || !uid || !msgEl?.isConnected) return;
+
     try {
-        const ref = doc(db, 'messages', uiState.currentChatId, 'msgs', id);
-        const d = await getDoc(ref);
-        if (!d.exists()) return;
+        const d = await getDoc(doc(db, 'messages', chatId, 'msgs', id));
+        if (!d.exists() || chatId !== uiState.currentChatId || !msgEl.isConnected) return;
         const m = d.data();
-        const isOwn = m.senderId === authState.user.uid;
+        const isOwn = m.senderId === uid;
         const canDelete = isOwn || (uiState.currentChannel && uiState.currentChannel.isAdmin);
         const canEdit = isOwn && m.type === 'text' && !m.deleted;
 
@@ -2879,6 +2983,7 @@ async function openMessageActionBar(id, msgEl) {
 
         for (const emoji of REACTION_EMOJIS.slice(0, 5)) {
             const btn = document.createElement('button');
+            btn.type = 'button';
             btn.className = 'reaction-btn';
             btn.textContent = emoji;
             btn.onclick = (e) => { e.stopPropagation(); toggleReaction(id, emoji, e); closeActionBar(); };
@@ -2890,12 +2995,14 @@ async function openMessageActionBar(id, msgEl) {
         bar.appendChild(sep);
 
         const replyBtn = document.createElement('button');
+        replyBtn.type = 'button';
         replyBtn.className = 'bar-btn';
         replyBtn.textContent = '↩ Ответ';
         replyBtn.onclick = (e) => { e.stopPropagation(); startReply(id, m); closeActionBar(); };
         bar.appendChild(replyBtn);
 
         const forwardBtn = document.createElement('button');
+        forwardBtn.type = 'button';
         forwardBtn.className = 'bar-btn';
         forwardBtn.textContent = '↪ Переслать';
         forwardBtn.onclick = (e) => { e.stopPropagation(); forwardMessage(id, m); closeActionBar(); };
@@ -2903,6 +3010,7 @@ async function openMessageActionBar(id, msgEl) {
 
         if (canEdit) {
             const editBtn = document.createElement('button');
+            editBtn.type = 'button';
             editBtn.className = 'bar-btn';
             editBtn.textContent = '✏️';
             editBtn.onclick = (e) => { e.stopPropagation(); startEdit(id, m); closeActionBar(); };
@@ -2910,39 +3018,51 @@ async function openMessageActionBar(id, msgEl) {
         }
         if (canDelete) {
             const delBtn = document.createElement('button');
+            delBtn.type = 'button';
             delBtn.className = 'bar-btn danger';
             delBtn.textContent = '🗑';
             delBtn.onclick = (e) => { e.stopPropagation(); closeActionBar(); deleteMessage(id); };
             bar.appendChild(delBtn);
         }
 
+        bar.style.position = 'fixed';
+        bar.style.left = '8px';
+        bar.style.top = '8px';
+        bar.style.maxWidth = 'calc(100vw - 16px)';
+        bar.style.boxSizing = 'border-box';
+        bar.style.flexWrap = 'wrap';
         document.body.appendChild(bar);
+
         const mr = msgEl.getBoundingClientRect();
         const br = bar.getBoundingClientRect();
-        let top = mr.top - br.height - 6;
-        if (top < 8) top = mr.bottom + 6;
-        let left = mr.left + mr.width / 2 - br.width / 2;
-        if (left < 8) left = 8;
-        if (left + br.width > innerWidth - 8) left = innerWidth - 8 - br.width;
+        const viewportWidth = document.documentElement.clientWidth || innerWidth;
+        const viewportHeight = document.documentElement.clientHeight || innerHeight;
+        const maxLeft = Math.max(8, viewportWidth - br.width - 8);
+        const left = Math.min(maxLeft, Math.max(8, mr.left + mr.width / 2 - br.width / 2));
+        const above = mr.top - br.height - 6;
+        const below = mr.bottom + 6;
+        const top = above >= 8
+            ? Math.min(above, Math.max(8, viewportHeight - br.height - 8))
+            : Math.max(8, Math.min(below, Math.max(8, viewportHeight - br.height - 8)));
 
-        bar.style.position = 'fixed';
         bar.style.top = top + 'px';
         bar.style.left = left + 'px';
         uiState.activeActionBar = bar;
 
-        const outside = (e) => {
-            if (uiState.activeActionBar && !uiState.activeActionBar.contains(e.target)) {
-                closeActionBar();
-                document.removeEventListener('mousedown', outside);
-                document.removeEventListener('touchstart', outside);
-            }
+        const outside = (event) => {
+            if (uiState.activeActionBar === bar && !bar.contains(event.target)) closeActionBar();
         };
-        setTimeout(() => {
-            document.addEventListener('mousedown', outside);
-            document.addEventListener('touchstart', outside, { passive: true });
-        }, 10);
-    } catch (e) {
-        console.error(e);
+        actionBarOutsideHandler = outside;
+        actionBarAttachTimer = setTimeout(() => {
+            actionBarAttachTimer = null;
+            if (uiState.activeActionBar !== bar) return;
+            document.addEventListener('mousedown', outside, true);
+            document.addEventListener('touchstart', outside, { passive: true, capture: true });
+            window.addEventListener('scroll', outside, true);
+            window.addEventListener('resize', outside);
+        }, 0);
+    } catch (error) {
+        console.error('[Message actions] Не удалось открыть меню:', error);
     }
 }
 
@@ -2966,12 +3086,44 @@ export function startReply(id, msgData) {
 }
 
 export async function startEdit(id, msgData) {
-    uiState.editingMessage = id;
-    let displayText = msgData.text;
-    if(msgData.encrypted&&uiState.currentChatKey&&isSedaUltraPayload(msgData.text))displayText=await sedaUltraDecrypt(msgData.text,uiState.currentChatKey)??'[Не удалось расшифровать SEDA Ultra]';
+    const chatId = uiState.currentChatId;
     const input = document.getElementById('messageInput');
+    if (!input || !chatId || msgData?.deleted) return;
+
+    let displayText = msgData.text || '';
+    if (msgData.cryptoVersion === 'SEDA_OFFLINE_1') {
+        try {
+            const payload = isOfflineTextPayload(msgData.text) ? msgData.text : msgData.keyEnvelope;
+            const opened = await decryptOfflineMessage(chatId, id, payload, authState.user.uid);
+            if (!opened || typeof opened.text !== 'string') {
+                showToast('Не удалось расшифровать сообщение на этом устройстве', 'error', 4000);
+                return;
+            }
+            displayText = opened.text;
+        } catch (error) {
+            console.error('[SEDA edit decrypt]', error);
+            showToast('Не удалось расшифровать сообщение для редактирования', 'error', 4000);
+            return;
+        }
+    } else if (msgData.encrypted) {
+        if (!uiState.currentChatKey || !isSedaUltraPayload(msgData.text)) {
+            showToast('Ключ сообщения пока недоступен для редактирования', 'error', 4000);
+            return;
+        }
+        displayText = await sedaUltraDecrypt(msgData.text, uiState.currentChatKey);
+        if (displayText === null) {
+            showToast('Не удалось расшифровать сообщение для редактирования', 'error', 4000);
+            return;
+        }
+    }
+
+    if (uiState.currentChatId !== chatId) return;
+    uiState.editingMessage = id;
     input.value = displayText;
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 90) + 'px';
     input.focus();
+
     const rp = document.getElementById('replyPreview');
     const rt = document.getElementById('replyPreviewText');
     if (rp && rt) {
@@ -3031,11 +3183,20 @@ export async function deleteMessage(id) {
             text: '🗑 Удалено',
             deleted: true,
             media: '',
+            mediaEncrypted: false,
+            attachment: null,
+            keyEnvelope: null,
+            fileName: null,
+            fileSize: null,
             type: 'text',
-            encrypted: false
+            encrypted: false,
+            cryptoVersion: null,
+            replyTo: null
         });
-    } catch (e) {
-        showToast('Ошибка', 'error');
+        showToast('Сообщение удалено', 'success');
+    } catch (error) {
+        console.error('[Messages] Не удалось удалить сообщение:', error);
+        showToast('Не удалось удалить сообщение' + (error?.code ? ' (' + error.code + ')' : ''), 'error', 4500);
     }
 }
 

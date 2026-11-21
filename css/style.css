@@ -4794,3 +4794,35 @@ body {
         min-width: 37px !important;
     }
 }
+
+
+/* Message action bar: keep every control inside narrow phone viewports. */
+.msg-action-bar {
+    box-sizing: border-box;
+    max-width: calc(100vw - 16px);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.msg-action-bar .bar-btn {
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+@media (max-width: 600px) {
+    .msg-action-bar {
+        gap: 2px;
+        padding: 5px;
+        border-radius: 18px;
+    }
+    .msg-action-bar .reaction-btn {
+        flex: 0 0 32px;
+        width: 32px;
+        height: 34px;
+    }
+    .msg-action-bar .bar-btn {
+        min-height: 32px;
+        justify-content: center;
+    }
+}
+.message-bubble.message-updating {
+    animation: none !important;
+}
