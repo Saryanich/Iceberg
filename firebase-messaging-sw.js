@@ -46,8 +46,8 @@ messaging.onBackgroundMessage((payload) => {
         data: {
             chatId: payload.data?.chatId || null,
             senderId: payload.data?.senderId || null,
-            url: payload.data?.url || '/',
-            click_action: payload.notification?.click_action || '/'
+            url: payload.data?.url || new URL('../', self.registration.scope).href,
+            click_action: payload.notification?.click_action || new URL('../', self.registration.scope).href
         },
         vibrate: [200, 100, 200],
         requireInteraction: false
