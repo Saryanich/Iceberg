@@ -112,7 +112,7 @@ function render(){
     const meta=document.createElement("div");meta.className="meta";
     const name=document.createElement("div");name.className="name";name.textContent=item.title;
     const detail=document.createElement("div");detail.className="detail";detail.textContent=item.detail+" · "+item.id;
-    meta.append(name,detail);const pill=document.createElement("span");pill.className="pill";pill.textContent=item.kind==="chats"?(item.id.startsWith("seda_")?"SEDA":"Чат"):labels[item.kind];
+    meta.append(name,detail);const pill=document.createElement("span");pill.className="pill";pill.textContent=item.kind==="chats"?((item.id.startsWith("seda_")||item.id.startsWith("sedaultra_"))?"SEDA":"Чат"):labels[item.kind];
     row.append(cb,ico,meta,pill);$("items").append(row);
   }
 }
@@ -130,7 +130,7 @@ async function loadAll(){
     const contactMap=new Map();
     for(const p of profiles){
       const d=p.data;
-      for(const c of normArray(d.chats)){const id=c?.sedaChatId||c?.chatId||c?.id||(c?.uid?[p.id,c.uid].sort().join("_"):"");if(id)chatIds.add(id)}
+      for(const c of normArray(d.chats)){const id=c?.sedaChatId||c?.chatId||c?.id||(c?.uid?"sedaultra_"+[p.id,c.uid].sort().join("_"):"");if(id)chatIds.add(id)}
       for(const c of normArray(d.contacts)){const id=idOf(c);if(id){if(!contactMap.has(id))contactMap.set(id,{...c,uid:id,owners:[]});contactMap.get(id).owners.push(p.id)}}
       for(const g of normArray(d.groups)){const id=idOf(g);if(id)addRecord("groups",id,labelOf(g),`Список пользователя ${p.id}`,{docId:id})}
       for(const c of normArray(d.channels)){const id=idOf(c);if(id)addRecord("channels",id,labelOf(c),`Список пользователя ${p.id}`,{docId:id})}
@@ -138,7 +138,7 @@ async function loadAll(){
     for(const d of groupsSnap.docs){const v=d.data();addRecord("groups",d.id,v.name||"Группа",`Создатель: ${v.createdBy||"не указан"} · участников: ${v.memberCount??"?"}`,{docId:d.id})}
     for(const d of channelsSnap.docs){const v=d.data();addRecord("channels",d.id,v.name||"Канал",`Создатель: ${v.createdBy||"не указан"} · подписчиков: ${v.memberCount??"?"}`,{docId:d.id})}
     for(const d of handshakeSnap.docs){const v=d.data();if(v.chatId)chatIds.add(v.chatId);if(d.id.startsWith("seda_"))chatIds.add(d.id)}
-    for(const id of chatIds){let title=id,detail="ID переписки";if(id.startsWith("seda_")){title="SEDA · "+id.slice(5,17);detail="Зашифрованный чат"}else if(id.startsWith("group_")){title="Группа · "+id.slice(6);detail="История группового чата"}else if(id.startsWith("channel_")){title="Канал · "+id.slice(8);detail="История канала"}else{const parts=id.split("_");if(parts.length===2){const peer=profiles.find(p=>p.id===parts[0]||p.id===parts[1]);if(peer)title=peer.data.nickname||peer.data.globalId||peer.data.email||id;detail="Личная переписка"}}
+    for(const id of chatIds){let title=id,detail="ID переписки";if(id.startsWith("seda_")||id.startsWith("sedaultra_")){title="SEDA · "+id.replace(/^seda(?:ultra)?_/ ,"").slice(0,12);detail="Зашифрованный чат"}else if(id.startsWith("group_")){title="Группа · "+id.slice(6);detail="История группового чата"}else if(id.startsWith("channel_")){title="Канал · "+id.slice(8);detail="История канала"}else{const parts=id.split("_");if(parts.length===2){const peer=profiles.find(p=>p.id===parts[0]||p.id===parts[1]);if(peer)title=peer.data.nickname||peer.data.globalId||peer.data.email||id;detail="Личная переписка"}}
       addRecord("chats",id,title,detail,{docId:id});
     }
     for(const [uid,c] of contactMap)addRecord("contacts",uid,labelOf(c),`В списках ${c.owners.length} пользователей · ${c.globalId||uid}`,{contactUid:uid});
@@ -159,7 +159,7 @@ async function removeFromProfiles(kind,item){
       const arr=normArray(p.data[field]);
       const next=arr.filter(x=>{
         if(kind==="contacts")return idOf(x)!==item.id;
-        if(kind==="chats"){const cid=x?.sedaChatId||x?.chatId||x?.id||(x?.uid?[p.id,x.uid].sort().join("_"):"");return cid!==item.id}
+        if(kind==="chats"){const cid=x?.sedaChatId||x?.chatId||x?.id||(x?.uid?"sedaultra_"+[p.id,x.uid].sort().join("_"):"");return cid!==item.id}
         return idOf(x)!==item.id;
       });
       if(next.length!==arr.length){batch.update(p.ref,{[field]:next});changed.push({profile:p,field,next})}
