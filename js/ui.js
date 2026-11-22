@@ -625,7 +625,7 @@ export async function loadChats(forceRefresh = false) {
     chats = chats.filter(chat => chat && (chat.uid || chat.id) && !chat.isChannel);
     chats.sort((a, b) => toMillis(b.lastMessageTime) - toMillis(a.lastMessageTime) ||
         (a.nickname || a.globalId || '').localeCompare(b.nickname || b.globalId || '', 'ru'));
-    if (authState.userData && !hideMarkerReadFailed) authState.userData.chats = chats;
+    if (authState.userData) authState.userData.chats = chats;
     if (!hideMarkerReadFailed && (didChange || (!Array.isArray(rawChats) && chats.length)) && navigator.onLine) {
         try {
             await updateDoc(doc(db, 'users', uid), { chats });
