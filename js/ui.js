@@ -537,22 +537,6 @@ export async function loadChats(forceRefresh = false) {
                 const peerUid = participants.find(participant => typeof participant === 'string' && participant !== uid);
                 if (!peerUid) continue;
                 let index = chats.findIndex(chat => chat.uid === peerUid && !chat.isGroup);
-                // Hiding a chat is local to this account and survives reloads.
-                // A newer message reopens it; old messages never undo the delete.
-                try {
-                    const hiddenSnap = await getDoc(doc(db, 'chat_clears', uid, 'items', thread.id));
-                    if (hiddenSnap.exists()) {
-                        const marker = hiddenSnap.data();
-                        const hiddenAt = toMillis(marker.hiddenAt || marker.clearedAt);
-                        const latestMessageAt = toMillis(data.lastMessageTime);
-                        if (marker.hidden === true && (!latestMessageAt || latestMessageAt <= hiddenAt)) {
-                            if (index >= 0) { chats.splice(index, 1); didChange = true; }
-                            continue;
-                        }
-                    }
-                } catch (error) {
-                    console.debug('[loadChats] Could not check chat hide marker:', error?.code || '');
-                }
                 let publicProfile = {};
                 if (index === -1 || !(chats[index].nickname || chats[index].globalId)) {
                     try {
@@ -607,11 +591,42 @@ export async function loadChats(forceRefresh = false) {
         }
     }
 
+    let hideMarkerReadFailed = false;
+    if (navigator.onLine) {
+        const visibleChats = [];
+        for (const chat of chats) {
+            if (!chat?.uid || chat.isGroup) {
+                visibleChats.push(chat);
+                continue;
+            }
+
+            const chatId = 'sedaultra_' + [uid, chat.uid].sort().join('_');
+            try {
+                const hiddenSnap = await getDoc(doc(db, 'chat_clears', uid, 'items', chatId));
+                if (hiddenSnap.exists()) {
+                    const marker = hiddenSnap.data();
+                    const hiddenAt = toMillis(marker.hiddenAt || marker.clearedAt);
+                    const latestMessageAt = toMillis(chat.lastMessageTime);
+                    if (marker.hidden === true && (!latestMessageAt || latestMessageAt <= hiddenAt)) {
+                        didChange = true;
+                        continue;
+                    }
+                }
+                visibleChats.push(chat);
+            } catch (error) {
+                // Unknown hide state must not resurrect a chat from an old profile/cache.
+                hideMarkerReadFailed = true;
+                console.debug('[loadChats] Could not verify chat hide marker:', error?.code || '');
+            }
+        }
+        chats = visibleChats;
+    }
+
     chats = chats.filter(chat => chat && (chat.uid || chat.id) && !chat.isChannel);
     chats.sort((a, b) => toMillis(b.lastMessageTime) - toMillis(a.lastMessageTime) ||
         (a.nickname || a.globalId || '').localeCompare(b.nickname || b.globalId || '', 'ru'));
-    if (authState.userData) authState.userData.chats = chats;
-    if ((didChange || (!Array.isArray(rawChats) && chats.length)) && navigator.onLine) {
+    if (authState.userData && !hideMarkerReadFailed) authState.userData.chats = chats;
+    if (!hideMarkerReadFailed && (didChange || (!Array.isArray(rawChats) && chats.length)) && navigator.onLine) {
         try {
             await updateDoc(doc(db, 'users', uid), { chats });
         } catch (error) {
@@ -624,7 +639,7 @@ export async function loadChats(forceRefresh = false) {
     } else {
         for (const chat of chats) container.appendChild(renderChatItem(chat));
     }
-    await DB.Lists.setChats(uid, chats).catch(() => {});
+    if (!hideMarkerReadFailed) await DB.Lists.setChats(uid, chats).catch(() => {});
     await loadGroups();
 }
 
@@ -1171,7 +1186,7 @@ async function decorateStoryImage(file) {
         const size = Math.max(20, Math.round(canvas.width * .045));
         ctx.font = '700 ' + size + 'px system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
         ctx.lineWidth = Math.max(3, size * .16); ctx.strokeStyle = 'rgba(0,0,0,.85)'; ctx.fillStyle = '#fff';
-        const words = caption.split(/\\s+/), lines = []; let line = '';
+        const words = caption.split(/\s+/), lines = []; let line = '';
         for (const word of words) { const test = line ? line + ' ' + word : word; if (ctx.measureText(test).width > canvas.width * .86 && line) { lines.push(line); line = word; } else line = test; }
         if (line) lines.push(line);
         lines.slice(-4).forEach((t,i,arr) => { const y=canvas.height-28-(arr.length-1-i)*size*1.25; ctx.strokeText(t,canvas.width/2,y); ctx.fillText(t,canvas.width/2,y); });
@@ -1921,7 +1936,8 @@ async function getHistoryClearedAt(chatId) {
         return Number.isFinite(n) ? n : 0;
     } catch (err) {
         console.warn('[History] Не удалось прочитать отметку очистки:', err);
-        return 0;
+        // Fail closed: without the marker, cached old messages may be hidden history.
+        return null;
     }
 }
 
@@ -1945,6 +1961,12 @@ export async function loadMessages() {
 
     const historyClearedAt = await getHistoryClearedAt(chatId);
     if (loadVersion !== messageLoadVersion || uiState.currentChatId !== chatId) return;
+    if (historyClearedAt === null) {
+        revokeMessageObjectUrls(area);
+        area.innerHTML = '<div class="empty-state">Не удалось проверить состояние истории. Старые сообщения скрыты до восстановления доступа.</div>';
+        showToast('Не удалось проверить отметку очистки истории. Старые сообщения не показаны.', 'error', 5000);
+        return;
+    }
 
     revokeMessageObjectUrls(area);
     area.innerHTML = '';
