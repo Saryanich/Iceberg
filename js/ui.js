@@ -2086,7 +2086,7 @@ async function renderMessage(msg) {
     if (msg.pending) div.classList.add('sending');
 
     let displayText = msg.deleted ? '🗑 Удалено' : (msg.text || '');
-    const isEncrypted = !msg.deleted && (msg.encrypted === true || msg.cryptoVersion === 'SEDA_OFFLINE_1');
+    const isEncrypted = !msg.deleted && (msg.encrypted === true || msg.mediaEncrypted === true || msg.cryptoVersion === 'SEDA_OFFLINE_1');
     let isDecrypted = false;
     let messageKey = null;
 
@@ -2135,6 +2135,7 @@ async function renderMessage(msg) {
             const bytes = await getBytes(storageRef(storage, msg.attachment.path));
             decryptedAttachment = await decryptSedaAttachment(bytes, msg.attachment, attachmentKey);
             mediaSrc = URL.createObjectURL(decryptedAttachment.blob);
+            if (isEncrypted) isDecrypted = true;
         } catch (error) {
             console.error('[SEDA attachment]', error);
         }
