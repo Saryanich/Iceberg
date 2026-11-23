@@ -10,6 +10,43 @@ import { onMessage } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-me
 let foregroundUnsub = null;
 let currentToken = null;
 
+async function getFcmServiceWorkerRegistration() {
+    let registration = await navigator.serviceWorker.getRegistration('./fcm/');
+    if (!registration) {
+        registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './fcm/' });
+    }
+
+    if (!registration.active) {
+        const worker = registration.installing || registration.waiting;
+        if (!worker) throw new Error('FCM service worker is not active');
+
+        await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                cleanup();
+                reject(new Error('FCM service worker activation timed out'));
+            }, 15000);
+            const checkState = () => {
+                if (registration.active) {
+                    cleanup();
+                    resolve();
+                } else if (worker.state === 'redundant') {
+                    cleanup();
+                    reject(new Error('FCM service worker became redundant'));
+                }
+            };
+            const cleanup = () => {
+                clearTimeout(timeout);
+                worker.removeEventListener('statechange', checkState);
+            };
+            worker.addEventListener('statechange', checkState);
+            checkState();
+        });
+    }
+
+    if (!registration.active) throw new Error('FCM service worker is not active');
+    return registration;
+}
+
 // ===================================================================
 // РЕГИСТРАЦИЯ ОСНОВНОГО PWA SW И ОТДЕЛЬНОГО FCM SW
 // Одинаковый scope у двух скриптов приводит к замене одного service worker другим.
@@ -73,17 +110,7 @@ export async function initPushNotifications() {
             return { success: false, error: 'service_worker_unavailable' };
         }
         await new Promise(resolve => setTimeout(resolve, 3000));
-        let registration = await navigator.serviceWorker.getRegistration('./fcm/');
-        if (!registration) {
-            try {
-                registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './fcm/' });
-            } catch (e) {
-                console.warn('[Push] Не удалось зарегистрировать FCM SW:', e);
-            }
-        }
-        if (registration) {
-            try { await navigator.serviceWorker.ready; } catch {}
-        }
+        const registration = await getFcmServiceWorkerRegistration();
 
         const { getToken } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging.js");
         let token = null;
@@ -244,18 +271,16 @@ export async function refreshTokenForUser(uid) {
     if (!messaging) return;
 
     try {
+        if (!('serviceWorker' in navigator)) return;
         const { getToken } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging.js");
-        if ('serviceWorker' in navigator) {
-            try { await navigator.serviceWorker.ready; } catch {}
-        }
-        const registration = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration('./') : null;
+        const registration = await getFcmServiceWorkerRegistration();
         const token = await getToken(messaging, {
             vapidKey: VAPID_KEY,
-            ...(registration ? { serviceWorkerRegistration: registration } : {})
+            serviceWorkerRegistration: registration
         });
-        if (token && token !== currentToken) {
+        if (token) {
             currentToken = token;
-            await saveTokenToFirestore(uid, token);
+            if (auth.currentUser?.uid === uid) await saveTokenToFirestore(uid, token);
         }
     } catch (e) {
         console.warn('[Push] refreshToken error:', e);
