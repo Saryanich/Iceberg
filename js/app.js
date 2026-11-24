@@ -570,6 +570,11 @@ function bindUIEvents() {
     let avatarCropState = { zoom: 1, x: 0.5, y: 0.5 };
     let cropPointers = new Map();
     let cropGestureStart = null;
+    const releasePendingAvatarObjectUrl = () => {
+        if (pendingAvatarObjectUrl) URL.revokeObjectURL(pendingAvatarObjectUrl);
+        pendingAvatarObjectUrl = null;
+        if (cropImage?.getAttribute('src')?.startsWith('blob:')) cropImage.removeAttribute('src');
+    };
 
     const getCropDimensions = () => {
         if (!pendingAvatarImage || !cropStage) return null;
@@ -618,7 +623,7 @@ function bindUIEvents() {
         const file = this.files?.[0];
         this.value = '';
         if (!file) return;
-        if (pendingAvatarObjectUrl) URL.revokeObjectURL(pendingAvatarObjectUrl);
+        releasePendingAvatarObjectUrl();
         pendingAvatarObjectUrl = URL.createObjectURL(file);
         const image = new Image();
         image.onload = () => {
@@ -630,8 +635,7 @@ function bindUIEvents() {
             requestAnimationFrame(updateAvatarCropPreview);
         };
         image.onerror = () => {
-            if (pendingAvatarObjectUrl) URL.revokeObjectURL(pendingAvatarObjectUrl);
-            pendingAvatarObjectUrl = null;
+            releasePendingAvatarObjectUrl();
             showToast('Не удалось открыть выбранное изображение.', 'error');
         };
         image.src = pendingAvatarObjectUrl;
@@ -692,6 +696,7 @@ function bindUIEvents() {
 
     document.getElementById('cancelAvatarCropBtn')?.addEventListener('click', () => {
         pendingAvatarImage = null;
+        releasePendingAvatarObjectUrl();
         cropModal.hidden = true;
     });
     document.getElementById('applyAvatarCropBtn')?.addEventListener('click', async () => {
@@ -759,6 +764,7 @@ function bindUIEvents() {
                 profileAvatarBig.appendChild(preview);
             }
             pendingAvatarImage = null;
+            releasePendingAvatarObjectUrl();
             cropModal.hidden = true;
             renderUserProfile();
             openProfileModal();
@@ -986,6 +992,8 @@ function bindUIEvents() {
         };
     });
     document.getElementById('profileCreateStoryBtn')?.addEventListener('click', async () => {
+        pendingAvatarImage = null;
+        releasePendingAvatarObjectUrl();
         document.getElementById('profileModal').classList.remove('active');
         document.getElementById('storiesModal').classList.add('active');
         await loadOwnStories();
@@ -995,7 +1003,13 @@ function bindUIEvents() {
     document.querySelectorAll('.close-modal').forEach(el => {
         el.onclick = () => {
             const modal = el.closest('.modal-overlay');
-            if (modal) modal.classList.remove('active');
+            if (modal) {
+                modal.classList.remove('active');
+                if (modal.id === 'profileModal') {
+                    pendingAvatarImage = null;
+                    releasePendingAvatarObjectUrl();
+                }
+            }
         };
     });
 
