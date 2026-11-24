@@ -786,7 +786,7 @@ function bindUIEvents() {
         }
     });
 
-    document.querySelector('#profileModal .btn-primary').onclick = async (event) => {
+    document.querySelector('#profileModal > .modal-content > .btn-primary').onclick = async (event) => {
         const saveButton = event.currentTarget;
         if (saveButton.dataset.saving === 'true') return;
         const fn = document.getElementById('profileFirstName').value.trim();
