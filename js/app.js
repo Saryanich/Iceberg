@@ -453,8 +453,6 @@ function setupAuthState() {
             stopBlockCheck();
             localStorage.removeItem('iceberg_authenticated');
             showAuthScreen();
-            document.getElementById('loginIdentifier').value = '';
-            document.getElementById('loginPassword').value = '';
         }
     });
 }
@@ -479,8 +477,6 @@ function setupAuthSyncEvents() {
         localStorage.removeItem('iceberg_auth_cache_v1');
         
         showAuthScreen();
-        document.getElementById('loginIdentifier').value = '';
-        document.getElementById('loginPassword').value = '';
         document.getElementById('authMessage').style.display = 'none';
         
         if (reason !== 'manual') {
