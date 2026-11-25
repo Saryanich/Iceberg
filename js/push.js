@@ -9,6 +9,7 @@ import { onMessage } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-me
 // ===================================================================
 let foregroundUnsub = null;
 let currentToken = null;
+let currentTokenUid = null;
 
 async function getFcmServiceWorkerRegistration() {
     let registration = await navigator.serviceWorker.getRegistration('./fcm/');
@@ -138,6 +139,7 @@ export async function initPushNotifications() {
 
         // Сохраняем токен в Firestore
         if (auth.currentUser) {
+            currentTokenUid = auth.currentUser.uid;
             await saveTokenToFirestore(auth.currentUser.uid, token);
         }
 
@@ -156,6 +158,7 @@ export async function initPushNotifications() {
 // ===================================================================
 async function saveTokenToFirestore(uid, token) {
     try {
+        if (auth.currentUser?.uid === uid) currentTokenUid = uid;
         const ref = doc(db, 'users', uid);
         const snap = await getDoc(ref);
         const existing = snap.data()?.fcmTokens || [];
@@ -180,8 +183,10 @@ export async function removeTokenFromFirestore(uid, token) {
         await updateDoc(doc(db, 'users', uid), {
             fcmTokens: arrayRemove(token)
         });
+        return true;
     } catch (e) {
         console.error('[Push] Ошибка удаления токена:', e);
+        return false;
     }
 }
 
@@ -256,11 +261,19 @@ export async function showNotification({ title, body, chatId, senderId, url }) {
 // ===================================================================
 // ОТПИСКА
 // ===================================================================
-export function cleanupPush() {
+export async function cleanupPush() {
     if (foregroundUnsub) {
         foregroundUnsub();
         foregroundUnsub = null;
     }
+
+    const uid = currentTokenUid;
+    const token = currentToken;
+    if (uid && token && auth.currentUser?.uid === uid) {
+        await removeTokenFromFirestore(uid, token);
+    }
+    currentToken = null;
+    currentTokenUid = null;
 }
 
 // ===================================================================
@@ -280,7 +293,10 @@ export async function refreshTokenForUser(uid) {
         });
         if (token) {
             currentToken = token;
-            if (auth.currentUser?.uid === uid) await saveTokenToFirestore(uid, token);
+            if (auth.currentUser?.uid === uid) {
+                currentTokenUid = uid;
+                await saveTokenToFirestore(uid, token);
+            }
         }
     } catch (e) {
         console.warn('[Push] refreshToken error:', e);

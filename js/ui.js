@@ -2658,8 +2658,9 @@ async function uploadEncryptedDirectAttachment(ctx, blob, type, name, preview) {
         mediaEncrypted: true,
         type,
         attachmentPending: true,
-        replyTo: uiState.replyTo || null,
-        reactions: {}
+        replyTo: uiState.currentChatId === ctx.chatId ? (uiState.replyTo || null) : null,
+        reactions: {},
+        ...(ctx.forwardedFrom ? { forwarded: true, forwardedFrom: ctx.forwardedFrom } : {})
     });
 
     try {
@@ -2682,8 +2683,8 @@ async function uploadEncryptedDirectAttachment(ctx, blob, type, name, preview) {
         throw error;
     }
 
-    cancelReply();
-    await updateChatLastMessage('🔒 Зашифрованное вложение', ctx);
+    if (uiState.currentChatId === ctx.chatId) cancelReply();
+    await updateChatLastMessage(preview || '🔒 Зашифрованное вложение', ctx);
     if (uiState.currentChatId === ctx.chatId && cryptoVersion === 'SEDA_ULTRA_1') {
         uiState.currentChatKey = key;
     }
@@ -3156,27 +3157,192 @@ export async function startEdit(id, msgData) {
 }
 
 export async function forwardMessage(id, msgData) {
-    const target = prompt('Введите Global ID получателя:');
+    const sourceChatId = uiState.currentChatId;
+    const senderUid = authState.user?.uid;
+    if (!sourceChatId || !senderUid) return;
+
+    const target = prompt('Введите Global ID получателя:')?.trim();
     if (!target) return;
+
     try {
-        const ref = doc(db, 'global_ids', target);
-        const snap = await getDoc(ref);
-        if (!snap.exists()) { showToast('Получатель не найден', 'error'); return; }
-        const targetUid = snap.data().uid;
-        const targetChatId = [authState.user.uid, targetUid].sort().join('_');
-        await addDoc(collection(db, 'messages', targetChatId, 'msgs'), {
-            ...msgData,
-            senderId: authState.user.uid,
-            senderName: authState.userData.nickname,
+        const globalIdSnap = await getDoc(doc(db, 'global_ids', target));
+        if (!globalIdSnap.exists()) {
+            showToast('Получатель не найден', 'error');
+            return;
+        }
+
+        const targetUid = globalIdSnap.data()?.uid;
+        if (typeof targetUid !== 'string' || !targetUid) {
+            showToast('У получателя некорректный Global ID', 'error');
+            return;
+        }
+        if (targetUid === senderUid) {
+            showToast('Нельзя переслать сообщение самому себе', 'error');
+            return;
+        }
+
+        const sourceRef = doc(db, 'messages', sourceChatId, 'msgs', id);
+        const sourceSnap = await getDoc(sourceRef);
+        if (!sourceSnap.exists()) {
+            showToast('Сообщение больше недоступно', 'error');
+            return;
+        }
+
+        const message = sourceSnap.data();
+        if (message.deleted) {
+            showToast('Удалённое сообщение нельзя переслать', 'error');
+            return;
+        }
+        if (message.attachmentPending) {
+            showToast('Дождитесь завершения загрузки вложения', 'error');
+            return;
+        }
+
+        const targetChatId = 'sedaultra_' + [senderUid, targetUid].sort().join('_');
+        let targetProfile = {};
+        try {
+            const profileSnap = await getDoc(doc(db, 'public_profiles', targetUid));
+            if (profileSnap.exists()) targetProfile = profileSnap.data();
+        } catch (profileError) {
+            console.debug('[Forward] Public profile unavailable:', profileError?.code || '');
+        }
+
+        const targetChat = {
+            uid: targetUid,
+            globalId: targetProfile.globalId || target,
+            nickname: targetProfile.nickname || '@' + target,
+            avatar: targetProfile.avatar || null,
+            mood: targetProfile.mood || '',
+            isGroup: false,
+            unread: false,
+            lastMessage: '',
+            lastMessageTime: null
+        };
+        const targetContext = {
+            chatId: targetChatId,
+            currentChat: targetChat,
+            currentGroup: null,
+            currentChannel: null,
+            sedaEnabled: true,
+            sedaKey: null,
+            forwardedFrom: message.forwardedFrom || message.senderName || 'Пользователь'
+        };
+
+        const isMediaMessage = ['photo', 'video', 'audio', 'file'].includes(message.type)
+            || !!message.attachment?.path
+            || (typeof message.media === 'string' && message.media.length > 0);
+
+        if (isMediaMessage) {
+            let blob;
+            let fileName = message.fileName || 'file';
+
+            if (message.attachment?.path) {
+                let attachmentKey = null;
+                if (message.cryptoVersion === 'SEDA_OFFLINE_1') {
+                    const payload = message.keyEnvelope || message.text;
+                    const opened = await decryptOfflineMessage(sourceChatId, id, payload, senderUid);
+                    attachmentKey = opened?.messageKey || null;
+                } else {
+                    attachmentKey = uiState.currentChatId === sourceChatId
+                        ? uiState.currentChatKey
+                        : null;
+                    attachmentKey ||= await DB.getChatKey(sourceChatId).catch(() => null);
+                }
+
+                if (!attachmentKey?.startsWith('SEDAKEY:')) {
+                    throw new Error('Не найден ключ для расшифровки исходного вложения');
+                }
+                const encryptedBytes = await getBytes(storageRef(storage, message.attachment.path));
+                const openedAttachment = await decryptSedaAttachment(
+                    encryptedBytes,
+                    message.attachment,
+                    attachmentKey
+                );
+                blob = openedAttachment.blob;
+                fileName = openedAttachment.fileName || fileName;
+            } else if (!message.mediaEncrypted && message.media) {
+                blob = await dataUrlToBlob(message.media);
+            } else {
+                throw new Error('Не удалось получить исходное вложение');
+            }
+
+            await ensureMessageThread(targetChatId, {
+                kind: 'direct',
+                participants: [targetUid]
+            });
+            await uploadEncryptedDirectAttachment(
+                targetContext,
+                blob,
+                ['photo', 'video', 'audio', 'file'].includes(message.type) ? message.type : 'file',
+                fileName,
+                '🔒 Пересланное вложение'
+            );
+            showToast('✅ Вложение переслано', 'success');
+            return;
+        }
+
+        let plaintext = typeof message.text === 'string' ? message.text : '';
+        if (message.cryptoVersion === 'SEDA_OFFLINE_1') {
+            const payload = isOfflineTextPayload(message.text) ? message.text : message.keyEnvelope;
+            const opened = await decryptOfflineMessage(sourceChatId, id, payload, senderUid);
+            if (!opened || typeof opened.text !== 'string') {
+                throw new Error('Не удалось расшифровать исходное сообщение на этом устройстве');
+            }
+            plaintext = opened.text;
+        } else if (message.encrypted) {
+            const sourceKey = uiState.currentChatId === sourceChatId
+                ? uiState.currentChatKey
+                : null;
+            const key = sourceKey || await DB.getChatKey(sourceChatId).catch(() => null);
+            if (!key?.startsWith('SEDAKEY:')) {
+                throw new Error('Ключ исходного сообщения недоступен');
+            }
+            plaintext = await sedaUltraDecrypt(plaintext, key);
+            if (plaintext === null) throw new Error('Не удалось расшифровать исходное сообщение');
+        }
+
+        if (!plaintext && message.type !== 'sticker') {
+            throw new Error('В сообщении нет текста для пересылки');
+        }
+
+        const targetMessageRef = doc(collection(db, 'messages', targetChatId, 'msgs'));
+        const sealed = await encryptOfflineText(
+            targetChatId,
+            targetMessageRef.id,
+            senderUid,
+            [targetUid],
+            plaintext
+        );
+        await ensureMessageThread(targetChatId, {
+            kind: 'direct',
+            participants: [targetUid]
+        });
+        await setDoc(targetMessageRef, {
+            text: sealed.payload,
+            senderId: senderUid,
+            senderName: authState.userData?.nickname || authState.userData?.globalId || 'Пользователь',
             timestamp: serverTimestamp(),
             read: false,
-            reactions: {},
+            encrypted: true,
+            cryptoVersion: 'SEDA_OFFLINE_1',
+            type: message.type === 'sticker' ? 'sticker' : 'text',
             replyTo: null,
-            forwarded: true
+            reactions: {},
+            forwarded: true,
+            forwardedFrom: targetContext.forwardedFrom
         });
-        showToast('✅ Переслано', 'success');
-    } catch (e) {
-        showToast('Ошибка пересылки', 'error');
+
+        const metadataSynced = await updateChatLastMessage('🔒 Пересланное сообщение', targetContext);
+        showToast(
+            metadataSynced
+                ? '✅ Сообщение переслано'
+                : 'Сообщение отправлено. Список чатов обновится после синхронизации.',
+            metadataSynced ? 'success' : 'info',
+            4500
+        );
+    } catch (error) {
+        console.error('[Forward] Не удалось переслать сообщение:', error?.code || error);
+        showToast('Не удалось переслать: ' + (error?.message || 'проверьте доступ Firestore и ключи устройств'), 'error', 6000);
     }
 }
 

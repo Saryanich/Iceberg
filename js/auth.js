@@ -2,6 +2,7 @@ import { auth, db } from './config.js';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, serverTimestamp, arrayUnion, arrayRemove, limit, runTransaction, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { hash2FACode, sha256Hex } from './crypto.js';
+import { cleanupPush } from './push.js';
  
 const AUTH_CACHE_KEY = 'iceberg_auth_cache_v1';
 const BRUTE_FORCE_KEY = 'iceberg_bruteforce_v1';
@@ -23,6 +24,15 @@ export const authState = {
     loggingIn: false,
     restoredFromCache: false
 };
+
+async function signOutAndCleanupPush() {
+    try {
+        await cleanupPush();
+    } catch (error) {
+        console.warn('[Auth] Не удалось удалить push-токен перед выходом:', error?.code || error);
+    }
+    await signOut(auth);
+}
 
 function getBruteForceState() {
     try { return JSON.parse(localStorage.getItem(BRUTE_FORCE_KEY) || '{"attempts":0,"lockedUntil":0}'); }
@@ -118,7 +128,7 @@ function startDeviceSessionWatcher(uid) {
             window.dispatchEvent(new CustomEvent('iceberg:force-logout', {
                 detail: { reason: revoked ? 'device-revoked' : 'locked' }
             }));
-            try { await signOut(auth); } catch {}
+            try { await signOutAndCleanupPush(); } catch {}
         }
     }, error => console.warn('[Auth] Device session watcher error:', error));
 }
@@ -340,7 +350,7 @@ export async function handleAuthLogin(user, callbacks = {}) {
             authState.userData = null;
             authState.pendingUser = null;
             authState.awaitingTwoFactor = false;
-            await signOut(auth);
+            await signOutAndCleanupPush();
             onError?.('Подтвердите электронную почту через письмо от Global ID, затем войдите снова.');
             return;
         }
@@ -355,11 +365,11 @@ export async function handleAuthLogin(user, callbacks = {}) {
         const ud = await getDoc(doc(db, 'users', user.uid));
         const data = ud.data();
 
-        if (!data) { await signOut(auth); onError?.('Профиль не найден'); return; }
+        if (!data) { await signOutAndCleanupPush(); onError?.('Профиль не найден'); return; }
         if (data.accountLocked) { onLocked?.(); return; }
 
         if (data.icebergAccess === false) {
-            await signOut(auth);
+            await signOutAndCleanupPush();
             onError?.('Доступ к Айсбергу для этого аккаунта отключён.');
             return;
         }
@@ -407,7 +417,7 @@ async function syncUserFromServer(uid) {
             authState.user = null;
             authState.userData = null;
             authState.restoredFromCache = false;
-            await signOut(auth);
+            await signOutAndCleanupPush();
             window.dispatchEvent(new CustomEvent('iceberg:force-logout', {
                 detail: { reason: 'email-unverified' }
             }));
@@ -417,7 +427,7 @@ async function syncUserFromServer(uid) {
         if (!ud.exists()) return;
         const data = ud.data();
         if (data.accountLocked) {
-            await signOut(auth);
+            await signOutAndCleanupPush();
             window.dispatchEvent(new CustomEvent('iceberg:force-logout', { detail: { reason: 'locked' } }));
             return;
         }
@@ -488,7 +498,7 @@ export async function verify2FA(code, trustDevice = false) {
 
 export async function cancel2FA() {
     authState.awaitingTwoFactor = false; authState.pendingUser = null;
-    try { await signOut(auth); } catch {}
+    try { await signOutAndCleanupPush(); } catch {}
 }
 
 // ===================================================================
@@ -607,7 +617,7 @@ export async function logout() {
 
     window.dispatchEvent(new CustomEvent('iceberg:force-logout', { detail: { reason: 'manual' } }));
 
-    await signOut(auth);
+    await signOutAndCleanupPush();
 }
 
 export function subscribeAuthState(handler) { return onAuthStateChanged(auth, handler); }
