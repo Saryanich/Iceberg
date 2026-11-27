@@ -2162,7 +2162,7 @@ async function renderMessage(msg) {
     if (msg.type === 'sticker') {
         const s = document.createElement('div');
         s.className = 'chat-msg-sticker';
-        s.textContent = msg.text;
+        s.textContent = displayText;
         div.appendChild(s);
     } else if (msg.type === 'photo' && mediaSrc) {
         const img = document.createElement('img');
