@@ -16,7 +16,7 @@ import {
     decryptOfflineMessage, isOfflineTextPayload, prefetchOfflineDeviceKeys
 } from './offline-keys.js';
 import { storage } from './config.js';
-import { ref as storageRef, uploadBytes, getBytes } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js';
+import { ref as storageRef, uploadBytes, getBytes, deleteObject } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js';
 import { encryptSedaAttachment, decryptSedaAttachment } from './seda-attachments.js';
 import { authState } from './auth.js';
 
@@ -1008,6 +1008,21 @@ export async function showContactCard(contact) {
     modal.classList.add('active');
 }
 
+async function deleteStoryAndSocial(ownerUid, storyId) {
+    for (const subcollectionName of ['likes', 'views']) {
+        const records = collection(db, 'user_stories', ownerUid, 'items', storyId, subcollectionName);
+        while (true) {
+            const snapshot = await getDocsFromServer(query(records, limit(400)));
+            if (snapshot.empty) break;
+            const batch = writeBatch(db);
+            snapshot.docs.forEach(item => batch.delete(item.ref));
+            await batch.commit();
+            if (snapshot.size < 400) break;
+        }
+    }
+    await deleteDoc(doc(db, 'user_stories', ownerUid, 'items', storyId));
+}
+
 async function pruneExpiredStories(uid) {
     const q = query(
         collection(db, 'user_stories', uid, 'items'),
@@ -1015,10 +1030,14 @@ async function pruneExpiredStories(uid) {
         limit(50)
     );
     const snap = await getDocs(q);
-    if (snap.empty) return;
-    const batch = writeBatch(db);
-    snap.docs.forEach(story => batch.delete(story.ref));
-    await batch.commit();
+    for (const story of snap.docs) {
+        try {
+            await deleteStoryAndSocial(uid, story.id);
+        } catch (error) {
+            // Keep the expired parent if its social subcollections could not be cleaned.
+            console.warn('[Stories] Could not clean expired story:', story.id, error?.code || error);
+        }
+    }
 }
 
 async function fetchUserStories(uid) {
@@ -1153,7 +1172,7 @@ export async function loadOwnStories() {
             event.stopPropagation();
             if (!confirm('Удалить эту историю?')) return;
             try {
-                await deleteDoc(doc(db, 'user_stories', authState.user.uid, 'items', item.id));
+                await deleteStoryAndSocial(authState.user.uid, item.id);
                 await loadOwnStories();
                 showToast('История удалена', 'success');
             } catch (err) {
@@ -1241,7 +1260,7 @@ export async function deleteCurrentStory() {
     const item = uiState.currentStories?.[uiState.storyViewerIndex];
     if (!item || item.ownerUid !== authState.user?.uid) return;
     try {
-        await deleteDoc(doc(db, 'user_stories', item.ownerUid, 'items', item.id));
+        await deleteStoryAndSocial(item.ownerUid, item.id);
         uiState.currentStories.splice(uiState.storyViewerIndex, 1);
         if (!uiState.currentStories.length) {
             document.getElementById('storyViewerModal')?.classList.remove('active');
@@ -2671,12 +2690,14 @@ async function uploadEncryptedDirectAttachment(ctx, blob, type, name, preview) {
         ...(ctx.forwardedFrom ? { forwarded: true, forwardedFrom: ctx.forwardedFrom } : {})
     });
 
+    let uploaded = false;
     try {
         // Keep the existing Storage contract: the parent Firestore message exists
         // before its encrypted object is uploaded. Push waits for attachmentPending=false.
         await uploadBytes(storageRef(storage, path), encryptedFile.ciphertext, {
             contentType: 'application/octet-stream'
         });
+        uploaded = true;
         await updateDoc(messageRef, {
             attachment: {
                 path,
@@ -2687,6 +2708,13 @@ async function uploadEncryptedDirectAttachment(ctx, blob, type, name, preview) {
             attachmentPending: false
         });
     } catch (error) {
+        if (uploaded) {
+            await deleteObject(storageRef(storage, path)).catch(cleanupError => {
+                if (cleanupError?.code !== 'storage/object-not-found') {
+                    console.warn('[SEDA attachment] Failed to clean up an incomplete upload:', cleanupError?.code || cleanupError);
+                }
+            });
+        }
         await deleteDoc(messageRef).catch(() => {});
         throw error;
     }
@@ -3370,6 +3398,7 @@ export async function deleteMessage(id) {
         const d = await getDoc(ref);
         if (!d.exists()) return;
         const m = d.data();
+        const attachmentPath = typeof m.attachment?.path === 'string' ? m.attachment.path : null;
         const isOwn = m.senderId === authState.user.uid;
         const isChannelAdmin = uiState.currentChannel && uiState.currentChannel.isAdmin;
         if (!isOwn && !isChannelAdmin) {
@@ -3390,7 +3419,24 @@ export async function deleteMessage(id) {
             cryptoVersion: null,
             replyTo: null
         });
-        showToast('Сообщение удалено', 'success');
+        let attachmentCleanupFailed = false;
+        if (attachmentPath) {
+            try {
+                await deleteObject(storageRef(storage, attachmentPath));
+            } catch (storageError) {
+                if (storageError?.code !== 'storage/object-not-found') {
+                    attachmentCleanupFailed = true;
+                    console.warn('[Messages] Attachment was hidden, but Storage cleanup failed:', storageError?.code || storageError);
+                }
+            }
+        }
+        showToast(
+            attachmentCleanupFailed
+                ? 'Сообщение удалено, но файл остался в Storage — проверьте Storage Rules.'
+                : 'Сообщение удалено',
+            attachmentCleanupFailed ? 'warning' : 'success',
+            5500
+        );
     } catch (error) {
         console.error('[Messages] Не удалось удалить сообщение:', error);
         showToast('Не удалось удалить сообщение' + (error?.code ? ' (' + error.code + ')' : ''), 'error', 4500);
