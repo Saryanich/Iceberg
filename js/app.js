@@ -11,7 +11,8 @@ import {
     subscribeAuthState,
     startBlockCheck,
     stopBlockCheck,
-    collectDeviceInfo
+    collectDeviceInfo,
+    clearOfflineCollectionsCache
 } from './auth.js';
 
 import * as DB from './db.js';
@@ -882,6 +883,7 @@ function bindUIEvents() {
         if (button) { button.disabled = true; button.textContent = 'Очистка…'; }
         try {
             await DB.clearOfflineContent();
+            clearOfflineCollectionsCache(authState.user?.uid);
             if ('serviceWorker' in navigator) {
                 const registration = await navigator.serviceWorker.getRegistration('./').catch(() => null);
                 const worker = registration?.active || navigator.serviceWorker.controller;

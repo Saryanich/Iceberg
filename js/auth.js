@@ -96,6 +96,26 @@ function loadAuthCache() {
 
 function clearAuthCache() { try { localStorage.removeItem(AUTH_CACHE_KEY); } catch {} }
 
+// Remove persisted messenger collections without deleting the profile or local E2E keys.
+// This prevents the offline login snapshot from repopulating lists after cache cleanup.
+export function clearOfflineCollectionsCache(uid) {
+    if (!uid) return;
+    const cached = loadAuthCache();
+    if (!cached || cached.uid !== uid || !cached.data) return;
+    const data = {
+        ...cached.data,
+        chats: [],
+        groups: [],
+        channels: [],
+        contacts: []
+    };
+    localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify({
+        uid,
+        data,
+        savedAt: Date.now()
+    }));
+}
+
 async function updatePublicPresence(uid, online) {
     if (!uid) return;
     await setDoc(doc(db, 'presence', uid), {
