@@ -1691,9 +1691,8 @@ export async function selectChannel(channel) {
                 ...channel,
                 ...remote,
                 id: channel.id,
-                isAdmin: Array.isArray(remote.admins)
-                    ? remote.admins.includes(authState.user.uid)
-                    : !!channel.isAdmin
+                isAdmin: (Array.isArray(remote.admins) && remote.admins.includes(authState.user.uid))
+                    || remote.createdBy === authState.user.uid
             };
         }
     } catch (err) {
@@ -1731,10 +1730,10 @@ export async function selectChannel(channel) {
     }
 
     renderChatHeader();
-    document.getElementById('clearChatBtn').style.display = channel.isAdmin ? 'inline-block' : 'none';
+    document.getElementById('clearChatBtn').style.display = freshChannel.isAdmin ? 'inline-block' : 'none';
     document.getElementById('deleteChatBtn').style.display = 'none';
 
-    if (channel.isAdmin) {
+    if (freshChannel.isAdmin) {
         document.getElementById('chatInputArea').style.display = 'flex';
         document.getElementById('messageInput').disabled = false;
         document.getElementById('chatSend').disabled = false;
@@ -1755,6 +1754,14 @@ function renderChatHeader() {
     const nameEl = document.getElementById('chatName');
     const avEl = document.getElementById('chatAvatar');
     const statusEl = document.getElementById('chatStatus');
+    const messageInput = document.getElementById('messageInput');
+    const sendButton = document.getElementById('chatSend');
+    const canPublish = !ch || !!ch.isAdmin;
+    if (messageInput) {
+        messageInput.disabled = !canPublish;
+        messageInput.placeholder = ch ? 'Публикация в канале...' : 'Сообщение...';
+    }
+    if (sendButton) sendButton.disabled = !canPublish;
 
     avEl.innerHTML = '';
 
